@@ -1,0 +1,1 @@
+# Integracja Open-Meteo
