@@ -1,0 +1,10 @@
+{
+  "domain": "openmeteo",
+  "name": "Open-Meteo",
+  "config_flow": true,
+  "documentation": "https://github.com/shockwave9315/ha-openmeteo",
+  "issue_tracker": "https://github.com/shockwave9315/ha-openmeteo/issues",
+  "codeowners": ["@shockwave9315"],
+  "iot_class": "cloud_polling",
+  "version": "1.0.0"
+}
