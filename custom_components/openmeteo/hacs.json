@@ -1,5 +1,6 @@
 {
   "name": "Open-Meteo",
   "render_readme": true,
-  "country": ["PL", "DE"]
+  "country": ["PL", "DE"],
+  "icon": "icon.png"
 }
