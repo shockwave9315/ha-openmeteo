@@ -1,0 +1,5 @@
+{
+  "name": "Open-Meteo",
+  "render_readme": true,
+  "country": ["PL", "DE"]
+}
