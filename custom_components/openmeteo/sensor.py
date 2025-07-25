@@ -285,19 +285,49 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         """Return the state of the sensor."""
-        if not hasattr(self, 'coordinator') or not self.coordinator or not hasattr(self.coordinator, 'data') or not self.coordinator.data:
-            return None
-        
         try:
-            value = SENSOR_TYPES[self._sensor_type]["value_fn"](self.coordinator.data)
-            
-            if value is None:
+            # Check if we have all required attributes
+            if not hasattr(self, 'coordinator') or not self.coordinator:
+                _LOGGER.debug("No coordinator available for sensor %s", self._sensor_type)
                 return None
                 
-            if isinstance(value, (int, float)):
-                return round(float(value), 2)
+            # Initialize coordinator data if it's None
+            if not hasattr(self.coordinator, 'data') or self.coordinator.data is None:
+                _LOGGER.debug("No data available in coordinator for sensor %s", self._sensor_type)
+                return None
                 
-            return value
+            # Get the value using the sensor's value function
+            if self._sensor_type not in SENSOR_TYPES:
+                _LOGGER.error("Unknown sensor type: %s", self._sensor_type)
+                return None
+                
+            value_fn = SENSOR_TYPES[self._sensor_type].get("value_fn")
+            if not callable(value_fn):
+                _LOGGER.error("Invalid value function for sensor type: %s", self._sensor_type)
+                return None
+                
+            # Safely call the value function
+            try:
+                value = value_fn(self.coordinator.data)
+                
+                if value is None:
+                    _LOGGER.debug("No value available for sensor %s", self._sensor_type)
+                    return None
+                    
+                # Format the value if it's a number
+                if isinstance(value, (int, float)):
+                    return round(float(value), 2)
+                    
+                return value
+                
+            except Exception as value_err:
+                _LOGGER.error(
+                    "Error getting value for sensor %s: %s",
+                    self._sensor_type,
+                    str(value_err),
+                    exc_info=True
+                )
+                return None
             
         except (KeyError, IndexError, TypeError, AttributeError) as err:
             _LOGGER.debug("Error getting sensor value for %s: %s", self._sensor_type, err)
@@ -335,29 +365,79 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         
     async def async_added_to_hass(self) -> None:
         """When entity is added to hass."""
-        await super().async_added_to_hass()
-        
-        # Add coordinator listener
-        self.async_on_remove(
-            self.coordinator.async_add_listener(self._handle_coordinator_update)
-        )
-        
-        # Add listener for device instance removal if this is a device sensor
-        if hasattr(self, '_device_id') and self._device_id and hasattr(self, 'hass') and hasattr(self.hass.data, 'get') and DOMAIN in self.hass.data:
-            entry_id = self._config_entry.entry_id
+        try:
+            await super().async_added_to_hass()
             
-            @callback
-            def _check_device_removed(entry_id: str) -> None:
-                """Check if this device instance has been removed."""
-                if (entry_id != self._config_entry.entry_id or 
-                    not hasattr(self, 'hass') or 
-                    DOMAIN not in self.hass.data or 
-                    entry_id not in self.hass.data[DOMAIN] or 
-                    self._device_id not in self.hass.data[DOMAIN][entry_id].get("device_instances", {})):
-                    
-                    # Device instance was removed, remove this entity
-                    if hasattr(self, 'hass') and hasattr(self, 'entity_id'):
-                        self.hass.async_create_task(self.async_remove(force_remove=True))
+            # Validate coordinator exists and has required methods
+            if not hasattr(self, 'coordinator') or not self.coordinator:
+                _LOGGER.error("No coordinator available when adding sensor %s to hass", self._sensor_type)
+                return
+                
+            if not hasattr(self.coordinator, 'async_add_listener'):
+                _LOGGER.error("Coordinator does not support async_add_listener")
+                return
+            
+            # Add coordinator listener with error handling
+            try:
+                self.async_on_remove(
+                    self.coordinator.async_add_listener(self._handle_coordinator_update)
+                )
+            except Exception as err:
+                _LOGGER.error(
+                    "Error adding coordinator listener for sensor %s: %s",
+                    self._sensor_type,
+                    str(err),
+                    exc_info=True
+                )
+            
+            # Add listener for device instance removal if this is a device sensor
+            if (hasattr(self, '_device_id') and self._device_id and 
+                hasattr(self, 'hass') and hasattr(self.hass, 'data') and 
+                isinstance(self.hass.data, dict) and DOMAIN in self.hass.data):
+                
+                entry_id = getattr(self._config_entry, 'entry_id', None)
+                if not entry_id:
+                    _LOGGER.error("No entry_id found in config entry")
+                    return
+                
+                @callback
+                def _check_device_removed(entry_id: str) -> None:
+                    """Check if this device instance has been removed."""
+                    try:
+                        if not hasattr(self, 'hass') or not hasattr(self, '_config_entry'):
+                            _LOGGER.debug("Missing required attributes in _check_device_removed")
+                            return
+                            
+                        current_entry_id = getattr(self._config_entry, 'entry_id', None)
+                        if not current_entry_id or entry_id != current_entry_id:
+                            _LOGGER.debug("Entry ID mismatch in _check_device_removed")
+                            return
+                            
+                        if (not hasattr(self.hass, 'data') or 
+                            not isinstance(self.hass.data, dict) or 
+                            DOMAIN not in self.hass.data or 
+                            entry_id not in self.hass.data[DOMAIN] or 
+                            self._device_id not in self.hass.data[DOMAIN][entry_id].get("device_instances", {})):
+                            
+                            # Device instance was removed, remove this entity
+                            if hasattr(self, 'hass') and hasattr(self, 'entity_id'):
+                                _LOGGER.debug("Removing entity %s as its device was removed", self.entity_id)
+                                self.hass.async_create_task(self.async_remove(force_remove=True))
+                                
+                    except Exception as err:
+                        _LOGGER.error(
+                            "Error in _check_device_removed for sensor %s: %s",
+                            getattr(self, '_sensor_type', 'unknown'),
+                            str(err),
+                            exc_info=True
+                        )
+        except Exception as err:
+            _LOGGER.error(
+                "Unexpected error in async_added_to_hass for sensor %s: %s",
+                getattr(self, '_sensor_type', 'unknown'),
+                str(err),
+                exc_info=True
+            )
             
             # Listen for device instance updates
             self.async_on_remove(
@@ -371,14 +451,35 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        # Check if this is still a valid device instance
-        if hasattr(self, '_device_id') and self._device_id and hasattr(self, 'hass') and hasattr(self.hass.data, 'get') and DOMAIN in self.hass.data:
-            entry_id = self._config_entry.entry_id
-            if (entry_id in self.hass.data[DOMAIN] and 
-                self._device_id not in self.hass.data[DOMAIN][entry_id].get("device_instances", {})):
-                # This device instance was removed, remove this entity
-                self.hass.async_create_task(self.async_remove(force_remove=True))
-                return
-        
-        # Update the state
-        self.async_write_ha_state()
+        try:
+            # Check if this device instance has been removed
+            if (hasattr(self, '_device_id') and self._device_id and 
+                hasattr(self, 'hass') and hasattr(self.hass, 'data') and 
+                isinstance(self.hass.data, dict) and DOMAIN in self.hass.data):
+                
+                entry_id = getattr(self._config_entry, 'entry_id', None)
+                if not entry_id:
+                    _LOGGER.error("No entry_id found in config entry")
+                    return
+                    
+                if (entry_id in self.hass.data[DOMAIN] and 
+                    self._device_id not in self.hass.data[DOMAIN][entry_id].get("device_instances", {})):
+                    
+                    _LOGGER.debug("Removing entity %s as its device was removed", getattr(self, 'entity_id', 'unknown'))
+                    if hasattr(self.hass, 'async_create_task') and hasattr(self, 'async_remove'):
+                        self.hass.async_create_task(self.async_remove(force_remove=True))
+                    return
+            
+            # Only update state if we have a coordinator with data
+            if (hasattr(self, 'coordinator') and self.coordinator and 
+                hasattr(self.coordinator, 'data') and self.coordinator.data is not None):
+                
+                self.async_write_ha_state()
+                
+        except Exception as err:
+            _LOGGER.error(
+                "Error in _handle_coordinator_update for sensor %s: %s",
+                getattr(self, '_sensor_type', 'unknown'),
+                str(err),
+                exc_info=True
+            )
