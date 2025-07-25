@@ -1,4 +1,4 @@
-"""""The Open-Meteo integration with dynamic device tracking."""
+"""The Open-Meteo integration with dynamic device tracking."""
 from __future__ import annotations
 
 import logging
@@ -149,40 +149,62 @@ async def _setup_device_tracking(hass: HomeAssistant, entry: ConfigEntry) -> Non
 async def _create_device_instance(
     hass: HomeAssistant, entry: ConfigEntry, device_entity_id: str, state: State
 ) -> Optional[OpenMeteoInstance]:
-    lat = state.attributes.get("latitude")
-    lon = state.attributes.get("longitude")
+    """Create a new device instance with validation and error handling."""
+    try:
+        if not isinstance(state, State) or not hasattr(state, 'attributes'):
+            _LOGGER.error("Invalid state object provided for device %s", device_entity_id)
+            return None
+            
+        lat = state.attributes.get("latitude")
+        lon = state.attributes.get("longitude")
 
-    if lat is None or lon is None:
+        if lat is None or lon is None:
+            _LOGGER.warning("Device %s is missing latitude/longitude in attributes", device_entity_id)
+            return None
+
+        if not isinstance(entry.data, dict):
+            _LOGGER.error("Invalid entry data for device %s", device_entity_id)
+            return None
+
+        device_id = device_entity_id
+        
+        # Create a copy of entry data to avoid modifying the original
+        config_data = dict(entry.data)
+        
+        # Update with device-specific coordinates
+        config_data.update({
+            CONF_LATITUDE: float(lat),
+            CONF_LONGITUDE: float(lon),
+        })
+
+        # Initialize the instance
+        instance = OpenMeteoInstance(hass, entry, device_id)
+        await instance.async_init()
+
+        # Store the instance
+        if DOMAIN not in hass.data or entry.entry_id not in hass.data[DOMAIN]:
+            _LOGGER.error("Integration not properly initialized for entry %s", entry.entry_id)
+            return None
+            
+        hass.data[DOMAIN][entry.entry_id].setdefault("device_instances", {})[device_id] = instance
+
+        # Set up platforms for the new instance
+        for platform in PLATFORMS:
+            try:
+                await hass.config_entries.async_forward_entry_setup(entry, platform)
+            except Exception as platform_err:
+                _LOGGER.error("Failed to setup platform %s for device %s: %s", 
+                            platform, device_entity_id, str(platform_err))
+                # Continue with other platforms even if one fails
+                continue
+
+        _LOGGER.debug("Successfully created device instance for %s", device_entity_id)
+        return instance
+        
+    except Exception as err:
+        _LOGGER.error("Error creating device instance for %s: %s", 
+                     device_entity_id, str(err), exc_info=True)
         return None
-
-    device_id = device_entity_id
-
-    config_data = dict(entry.data)
-    config_data.update({
-        CONF_LATITUDE: lat,
-        CONF_LONGITUDE: lon,
-    })
-
-    device_entry = ConfigEntry(
-        version=entry.version,
-        domain=entry.domain,
-        title=entry.title,
-        data=config_data,
-        source=entry.source,
-        options=dict(entry.options),
-        unique_id=f"{entry.unique_id}_{device_id}",
-        entry_id=f"{entry.entry_id}_{device_id}",
-    )
-
-    instance = OpenMeteoInstance(hass, device_entry, device_id)
-    await instance.async_init()
-
-    hass.data[DOMAIN][entry.entry_id]["device_instances"][device_id] = instance
-
-    for platform in PLATFORMS:
-        await hass.config_entries.async_forward_entry_setup(device_entry, platform)
-
-    return instance
 
 async def _unload_device_instance(
     hass: HomeAssistant, entry: ConfigEntry, device_id: str
@@ -213,44 +235,150 @@ def _handle_device_tracker_update(
 async def _update_device_instance(
     hass: HomeAssistant, entry: ConfigEntry, device_entity_id: str, state: State
 ) -> None:
-    device_id = f"{device_entity_id}"
-    entry_data = hass.data[DOMAIN][entry.entry_id]
-
-    if device_id in entry_data["device_instances"]:
-        instance = entry_data["device_instances"][device_id]
-        instance.coordinator.entry.data.update({
-            CONF_LATITUDE: state.attributes["latitude"],
-            CONF_LONGITUDE: state.attributes["longitude"],
-        })
-        await instance.coordinator.async_refresh()
-    else:
-        await _create_device_instance(hass, entry, device_entity_id, state)
+    """Update an existing device instance with new state data."""
+    try:
+        # Validate input parameters
+        if not isinstance(device_entity_id, str) or not device_entity_id:
+            _LOGGER.error("Invalid device_entity_id provided")
+            return
+            
+        if not isinstance(state, State) or not hasattr(state, 'attributes'):
+            _LOGGER.error("Invalid state object provided for device %s", device_entity_id)
+            return
+            
+        # Validate required attributes
+        lat = state.attributes.get("latitude")
+        lon = state.attributes.get("longitude")
+        
+        if lat is None or lon is None:
+            _LOGGER.warning("Cannot update device %s: missing latitude/longitude", device_entity_id)
+            return
+            
+        device_id = f"{device_entity_id}"
+        
+        # Safely get entry data
+        try:
+            entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+            if not entry_data:
+                _LOGGER.error("No entry data found for entry %s", entry.entry_id)
+                return
+                
+            device_instances = entry_data.get("device_instances", {})
+            
+            if device_id in device_instances:
+                instance = device_instances[device_id]
+                if not hasattr(instance, 'coordinator') or not hasattr(instance.coordinator, 'entry'):
+                    _LOGGER.error("Invalid instance or coordinator for device %s", device_id)
+                    return
+                    
+                # Create a copy of the data to avoid modifying the original
+                updated_data = dict(instance.coordinator.entry.data)
+                updated_data.update({
+                    CONF_LATITUDE: float(lat),
+                    CONF_LONGITUDE: float(lon),
+                })
+                
+                # Update the coordinator's entry data
+                instance.coordinator.entry.data = updated_data
+                
+                # Refresh the coordinator
+                try:
+                    await instance.coordinator.async_refresh()
+                    _LOGGER.debug("Successfully updated device instance %s", device_id)
+                except Exception as refresh_err:
+                    _LOGGER.error("Failed to refresh coordinator for device %s: %s", 
+                                device_id, str(refresh_err))
+            else:
+                # Create a new instance if it doesn't exist
+                _LOGGER.debug("Device %s not found, creating new instance", device_id)
+                await _create_device_instance(hass, entry, device_entity_id, state)
+                
+        except KeyError as key_err:
+            _LOGGER.error("Key error while updating device %s: %s", device_id, str(key_err))
+        except Exception as data_err:
+            _LOGGER.error("Error accessing data for device %s: %s", device_id, str(data_err))
+            
+    except Exception as err:
+        _LOGGER.error("Unexpected error in _update_device_instance for %s: %s", 
+                     device_entity_id, str(err), exc_info=True)
 
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
+    """Coordinator for managing OpenMeteo data updates with error handling."""
+    
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, device_id: Optional[str] = None) -> None:
-        self.hass = hass
-        self.entry = entry
-        self.device_id = device_id
-        self._data: dict[str, Any] = {}
-
-        scan_interval_seconds = entry.options.get(
-            CONF_SCAN_INTERVAL,
-            entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-        )
-
-        if not isinstance(scan_interval_seconds, int):
-            scan_interval_seconds = int(scan_interval_seconds)
-
-        update_interval = timedelta(seconds=scan_interval_seconds)
-
-        super().__init__(
-            hass,
-            _LOGGER,
-            name="OpenMeteo",
-            update_interval=update_interval,
-        )
-
-        self.scan_interval_seconds = scan_interval_seconds
+        """Initialize the OpenMeteo data update coordinator."""
+        try:
+            if not isinstance(hass, HomeAssistant):
+                raise ValueError("Invalid HomeAssistant instance provided")
+                
+            if not isinstance(entry, ConfigEntry):
+                raise ValueError("Invalid ConfigEntry provided")
+                
+            self.hass = hass
+            self.entry = entry
+            self.device_id = device_id
+            self._data: dict[str, Any] = {}
+            self._last_update_success = False
+            
+            # Validate and get scan interval
+            try:
+                scan_interval_seconds = entry.options.get(
+                    CONF_SCAN_INTERVAL,
+                    entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+                )
+                
+                # Ensure scan_interval_seconds is a valid integer
+                try:
+                    scan_interval_seconds = int(scan_interval_seconds)
+                    if scan_interval_seconds < 30:  # Minimum 30 seconds between updates
+                        _LOGGER.warning(
+                            "Scan interval %s is too low, using minimum of 30 seconds",
+                            scan_interval_seconds
+                        )
+                        scan_interval_seconds = 30
+                except (TypeError, ValueError) as err:
+                    _LOGGER.warning(
+                        "Invalid scan interval %s, using default %s: %s",
+                        scan_interval_seconds, DEFAULT_SCAN_INTERVAL, str(err)
+                    )
+                    scan_interval_seconds = DEFAULT_SCAN_INTERVAL
+                    
+                update_interval = timedelta(seconds=scan_interval_seconds)
+                
+            except Exception as interval_err:
+                _LOGGER.error(
+                    "Error setting up scan interval, using default: %s",
+                    str(interval_err)
+                )
+                update_interval = timedelta(seconds=DEFAULT_SCAN_INTERVAL)
+                scan_interval_seconds = DEFAULT_SCAN_INTERVAL
+            
+            # Initialize the parent class
+            try:
+                super().__init__(
+                    hass,
+                    _LOGGER,
+                    name=f"OpenMeteo{' ' + str(device_id) if device_id else ''}",
+                    update_interval=update_interval,
+                )
+            except Exception as parent_err:
+                _LOGGER.error("Failed to initialize parent class: %s", str(parent_err))
+                raise
+                
+            self.scan_interval_seconds = scan_interval_seconds
+            _LOGGER.debug(
+                "Initialized OpenMeteoDataUpdateCoordinator for device %s with interval %s",
+                device_id or 'main',
+                update_interval
+            )
+            
+        except Exception as init_err:
+            _LOGGER.critical(
+                "Failed to initialize OpenMeteoDataUpdateCoordinator: %s",
+                str(init_err),
+                exc_info=True
+            )
+            raise
 
     async def _async_update_data(self) -> dict[str, Any]:
         latitude = self.entry.data[CONF_LATITUDE]

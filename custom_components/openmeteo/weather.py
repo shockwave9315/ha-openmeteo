@@ -119,12 +119,25 @@ class OpenMeteoWeather(WeatherEntity):
         self, 
         coordinator: OpenMeteoDataUpdateCoordinator, 
         config_entry: ConfigEntry, 
-        device_id: str = None
+        device_id: str | None = None 
     ) -> None:
         """Initialize the Open-Meteo weather."""
+        if not coordinator or not config_entry:
+            _LOGGER.error("Brak wymaganych argumentów: coordinator=%s, config_entry=%s", 
+                         'None' if coordinator is None else 'OK',
+                         'None' if config_entry is None else 'OK')
+            raise ValueError("Wymagane argumenty coordinator i config_entry nie mogą być puste")
+            
         self.coordinator = coordinator
         self._device_id = device_id
         self._config_entry = config_entry
+        self.entity_id = None # Inicjalizacja entity_id dla logera w property available
+        
+        # Inicjalizacja wymaganych atrybutów, aby uniknąć błędów w późniejszym kodzie
+        self._attr_name = None
+        self._attr_unique_id = None
+        self._attr_entity_registry_visible_default = True
+        self._attr_device_info = None
         
         # Set up unique ID and name based on whether this is a device instance or not
         if device_id:
@@ -1224,16 +1237,27 @@ class OpenMeteoWeather(WeatherEntity):
             return []
 
     async def async_added_to_hass(self) -> None:
-        """When entity is added to hass."""
+        """Run when entity about to be added to Home Assistant."""
         await super().async_added_to_hass()
         
-        # Add coordinator listener
-        self.async_on_remove(
-            self.coordinator.async_add_listener(self._handle_coordinator_update)
-        )
+        # Dodaj nasłuchiwacz, aby aktualizować stan encji po pomyślnej aktualizacji koordynatora
+        self.async_on_remove(self.coordinator.async_add_listener(self.async_write_ha_state))
         
-        # Add listener for device tracker updates
-        if hasattr(self, '_device_id'):
+        # Dodatkowe zabezpieczenia przed błędem 'NoneType' object has no attribute 'data'
+        if not hasattr(self, 'hass') or not hasattr(self, '_config_entry') or not self._config_entry:
+            _LOGGER.error("Błąd inicjalizacji: brak wymaganych atrybutów w encji %s", getattr(self, 'entity_id', 'nieznana'))
+            return
+            
+        # Logika widoczności głównej encji: ukryj, jeśli istnieją instancje urządzeń
+        if not self._device_id:  # Tylko dla głównej encji
+            if DOMAIN not in self.hass.data or not self._config_entry.entry_id in self.hass.data[DOMAIN]:
+                _LOGGER.error("Brak danych konfiguracyjnych dla wpisu %s w domenie %s", 
+                           self._config_entry.entry_id, DOMAIN)
+                return
+                
+            device_instances = self.hass.data[DOMAIN][self._config_entry.entry_id].get("device_instances", {})
+            
+            # Dodaj nasłuchiwacz, aby aktualizować stan encji po pomyślnej aktualizacji urządzeń
             self.async_on_remove(
                 async_dispatcher_connect(
                     self.hass,
