@@ -214,43 +214,91 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     ) -> None:
         """Initialize the sensor."""
         try:
+            # Initialize parent class first
             super().__init__(coordinator)
+            
+            # Basic attribute initialization
             self._sensor_type = sensor_type
             self._config_entry = config_entry
             self._device_id = device_id
             self._friendly_name = friendly_name
             
+            # Validate sensor type
             if sensor_type not in SENSOR_TYPES:
-                _LOGGER.error("Nieznany typ czujnika: %s", sensor_type)
-                raise ValueError(f"Nieznany typ czujnika: {sensor_type}")
+                error_msg = f"Nieznany typ czujnika: {sensor_type}"
+                _LOGGER.error(error_msg)
+                raise ValueError(error_msg)
                 
             sensor_config = SENSOR_TYPES[sensor_type]
             
-            # Ustaw podstawowe atrybuty
+            # Set basic attributes
             self._attr_available = False
             self._attr_should_poll = False
             
-            # Ustaw unikalny identyfikator i nazwę w zależności od tego, czy to instancja urządzenia, czy główna
+            # Set unique identifier and name based on device instance or main instance
             if device_id and friendly_name:
-                # To jest instancja urządzenia
+                # This is a device instance
                 self._attr_name = f"{friendly_name} {sensor_config.get('name', '')}".strip()
                 self._attr_unique_id = f"{config_entry.entry_id}-{sensor_type}-{device_id}"
                 self._attr_entity_registry_visible_default = True
             else:
-                # To jest główna instancja
-                base_name = config_entry.data.get('name', 'Open-Meteo')
+                # This is the main instance
+                base_name = config_entry.data.get('name', 'Open-Meteo') if config_entry.data else 'Open-Meteo'
                 self._attr_name = f"{base_name} {sensor_config.get('name', '')}".strip()
                 self._attr_unique_id = f"{config_entry.entry_id}-{sensor_type}"
                 
-                # Pokaż główną encję tylko jeśli nie ma instancji urządzeń
+                # Show main entity only if there are no device instances
                 try:
-                    device_instances = self.hass.data.get(DOMAIN, {}).get(config_entry.entry_id, {}).get("device_instances", {})
-                    self._attr_entity_registry_visible_default = not bool(device_instances)
+                    # Safely get device_instances with proper None checks
+                    hass = getattr(self, 'hass', None)
+                    if hass and hasattr(hass, 'data') and isinstance(hass.data, dict):
+                        domain_data = hass.data.get(DOMAIN, {})
+                        if isinstance(domain_data, dict):
+                            entry_data = domain_data.get(config_entry.entry_id, {})
+                            if isinstance(entry_data, dict):
+                                device_instances = entry_data.get("device_instances", {})
+                                self._attr_entity_registry_visible_default = not bool(device_instances)
+                                _LOGGER.debug(
+                                    "Sprawdzono instancje urządzeń dla %s. Widoczność: %s",
+                                    sensor_type,
+                                    self._attr_entity_registry_visible_default
+                                )
+                                # Przejdź do ustawień urządzenia
+                                self._setup_device_info(config_entry, sensor_config, device_id)
+                                return
+                    
+                    # Jeśli dotarliśmy tutaj, coś poszło nie tak z sprawdzaniem
+                    _LOGGER.debug(
+                        "Nie można określić instancji urządzeń dla %s. Domyślnie widoczne.",
+                        sensor_type
+                    )
+                    self._attr_entity_registry_visible_default = True
+                    
                 except Exception as e:
-                    _LOGGER.warning("Błąd podczas sprawdzania instancji urządzeń: %s", e)
+                    _LOGGER.warning(
+                        "Błąd podczas sprawdzania instancji urządzeń dla %s: %s",
+                        sensor_type,
+                        str(e),
+                        exc_info=True
+                    )
+                    # Domyślnie ustaw na True, aby upewnić się, że encja jest widoczna w przypadku błędu
                     self._attr_entity_registry_visible_default = True
             
             # Ustaw podstawowe informacje o urządzeniu
+            self._setup_device_info(config_entry, sensor_config, device_id)
+            
+        except Exception as e:
+            _LOGGER.error(
+                "Błąd podczas inicjalizacji czujnika %s: %s",
+                sensor_type,
+                str(e),
+                exc_info=True
+            )
+            raise
+            
+    def _setup_device_info(self, config_entry, sensor_config, device_id):
+        """Konfiguruje informacje o urządzeniu dla czujnika."""
+        try:
             self._attr_device_info = {
                 "identifiers": {(DOMAIN, config_entry.entry_id)},
                 "name": self._attr_name.replace(f" {sensor_config.get('name', '')}", "").strip() or "Open-Meteo",
@@ -261,7 +309,7 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
             if device_id and hasattr(self, '_attr_device_info'):
                 self._attr_device_info["via_device"] = (DOMAIN, config_entry.entry_id)
                 
-                # Pobierz dane konfiguracyjne
+                # Pobierz dane konfiguracyjne z obsługą błędów
                 config_data = config_entry.data or {}
                 device_name = config_data.get("device_name")
                 area_overrides = config_data.get("area_overrides", {})
@@ -279,7 +327,7 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
                 self._attr_available = False
                 
         except Exception as e:
-            _LOGGER.error("Błąd podczas inicjalizacji czujnika %s: %s", sensor_type, str(e), exc_info=True)
+            _LOGGER.error("Błąd podczas konfigurowania informacji o urządzeniu: %s", str(e), exc_info=True)
             raise
 
     @property
