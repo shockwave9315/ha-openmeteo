@@ -178,26 +178,45 @@ async def _create_device_instance(
     hass: HomeAssistant, entry: ConfigEntry, device_entity_id: str, state: State
 ) -> Optional[OpenMeteoInstance]:
     """Create a new OpenMeteo instance for a device."""
+    # Sprawdź poprawność stanu
+    if not state or not hasattr(state, 'attributes'):
+        _LOGGER.warning("Nieprawidłowy stan urządzenia: %s", device_entity_id)
+        return None
+        
+    # Pobierz współrzędne
     lat = state.attributes.get("latitude")
     lon = state.attributes.get("longitude")
     
     if lat is None or lon is None:
+        _LOGGER.debug("Brak wymaganych współrzędnych dla urządzenia %s", device_entity_id)
         return None
     
-    # Create a unique ID for this device instance
-    device_id = f"{device_entity_id}"
+    # Utwórz unikalny identyfikator dla tego urządzenia
+    try:
+        device_id = str(device_entity_id)
+    except Exception as e:
+        _LOGGER.error("Błąd podczas tworzenia ID urządzenia: %s", e)
+        return None
     
-    # Pobierz nazwę urządzenia z atrybutów, jeśli dostępna
+    # Pobierz nazwę urządzenia z rejestru urządzeń
     device_name = None
-    device_registry = await hass.helpers.device_registry.async_get_registry()
-    device_entry = device_registry.async_get_device(
-        identifiers={"device_tracker": device_entity_id.split('.')[1]}
-    )
-    
-    if device_entry and device_entry.name:
-        device_name = device_entry.name
-    else:
-        device_name = state.name
+    try:
+        device_registry = await hass.helpers.device_registry.async_get_registry()
+        device_id_parts = device_entity_id.split('.')
+        if len(device_id_parts) > 1:
+            device_entry = device_registry.async_get_device(
+                identifiers={"device_tracker": device_id_parts[1]}
+            )
+            if device_entry and device_entry.name:
+                device_name = device_entry.name
+        
+        # Jeśli nie znaleziono w rejestrze, użyj nazwy ze stanu
+        if not device_name and hasattr(state, 'name') and state.name:
+            device_name = state.name
+            
+    except Exception as e:
+        _LOGGER.warning("Błąd podczas pobierania nazwy urządzenia: %s", e)
+        device_name = f"Open-Meteo {device_id}"
     
     # Pobierz opcje konfiguracyjne
     use_device_names = entry.options.get(CONF_USE_DEVICE_NAMES, DEFAULT_USE_DEVICE_NAMES)

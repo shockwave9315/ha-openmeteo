@@ -172,8 +172,16 @@ async def async_setup_entry(
             new_entities = []
             for device_id, instance in device_instances.items():
                 if device_id not in existing_device_ids:
+                    # Pobierz przyjazną nazwę urządzenia z konfiguracji
+                    friendly_name = instance.entry.data.get("friendly_name", f"Open-Meteo {device_id}")
                     new_entities.extend([
-                        OpenMeteoSensor(instance.coordinator, instance.entry, sensor_type, device_id)
+                        OpenMeteoSensor(
+                            instance.coordinator, 
+                            instance.entry, 
+                            sensor_type, 
+                            device_id,
+                            friendly_name
+                        )
                         for sensor_type in SENSOR_TYPES
                     ])
             
