@@ -62,21 +62,8 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data=user_input,
             )
 
-        # Pobierz dostępne urządzenia do śledzenia
-        device_registry = dr.async_get(self.hass)
-        device_entries = dr.async_entries_for_config_entry(
-            device_registry, self.hass.config_entries.async_get_entry(DOMAIN, self.flow_id).entry_id
-        )
-        
-        # Filtruj tylko urządzenia z komponentu device_tracker
-        trackable_devices = {
-            entry.id: entry.name_by_user or entry.name or f"Device {entry.id}"
-            for entry in device_entries
-            if any(
-                identifier[0] == DEVICE_TRACKER_DOMAIN 
-                for identifier in entry.identifiers
-            )
-        }
+        # Pusta lista śledzonych urządzeń - będzie uzupełniona w opcjach po instalacji
+        trackable_devices = {}
         
         data_schema = {
             vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
