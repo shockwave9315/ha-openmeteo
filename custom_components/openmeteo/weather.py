@@ -1387,16 +1387,43 @@ class OpenMeteoWeather(WeatherEntity):
                          getattr(self, 'entity_id', 'nieznana'), str(e), exc_info=True)
             return []
 
+    @callback
+    def _check_device_removed(self, *_) -> None:
+        """Check if this entity's device has been removed and remove the entity if so."""
+        if not hasattr(self, 'hass') or not hasattr(self, '_config_entry') or not self._config_entry:
+            return
+            
+        try:
+            # Check if this is a device instance and if the device still exists
+            if hasattr(self, '_device_id') and self._device_id:
+                device_instances = self.hass.data[DOMAIN][self._config_entry.entry_id].get("device_instances", {})
+                if self._device_id not in device_instances:
+                    _LOGGER.debug("Removing weather entity for removed device: %s", self._device_id)
+                    self.hass.async_create_task(self.async_remove(force_remove=True))
+        except Exception as err:
+            _LOGGER.error("Error in _check_device_removed: %s", str(err), exc_info=True)
+
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to Home Assistant."""
         await super().async_added_to_hass()
         
-        # Dodaj nasłuchiwacz, aby aktualizować stan encji po pomyślnej aktualizacji koordynatora
+        # Initialize coordinator data if it's None
+        if not hasattr(self, 'coordinator') or self.coordinator is None:
+            _LOGGER.error("Coordinator not available for entity %s", getattr(self, 'entity_id', 'unknown'))
+            return
+            
+        # Initialize coordinator data if it's empty
+        if not hasattr(self.coordinator, 'data') or self.coordinator.data is None:
+            _LOGGER.debug("Initializing empty coordinator data for entity %s", getattr(self, 'entity_id', 'unknown'))
+            self.coordinator.data = {}
+        
+        # Add listener for coordinator updates
         self.async_on_remove(self.coordinator.async_add_listener(self.async_write_ha_state))
         
-        # Dodatkowe zabezpieczenia przed błędem 'NoneType' object has no attribute 'data'
+        # Additional safeguards for NoneType errors
         if not hasattr(self, 'hass') or not hasattr(self, '_config_entry') or not self._config_entry:
-            _LOGGER.error("Błąd inicjalizacji: brak wymaganych atrybutów w encji %s", getattr(self, 'entity_id', 'nieznana'))
+            _LOGGER.error("Initialization error: missing required attributes in entity %s", 
+                        getattr(self, 'entity_id', 'unknown'))
             return
             
         # Logika widoczności głównej encji: ukryj, jeśli istnieją instancje urządzeń
