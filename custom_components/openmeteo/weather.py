@@ -1486,6 +1486,48 @@ class OpenMeteoWeather(WeatherEntity):
                     _LOGGER.warning("Nie udało się zaktualizować nazwy obszaru: %s", e)
                     
     @property
+    def _is_daytime(self, dt_utc: datetime) -> bool:
+        """
+        Check if given datetime is during daytime based on sunrise/sunset data.
+        
+        Args:
+            dt_utc: Datetime to check in UTC
+            
+        Returns:
+            bool: True if it's daytime, False otherwise
+        """
+        try:
+            if not hasattr(self, 'coordinator') or not hasattr(self.coordinator, 'data'):
+                _LOGGER.debug("Brak danych koordynatora do określenia dnia/nocy")
+                return True  # Domyślnie uznajemy, że jest dzień
+                
+            # Pobierz dane o wschodzie i zachodzie słońca
+            data = self.coordinator.data
+            sunrise = data.get('daily', {}).get('sunrise', [])
+            sunset = data.get('daily', {}).get('sunset', [])
+            
+            if not sunrise or not sunset:
+                _LOGGER.debug("Brak danych o wschodzie/zachodzie słońca")
+                return True  # Domyślnie uznajemy, że jest dzień
+                
+            # Użyj pierwszego dostępnego wschodu i zachodu
+            sunrise_time = datetime.fromisoformat(sunrise[0])
+            sunset_time = datetime.fromisoformat(sunset[0])
+            
+            # Sprawdź, czy aktualna godzina jest między wschodem a zachodem
+            is_day = sunrise_time.time() <= dt_utc.time() < sunset_time.time()
+            _LOGGER.debug("Określono porę dnia: %s (godzina: %s, wschód: %s, zachód: %s)", 
+                         'dzień' if is_day else 'noc', 
+                         dt_utc.time(), 
+                         sunrise_time.time(), 
+                         sunset_time.time())
+            return is_day
+            
+        except Exception as e:
+            _LOGGER.error("Błąd podczas określania pory dnia: %s", str(e), exc_info=True)
+            return True  # W przypadku błędu uznajemy, że jest dzień
+            
+    @property
     def entity_picture(self) -> str | None:
         """
         Return the entity picture to use in the frontend, if any.
