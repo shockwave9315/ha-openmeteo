@@ -1,6 +1,7 @@
 """Sensor platform for Open-Meteo with device tracking support."""
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
 
 from homeassistant.components.sensor import SensorEntity
@@ -12,6 +13,8 @@ from homeassistant.const import (
     UnitOfSpeed,
     UnitOfTemperature,
 )
+
+_LOGGER = logging.getLogger(__name__)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -199,60 +202,77 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         config_entry: ConfigEntry,
         sensor_type: str,
         device_id: str = None,
+        friendly_name: str = None,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
-        self._sensor_type = "precipitation_total" if sensor_type == "precipitation" else sensor_type
-        self._device_id = device_id
-        self._config_entry = config_entry
-        
-        # Get sensor configuration
-        sensor_config = SENSOR_TYPES[self._sensor_type]
-        
-        # Set up unique ID and name based on whether this is a device instance or not
-        if device_id:
-            # This is a device instance
-            friendly_name = config_entry.data.get("friendly_name", f"Open-Meteo {device_id}")
-            self._attr_name = f"{friendly_name} {sensor_config['name']}"
-            self._attr_unique_id = f"{config_entry.entry_id}-{self._sensor_type}-{device_id}"
-            self._attr_entity_registry_visible_default = True
-        else:
-            # This is the main instance
-            self._attr_name = f"{config_entry.data.get('name', 'Open-Meteo')} {sensor_config['name']}"
-            self._attr_unique_id = f"{config_entry.entry_id}-{self._sensor_type}"
+        try:
+            super().__init__(coordinator)
+            self._sensor_type = sensor_type
+            self._config_entry = config_entry
+            self._device_id = device_id
+            self._friendly_name = friendly_name
             
-            # Only show the main entity if there are no device instances
-            device_instances = self.hass.data[DOMAIN][config_entry.entry_id].get("device_instances", {})
-            self._attr_entity_registry_visible_default = not device_instances
-        
-        # Set up basic device info
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, config_entry.entry_id)},
-            "name": self._attr_name.replace(f" {sensor_config['name']}", ""),
-            "manufacturer": "Open-Meteo",
-        }
-        
-        # Add device ID to device info if this is a device instance
-        if device_id:
-            self._attr_device_info["via_device"] = (DOMAIN, config_entry.entry_id)
+            if sensor_type not in SENSOR_TYPES:
+                _LOGGER.error("Nieznany typ czujnika: %s", sensor_type)
+                raise ValueError(f"Nieznany typ czujnika: {sensor_type}")
+                
+            sensor_config = SENSOR_TYPES[sensor_type]
             
-            # Pobierz nazwę urządzenia z konfiguracji, jeśli dostępna
-            device_name = config_entry.data.get("device_name")
+            # Ustaw podstawowe atrybuty
+            self._attr_available = False
+            self._attr_should_poll = False
             
-            # Sprawdź, czy mamy nadpisany obszar w konfiguracji
-            area_overrides = config_entry.data.get("area_overrides", {})
-            device_entity_id = config_entry.data.get("device_entity_id")
-            
-            if device_entity_id in area_overrides:
-                # Użyj nadpisanego obszaru
-                self._attr_device_info["suggested_area"] = area_overrides[device_entity_id]
-            elif device_name:
-                # Użyj nazwy urządzenia jako sugerowanego obszaru
-                self._attr_device_info["suggested_area"] = device_name
+            # Ustaw unikalny identyfikator i nazwę w zależności od tego, czy to instancja urządzenia, czy główna
+            if device_id and friendly_name:
+                # To jest instancja urządzenia
+                self._attr_name = f"{friendly_name} {sensor_config.get('name', '')}".strip()
+                self._attr_unique_id = f"{config_entry.entry_id}-{sensor_type}-{device_id}"
+                self._attr_entity_registry_visible_default = True
             else:
-                # Domyślnie: użyj części po myślniku w nazwie
-                if " - " in self._attr_name:
-                    self._attr_device_info["suggested_area"] = self._attr_name.split(" - ")[-1].strip()
+                # To jest główna instancja
+                base_name = config_entry.data.get('name', 'Open-Meteo')
+                self._attr_name = f"{base_name} {sensor_config.get('name', '')}".strip()
+                self._attr_unique_id = f"{config_entry.entry_id}-{sensor_type}"
+                
+                # Pokaż główną encję tylko jeśli nie ma instancji urządzeń
+                try:
+                    device_instances = self.hass.data.get(DOMAIN, {}).get(config_entry.entry_id, {}).get("device_instances", {})
+                    self._attr_entity_registry_visible_default = not bool(device_instances)
+                except Exception as e:
+                    _LOGGER.warning("Błąd podczas sprawdzania instancji urządzeń: %s", e)
+                    self._attr_entity_registry_visible_default = True
+            
+            # Ustaw podstawowe informacje o urządzeniu
+            self._attr_device_info = {
+                "identifiers": {(DOMAIN, config_entry.entry_id)},
+                "name": self._attr_name.replace(f" {sensor_config.get('name', '')}", "").strip() or "Open-Meteo",
+                "manufacturer": "Open-Meteo",
+            }
+            
+            # Dodaj ID urządzenia do informacji o urządzeniu, jeśli to instancja urządzenia
+            if device_id and hasattr(self, '_attr_device_info'):
+                self._attr_device_info["via_device"] = (DOMAIN, config_entry.entry_id)
+                
+                # Pobierz dane konfiguracyjne
+                config_data = config_entry.data or {}
+                device_name = config_data.get("device_name")
+                area_overrides = config_data.get("area_overrides", {})
+                device_entity_id = config_data.get("device_entity_id")
+                
+                # Ustaw sugerowany obszar na podstawie dostępnych danych
+                if device_entity_id and device_entity_id in area_overrides:
+                    self._attr_device_info["suggested_area"] = str(area_overrides[device_entity_id])
+                elif device_name:
+                    self._attr_device_info["suggested_area"] = str(device_name)
+                elif " - " in self._attr_name:
+                    self._attr_device_info["suggested_area"] = str(self._attr_name.split(" - ")[-1].strip())
+                
+                # Ustaw domyślną dostępność na False, aby uniknąć błędów przed pierwszą aktualizacją
+                self._attr_available = False
+                
+        except Exception as e:
+            _LOGGER.error("Błąd podczas inicjalizacji czujnika %s: %s", sensor_type, str(e), exc_info=True)
+            raise
 
     @property
     def native_value(self):
