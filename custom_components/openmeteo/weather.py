@@ -1485,7 +1485,6 @@ class OpenMeteoWeather(WeatherEntity):
                 except Exception as e:
                     _LOGGER.warning("Nie udało się zaktualizować nazwy obszaru: %s", e)
                     
-    @property
     def _is_daytime(self, dt_input) -> bool:
         """
         Check if given datetime is during daytime based on sunrise/sunset data.
@@ -1496,6 +1495,7 @@ class OpenMeteoWeather(WeatherEntity):
         Returns:
             bool: True if it's daytime, False otherwise
         """
+        _LOGGER.debug("Sprawdzanie pory dnia dla: %s (typ: %s)", dt_input, type(dt_input).__name__)
         try:
             if not hasattr(self, 'coordinator') or not hasattr(self.coordinator, 'data'):
                 _LOGGER.debug("Brak danych koordynatora do określenia dnia/nocy")
