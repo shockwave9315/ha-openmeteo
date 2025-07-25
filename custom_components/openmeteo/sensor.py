@@ -25,6 +25,13 @@ from . import OpenMeteoDataUpdateCoordinator, OpenMeteoInstance
 from .const import DOMAIN, SIGNAL_UPDATE_ENTITIES
 
 SENSOR_TYPES = {
+    "location": {
+        "name": "Lokalizacja",
+        "unit": None,
+        "icon": "mdi:map-marker",
+        "device_class": None,
+        "value_fn": lambda data: f"{data.get('latitude', 0):.4f}, {data.get('longitude', 0):.4f}",
+    },
     "temperature": {
         "name": "Temperatura",
         "unit": UnitOfTemperature.CELSIUS,

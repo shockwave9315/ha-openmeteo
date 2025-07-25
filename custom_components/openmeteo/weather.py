@@ -1545,6 +1545,47 @@ class OpenMeteoWeather(WeatherEntity):
             _LOGGER.error("Błąd podczas określania pory dnia: %s", str(e), exc_info=True)
             return True  # W przypadku błędu uznajemy, że jest dzień
             
+    async def async_update(self) -> None:
+        """Update the entity."""
+        _LOGGER.debug("Rozpoczęcie aktualizacji danych dla encji %s", getattr(self, 'entity_id', 'nieznana'))
+        try:
+            if not hasattr(self, 'coordinator') or not self.coordinator:
+                _LOGGER.error("Brak koordynatora do aktualizacji dla encji %s", getattr(self, 'entity_id', 'nieznana'))
+                return
+                
+            # Pobierz bieżące dane lokalizacyjne przed aktualizacją
+            old_lat = None
+            old_lon = None
+            if hasattr(self.coordinator, 'latitude'):
+                old_lat = self.coordinator.latitude
+            if hasattr(self.coordinator, 'longitude'):
+                old_lon = self.coordinator.longitude
+            
+            # Wymuś aktualizację danych
+            await self.coordinator.async_request_refresh()
+            
+            # Sprawdź, czy lokalizacja się zmieniła
+            new_lat = getattr(self.coordinator, 'latitude', None)
+            new_lon = getattr(self.coordinator, 'longitude', None)
+            
+            if old_lat != new_lat or old_lon != new_lon:
+                _LOGGER.info("Zmiana lokalizacji z (%s, %s) na (%s, %s) dla encji %s", 
+                           old_lat, old_lon, new_lat, new_lon, getattr(self, 'entity_id', 'nieznana'))
+            
+            _LOGGER.debug("Zakończono aktualizację danych dla encji %s. Nowe dane: %s", 
+                         getattr(self, 'entity_id', 'nieznana'), 
+                         bool(self.coordinator.data) if hasattr(self.coordinator, 'data') else 'brak danych')
+                         
+            # Wymuś aktualizację interfejsu użytkownika
+            self.async_write_ha_state()
+            
+        except Exception as e:
+            _LOGGER.error("Błąd podczas aktualizacji danych dla encji %s: %s", 
+                         getattr(self, 'entity_id', 'nieznana'), 
+                         str(e), 
+                         exc_info=True)
+            raise
+
     @property
     def entity_picture(self) -> str | None:
         """

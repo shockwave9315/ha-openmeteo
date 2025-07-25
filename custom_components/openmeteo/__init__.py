@@ -422,10 +422,11 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
                         raise UpdateFailed(f"API error: {response.status}")
 
                     data = await response.json()
+                    # Dodajemy dane lokalizacyjne do głównego słownika danych
+                    data["latitude"] = latitude
+                    data["longitude"] = longitude
+                    data["timezone"] = timezone
                     data["_metadata"] = {
-                        "latitude": latitude,
-                        "longitude": longitude,
-                        "timezone": timezone,
                         "last_update": datetime.now(timezone.utc).isoformat(),
                     }
                     return data
