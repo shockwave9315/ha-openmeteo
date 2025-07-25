@@ -1233,7 +1233,7 @@ class OpenMeteoWeather(WeatherEntity):
                         "temperature": float(temperature_2m[i]) if i < len(temperature_2m) else None,
                         "condition": self._get_condition(
                             int(weather_code[i]) if i < len(weather_code) else None,
-                            is_day=self._is_daytime(time_entry) if isinstance(time_entry, str) else True
+                            is_day=self._is_daytime(time_entry)
                         ),
                         "precipitation": float(precipitation[i]) if i < len(precipitation) else None,
                         "precipitation_probability": int(precipitation_probability[i]) if i < len(precipitation_probability) else None,
@@ -1486,12 +1486,12 @@ class OpenMeteoWeather(WeatherEntity):
                     _LOGGER.warning("Nie udało się zaktualizować nazwy obszaru: %s", e)
                     
     @property
-    def _is_daytime(self, dt_utc: datetime) -> bool:
+    def _is_daytime(self, dt_input) -> bool:
         """
         Check if given datetime is during daytime based on sunrise/sunset data.
         
         Args:
-            dt_utc: Datetime to check in UTC
+            dt_input: Datetime to check (can be datetime object or ISO format string)
             
         Returns:
             bool: True if it's daytime, False otherwise
@@ -1500,6 +1500,19 @@ class OpenMeteoWeather(WeatherEntity):
             if not hasattr(self, 'coordinator') or not hasattr(self.coordinator, 'data'):
                 _LOGGER.debug("Brak danych koordynatora do określenia dnia/nocy")
                 return True  # Domyślnie uznajemy, że jest dzień
+            
+            # Konwertuj wejście na obiekt datetime, jeśli to konieczne
+            if isinstance(dt_input, str):
+                try:
+                    dt_utc = datetime.fromisoformat(dt_input.replace('Z', '+00:00'))
+                except ValueError:
+                    _LOGGER.warning("Nieprawidłowy format daty: %s", dt_input)
+                    return True
+            elif isinstance(dt_input, datetime):
+                dt_utc = dt_input
+            else:
+                _LOGGER.warning("Nieobsługiwany typ danych wejściowych: %s", type(dt_input))
+                return True
                 
             # Pobierz dane o wschodzie i zachodzie słońca
             data = self.coordinator.data
@@ -1510,18 +1523,23 @@ class OpenMeteoWeather(WeatherEntity):
                 _LOGGER.debug("Brak danych o wschodzie/zachodzie słońca")
                 return True  # Domyślnie uznajemy, że jest dzień
                 
-            # Użyj pierwszego dostępnego wschodu i zachodu
-            sunrise_time = datetime.fromisoformat(sunrise[0])
-            sunset_time = datetime.fromisoformat(sunset[0])
-            
-            # Sprawdź, czy aktualna godzina jest między wschodem a zachodem
-            is_day = sunrise_time.time() <= dt_utc.time() < sunset_time.time()
-            _LOGGER.debug("Określono porę dnia: %s (godzina: %s, wschód: %s, zachód: %s)", 
-                         'dzień' if is_day else 'noc', 
-                         dt_utc.time(), 
-                         sunrise_time.time(), 
-                         sunset_time.time())
-            return is_day
+            try:
+                # Użyj pierwszego dostępnego wschodu i zachodu
+                sunrise_time = datetime.fromisoformat(sunrise[0].replace('Z', '+00:00'))
+                sunset_time = datetime.fromisoformat(sunset[0].replace('Z', '+00:00'))
+                
+                # Sprawdź, czy aktualna godzina jest między wschodem a zachodem
+                is_day = sunrise_time.time() <= dt_utc.time() < sunset_time.time()
+                _LOGGER.debug("Określono porę dnia: %s (godzina: %s, wschód: %s, zachód: %s)", 
+                            'dzień' if is_day else 'noc', 
+                            dt_utc.time(), 
+                            sunrise_time.time(), 
+                            sunset_time.time())
+                return is_day
+                
+            except (ValueError, IndexError) as e:
+                _LOGGER.warning("Błąd podczas przetwarzania czasu wschodu/zachodu: %s", str(e))
+                return True
             
         except Exception as e:
             _LOGGER.error("Błąd podczas określania pory dnia: %s", str(e), exc_info=True)
