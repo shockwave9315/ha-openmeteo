@@ -28,10 +28,22 @@ CONF_LONGITUDE = "longitude"
 CONF_ALTITUDE = "altitude"
 CONF_TIME_ZONE = "time_zone"  # Uwaga: w pliku __init__.py jest używane CONF_TIME_ZONE
 CONF_SCAN_INTERVAL = "scan_interval"
+CONF_DEVICE_TRACKERS = "device_trackers"
+CONF_TRACK_DEVICES = "track_devices"
+CONF_USE_DEVICE_NAMES = "use_device_names"  # Czy używać nazw urządzeń zamiast nazw trackerów
+CONF_AREA_OVERRIDES = "area_overrides"  # Nadpisywanie obszarów dla konkretnych urządzeń
+
 # Default values
-# Default values
-DEFAULT_NAME = "Open-Meteo"  # Dodaj tę linię
-DEFAULT_SCAN_INTERVAL = 600  # 10 minutes
+DEFAULT_NAME = "Open-Meteo"
+DEFAULT_SCAN_INTERVAL = 1800  # 30 minutes
+DEFAULT_TRACK_DEVICES = False
+DEFAULT_DEVICE_TRACKERS = []
+DEFAULT_USE_DEVICE_NAMES = True
+DEFAULT_AREA_OVERRIDES = {}
+
+# Signals
+SIGNAL_UPDATE_ENTITIES = f"{DOMAIN}_update_entities"
+SIGNAL_DEVICE_TRACKER_UPDATE = f"{DOMAIN}_device_tracker_update"
 
 DEFAULT_DAILY_VARIABLES = [
     "temperature_2m_max",
