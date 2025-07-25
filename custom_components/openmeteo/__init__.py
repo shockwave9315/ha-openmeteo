@@ -13,7 +13,7 @@ from homeassistant.components.device_tracker import DOMAIN as DEVICE_TRACKER_DOM
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.typing import EventType
+from homeassistant.core import Event
 
 from .const import (
     CONF_DAILY_VARIABLES,
@@ -221,7 +221,7 @@ async def _unload_device_instance(
 
 @callback
 def _handle_device_tracker_update(
-    hass: HomeAssistant, entry: ConfigEntry, event: EventType
+    hass: HomeAssistant, entry: ConfigEntry, event: Event
 ) -> None:
     entity_id = event.data.get("entity_id")
     new_state = hass.states.get(entity_id)
