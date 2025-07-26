@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from datetime import datetime
+from functools import lru_cache
+from typing import Any, Optional, List
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
@@ -24,8 +26,73 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import OpenMeteoDataUpdateCoordinator, OpenMeteoInstance
 from .const import DOMAIN, SIGNAL_UPDATE_ENTITIES
 
+@lru_cache(maxsize=32)
+def _get_hour_index(time_list: tuple[str, ...], now_iso: str) -> int:
+    """Find the index of the current hour in the time list.
+    
+    Args:
+        time_list: Tuple of ISO format timestamps
+        now_iso: Current UTC time in ISO format (without microseconds)
+        
+    Returns:
+        int: Index of the current hour, or 0 if not found
+    """
+    # Try exact match first
+    try:
+        return time_list.index(now_iso)
+    except ValueError:
+        pass
+        
+    # Try with 'Z' suffix
+    if not now_iso.endswith('Z'):
+        try:
+            return time_list.index(f"{now_iso}Z")
+        except ValueError:
+            pass
+    
+    # Try without 'Z' suffix
+    if now_iso.endswith('Z'):
+        try:
+            return time_list.index(now_iso[:-1])
+        except ValueError:
+            pass
+            
+    _LOGGER.debug("Current hour %s not found in time list, using index 0", now_iso)
+    return 0
+
+def get_current_hour_index(data: dict) -> int:
+    """Get the index of the current hour in the hourly data.
+    
+    Args:
+        data: The API response data containing hourly time information
+        
+    Returns:
+        int: The index of the current hour, or 0 if not found
+    """
+    try:
+        time_list = data.get("hourly", {}).get("time", [])
+        if not time_list or not isinstance(time_list, list):
+            _LOGGER.debug("No hourly time data available")
+            return 0
+            
+        # Get current UTC time in ISO format (without microseconds)
+        now_iso = datetime.utcnow().replace(minute=0, second=0, microsecond=0).isoformat()
+        
+        # Convert list to tuple for caching (lists are not hashable)
+        time_tuple = tuple(time_list)
+        
+        # Get the index using the cached function
+        idx = _get_hour_index(time_tuple, now_iso)
+        if idx > 0:
+            _LOGGER.debug("Found current hour at index %d: %s", idx, now_iso)
+        return idx
+            
+    except Exception as e:
+        _LOGGER.debug("Error in get_current_hour_index: %s", str(e), exc_info=True)
+        return 0
+
 def get_hourly_value(data: dict, key: str):
-    """Safely get hourly value from API response data.
+    """Safely get hourly value from API response data for the current hour.
     
     Args:
         data: The full API response data
@@ -36,20 +103,44 @@ def get_hourly_value(data: dict, key: str):
     """
     try:
         if not data or not isinstance(data, dict):
+            _LOGGER.debug("No data or invalid data format")
             return None
             
+        # Get the current hour index
+        idx = get_current_hour_index(data)
+        _LOGGER.debug("Using index %d for key %s", idx, key)
+        
+        # Get the value for the current hour
         hourly_data = data.get("hourly", {})
         if not isinstance(hourly_data, dict):
+            _LOGGER.debug("Hourly data is not a dictionary")
             return None
             
         values = hourly_data.get(key)
         if not values or not isinstance(values, list) or not values:
+            _LOGGER.debug("No values available for key: %s", key)
             return None
             
-        return float(values[0]) if values[0] is not None else None
+        # Handle index out of range
+        if idx >= len(values):
+            _LOGGER.debug("Index %d out of range for key %s (max: %d)", 
+                         idx, key, len(values) - 1)
+            return None
+            
+        value = values[idx]
+        if value is None:
+            _LOGGER.debug("Value is None for key %s at index %d", key, idx)
+            return None
+            
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            _LOGGER.debug("Could not convert value to float: %s", value)
+            return value
         
     except Exception as e:
-        _LOGGER.debug("Error in get_hourly_value for %s: %s", key, str(e))
+        _LOGGER.debug("Error in get_hourly_value for %s: %s", 
+                     key, str(e), exc_info=True)
         return None
 
 SENSOR_TYPES = {
@@ -91,9 +182,9 @@ SENSOR_TYPES = {
     "precipitation_probability": {
         "name": "Prawdopodobieństwo opadów",
         "unit": PERCENTAGE,
-        "icon": "mdi:weather-pouring",
+        "icon": "mdi:weather-rainy",
         "device_class": None,
-        "value_fn": lambda data: data.get("hourly", {}).get("precipitation_probability", [None])[0],
+        "value_fn": lambda data: get_hourly_value(data, "precipitation_probability"),
     },
     "precipitation_total": {
         "name": "Suma opadów (deszcz+śnieg)",
@@ -116,9 +207,9 @@ SENSOR_TYPES = {
     "wind_gust": {
         "name": "Porywy wiatru",
         "unit": UnitOfSpeed.KILOMETERS_PER_HOUR,
-        "icon": "mdi:weather-windy-variant",
+        "icon": "mdi:weather-windy",
         "device_class": None,
-        "value_fn": lambda data: data.get("hourly", {}).get("windgusts_10m", [None])[0],
+        "value_fn": lambda data: get_hourly_value(data, "windspeed_10m"),
     },
     "wind_bearing": {
         "name": "Kierunek wiatru",
@@ -132,7 +223,7 @@ SENSOR_TYPES = {
         "unit": UnitOfPressure.HPA,
         "icon": "mdi:gauge",
         "device_class": "pressure",
-        "value_fn": lambda data: data.get("hourly", {}).get("surface_pressure", [None])[0],
+        "value_fn": lambda data: get_hourly_value(data, "surface_pressure"),
     },
     "visibility": {
         "name": "Widzialność",
