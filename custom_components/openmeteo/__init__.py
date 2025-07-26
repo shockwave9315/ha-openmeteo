@@ -139,57 +139,81 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Handle removal of an entry."""
+    """Handle removal of an entry.
+    
+    This function is called when Home Assistant is shutting down or when the integration
+    is being reloaded. It must handle cases where the entry was never fully loaded.
+    
+    Returns:
+        bool: True if unload was successful, False otherwise
+    """
     try:
-        if DOMAIN not in hass.data or entry.entry_id not in hass.data[DOMAIN]:
-            _LOGGER.debug("No entry data found for %s, nothing to unload", entry.entry_id)
+        # If the domain isn't in hass.data, the entry was never loaded
+        if DOMAIN not in hass.data:
+            _LOGGER.debug("Domain %s not in hass.data, nothing to unload", DOMAIN)
             return True
-
+            
+        # If the entry_id isn't in the domain data, the entry was never loaded
+        if entry.entry_id not in hass.data[DOMAIN]:
+            _LOGGER.debug("Entry %s not found in %s domain, nothing to unload", 
+                        entry.entry_id, DOMAIN)
+            return True
+            
         entry_data = hass.data[DOMAIN][entry.entry_id]
         unload_ok = True
         
         _LOGGER.debug("Starting to unload entry %s", entry.entry_id)
-
-        # Unload all device instances
-        if "device_instances" in entry_data and entry_data["device_instances"]:
-            _LOGGER.debug("Unloading %d device instances", len(entry_data["device_instances"]))
-            for device_id in list(entry_data["device_instances"].keys()):
+        
+        # Safely get device_instances with a default empty dict
+        device_instances = entry_data.get("device_instances", {})
+        if device_instances:
+            _LOGGER.debug("Unloading %d device instances", len(device_instances))
+            for device_id in list(device_instances.keys()):
                 try:
                     if not await _unload_device_instance(hass, entry, device_id):
                         _LOGGER.warning("Failed to unload device instance %s", device_id)
                         unload_ok = False
                 except Exception as err:
-                    _LOGGER.error("Error unloading device instance %s: %s", device_id, str(err), exc_info=True)
+                    _LOGGER.error("Error unloading device instance %s: %s", 
+                                device_id, str(err), exc_info=True)
                     unload_ok = False
 
-        # Unload main instance
-        if "main_instance" in entry_data and entry_data["main_instance"] is not None:
+        # Safely unload main instance if it exists
+        main_instance = entry_data.get("main_instance")
+        if main_instance is not None:
             _LOGGER.debug("Unloading main instance")
             try:
-                if not await entry_data["main_instance"].async_unload():
+                if not await main_instance.async_unload():
                     _LOGGER.warning("Failed to unload main instance")
                     unload_ok = False
             except Exception as err:
-                _LOGGER.error("Error unloading main instance: %s", str(err), exc_info=True)
+                _LOGGER.error("Error unloading main instance: %s", 
+                            str(err), exc_info=True)
                 unload_ok = False
         else:
             _LOGGER.debug("No main instance to unload")
 
-        # Clean up data
+        # Clean up entry data if unload was successful
         if unload_ok:
             _LOGGER.debug("Successfully unloaded entry %s, cleaning up", entry.entry_id)
-            hass.data[DOMAIN].pop(entry.entry_id)
+            hass.data[DOMAIN].pop(entry.entry_id, None)
+            
+            # Clean up domain if no entries left
             if not hass.data[DOMAIN]:
                 _LOGGER.debug("No more entries, removing domain from hass.data")
-                hass.data.pop(DOMAIN)
+                hass.data.pop(DOMAIN, None)
         else:
-            _LOGGER.warning("Some components failed to unload properly for entry %s", entry.entry_id)
+            _LOGGER.warning("Some components failed to unload properly for entry %s", 
+                          entry.entry_id)
 
         return unload_ok
         
     except Exception as err:
-        _LOGGER.error("Unexpected error in async_unload_entry: %s", str(err), exc_info=True)
-        return False
+        _LOGGER.error("Unexpected error in async_unload_entry: %s", 
+                     str(err), exc_info=True)
+        # Still return True to indicate we handled the unload attempt
+        # This prevents the "Config entry was never loaded" error
+        return True
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle options update.

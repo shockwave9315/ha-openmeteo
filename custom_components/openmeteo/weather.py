@@ -84,11 +84,13 @@ async def async_setup_entry(
             device_instances = hass.data[DOMAIN][entry_id].get("device_instances", {})
             registry = er.async_get(hass)
 
-            # Find all existing weather entities for this config entry
+            # Find all existing weather entities for this config entry that belong to our integration
             existing_entities = [
                 e.entity_id
                 for e in registry.entities.values()
-                if e.config_entry_id == config_entry.entry_id and e.domain == "weather"
+                if (e.config_entry_id == config_entry.entry_id and 
+                    e.domain == "weather" and 
+                    getattr(e, 'platform', '').startswith(DOMAIN))
             ]
 
             # Remove old entities
@@ -107,17 +109,18 @@ async def async_setup_entry(
         except Exception as e:
             _LOGGER.exception("Error while dynamically updating weather entities: %s", e)
 
-    # Register the update listener
-    config_entry.async_on_unload(
-        async_dispatcher_connect(
-            hass,
-            f"{DOMAIN}_{entry_id}_update_entities",
-            _async_update_entities,
+    # Register the update listener (only for main instance!)
+    if not device_id:
+        config_entry.async_on_unload(
+            async_dispatcher_connect(
+                hass,
+                f"{DOMAIN}_{entry_id}_update_entities",
+                _async_update_entities,
+            )
         )
-    )
-
-    # Initial update call
-    _async_update_entities(entry_id)
+        
+        # Initial update only if no device_id
+        _async_update_entities(entry_id)
 
 class OpenMeteoWeather(WeatherEntity):
     """Implementation of an Open-Meteo weather entity with device tracking support."""
