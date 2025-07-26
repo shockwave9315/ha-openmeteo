@@ -418,12 +418,22 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
             device_id: The device ID if this is a device instance, None for main instance
             
         Note:
-            - For device instances, we don't set device_info as the device is managed in __init__.py
-            - Only the main instance (when no device_id) gets device_info
+            - For device instances, we set device_info with suggested_area for area assignment
+            - For main instance, we set basic device info
         """
         try:
-            if not device_id:
-                # Only set device info for main instance
+            if device_id:
+                # For device trackers, set device_info with suggested_area
+                self._attr_device_info = {
+                    "identifiers": {(DOMAIN, f"{config_entry.entry_id}-{device_id}")},
+                    "name": self._friendly_name or f"Open-Meteo {device_id}",
+                    "manufacturer": "Open-Meteo",
+                    "suggested_area": self._friendly_name or "Open-Meteo"
+                }
+                _LOGGER.debug("Set device_info for device instance %s (%s)", 
+                            device_id, self._sensor_type)
+            else:
+                # For main instance, set basic device info
                 self._attr_device_info = {
                     "identifiers": {(DOMAIN, config_entry.entry_id)},
                     "name": "Open-Meteo",
@@ -431,11 +441,6 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
                     "suggested_area": "Open-Meteo"
                 }
                 _LOGGER.debug("Set device_info for main instance sensor %s", self._sensor_type)
-            else:
-                # For device instances, don't set device_info as the device is managed in __init__.py
-                self._attr_device_info = None
-                _LOGGER.debug("Skipping device_info for device instance %s (%s)", 
-                            device_id, self._sensor_type)
         except Exception as e:
             _LOGGER.warning(
                 "Error configuring device info for %s: %s",
