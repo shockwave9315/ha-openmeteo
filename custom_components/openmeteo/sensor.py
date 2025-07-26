@@ -98,43 +98,22 @@ def get_hourly_value(data: dict, key: str):
         key: The hourly variable key to retrieve
         
     Returns:
-        The numeric value if available, None otherwise
+        The value if available, None otherwise
     """
     try:
-        if not data or not isinstance(data, dict):
-            _LOGGER.debug("No data or invalid data format")
-            return None
-            
-        # Log available hourly keys for debugging
-        hourly_keys = list(data.get("hourly", {}).keys()) if isinstance(data.get("hourly"), dict) else []
-        _LOGGER.debug("Available hourly keys in response: %s", hourly_keys)
+        # Log current UTC time and available time slots for debugging
+        now_utc = dt_util.utcnow()
+        now_iso = now_utc.isoformat() + "Z"  # Add 'Z' for UTC
+        hourly_times = data.get("hourly", {}).get("time", [])
+        _LOGGER.debug("Current UTC time: %s, Available times: %s...", now_iso, hourly_times[:3])
         
         # Get the current hour index
         idx = get_current_hour_index(data)
         if idx is None:
-            _LOGGER.debug("Could not determine current hour index for key %s", key)
-            return None
-        
-        _LOGGER.debug("Using index %d for key %s (available keys: %s)", idx, key, hourly_keys)
-        
-        # Get the value for the current hour
-        hourly_data = data.get("hourly", {})
-        if not isinstance(hourly_data, dict):
-            _LOGGER.debug("Hourly data is not a dictionary")
-            return None
-            
-        values = hourly_data.get(key)
-        if not values or not isinstance(values, list) or not values:
-            _LOGGER.debug("No values available for key: %s", key)
-            return None
-            
-        # Handle index out of range
-        if idx >= len(values):
-            _LOGGER.debug("Index %d out of range for key %s (max: %d)", 
-                         idx, key, len(values) - 1)
-            return None
-            
-        value = values[idx]
+            _LOGGER.warning("Brak dopasowania godziny, używam indeks 0 dla %s", key)
+            return data.get("hourly", {}).get(key, [None])[0]
+
+        return data.get("hourly", {}).get(key, [None])[idx]
         if value is None:
             _LOGGER.debug("Value is None for key %s at index %d", key, idx)
             return None

@@ -58,7 +58,6 @@ DEFAULT_HOURLY_VARIABLES = [
     "temperature_2m",
     "relativehumidity_2m",
     "apparent_temperature",
-    "apparent_temperature",
     "precipitation",
     "snowfall",
     "precipitation_probability",
