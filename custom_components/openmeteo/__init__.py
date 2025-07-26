@@ -79,14 +79,27 @@ class OpenMeteoInstance:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
-    main_instance = OpenMeteoInstance(hass, entry)
-    await main_instance.async_init()
-
+    instance = OpenMeteoInstance(hass, entry)
+    
+    # For main instance, ensure coordinates are set in the coordinator
+    if hasattr(entry, 'data') and isinstance(entry.data, dict):
+        lat = entry.data.get(CONF_LATITUDE)
+        lon = entry.data.get(CONF_LONGITUDE)
+        if lat is not None and lon is not None:
+            try:
+                instance.coordinator.update_coordinates(float(lat), float(lon))
+                _LOGGER.debug("Set initial coordinates for main instance: lat=%s, lon=%s", lat, lon)
+            except (ValueError, TypeError) as err:
+                _LOGGER.error("Invalid coordinates in entry data: lat=%s, lon=%s: %s", 
+                            lat, lon, str(err))
+                return False
+    
+    await instance.async_init()
+    
+    # Store the instance with consistent key 'main_instance' for backward compatibility
     hass.data[DOMAIN][entry.entry_id] = {
-        "main_instance": main_instance,
-        "device_instances": {},
-        "tracked_devices": set(),
-        "entry": entry,
+        "main_instance": instance,
+        "device_instances": {}
     }
 
     if entry.data.get("track_devices", False):
@@ -98,24 +111,57 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    if DOMAIN not in hass.data or entry.entry_id not in hass.data[DOMAIN]:
-        return True
+    """Handle removal of an entry."""
+    try:
+        if DOMAIN not in hass.data or entry.entry_id not in hass.data[DOMAIN]:
+            _LOGGER.debug("No entry data found for %s, nothing to unload", entry.entry_id)
+            return True
 
-    entry_data = hass.data[DOMAIN][entry.entry_id]
-    unload_ok = True
+        entry_data = hass.data[DOMAIN][entry.entry_id]
+        unload_ok = True
+        
+        _LOGGER.debug("Starting to unload entry %s", entry.entry_id)
 
-    for device_id in list(entry_data["device_instances"].keys()):
-        unload_ok = unload_ok and await _unload_device_instance(hass, entry, device_id)
+        # Unload all device instances
+        if "device_instances" in entry_data and entry_data["device_instances"]:
+            _LOGGER.debug("Unloading %d device instances", len(entry_data["device_instances"]))
+            for device_id in list(entry_data["device_instances"].keys()):
+                try:
+                    if not await _unload_device_instance(hass, entry, device_id):
+                        _LOGGER.warning("Failed to unload device instance %s", device_id)
+                        unload_ok = False
+                except Exception as err:
+                    _LOGGER.error("Error unloading device instance %s: %s", device_id, str(err), exc_info=True)
+                    unload_ok = False
 
-    if "main_instance" in entry_data:
-        unload_ok = unload_ok and await entry_data["main_instance"].async_unload()
+        # Unload main instance
+        if "main_instance" in entry_data and entry_data["main_instance"] is not None:
+            _LOGGER.debug("Unloading main instance")
+            try:
+                if not await entry_data["main_instance"].async_unload():
+                    _LOGGER.warning("Failed to unload main instance")
+                    unload_ok = False
+            except Exception as err:
+                _LOGGER.error("Error unloading main instance: %s", str(err), exc_info=True)
+                unload_ok = False
+        else:
+            _LOGGER.debug("No main instance to unload")
 
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
-        if not hass.data[DOMAIN]:
-            hass.data.pop(DOMAIN)
+        # Clean up data
+        if unload_ok:
+            _LOGGER.debug("Successfully unloaded entry %s, cleaning up", entry.entry_id)
+            hass.data[DOMAIN].pop(entry.entry_id)
+            if not hass.data[DOMAIN]:
+                _LOGGER.debug("No more entries, removing domain from hass.data")
+                hass.data.pop(DOMAIN)
+        else:
+            _LOGGER.warning("Some components failed to unload properly for entry %s", entry.entry_id)
 
-    return unload_ok
+        return unload_ok
+        
+    except Exception as err:
+        _LOGGER.error("Unexpected error in async_unload_entry: %s", str(err), exc_info=True)
+        return False
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if DOMAIN not in hass.data or entry.entry_id not in hass.data[DOMAIN]:
@@ -243,15 +289,51 @@ async def _create_device_instance(
 async def _unload_device_instance(
     hass: HomeAssistant, entry: ConfigEntry, device_id: str
 ) -> bool:
-    if (DOMAIN not in hass.data or 
-            entry.entry_id not in hass.data[DOMAIN] or 
-            device_id not in hass.data[DOMAIN][entry.entry_id]["device_instances"]):
-        return True
+    """Unload a device instance and clean up its resources.
+    
+    Args:
+        hass: The Home Assistant instance
+        entry: The config entry
+        device_id: The ID of the device to unload
+        
+    Returns:
+        bool: True if the device was unloaded successfully, False otherwise
+    """
+    try:
+        _LOGGER.debug("Starting to unload device instance %s", device_id)
+        
+        # Check if the device instance exists
+        if (DOMAIN not in hass.data or 
+                entry.entry_id not in hass.data[DOMAIN] or 
+                device_id not in hass.data[DOMAIN][entry.entry_id].get("device_instances", {})):
+            _LOGGER.debug("Device instance %s not found or already unloaded", device_id)
+            return True
 
-    instance = hass.data[DOMAIN][entry.entry_id]["device_instances"].pop(device_id, None)
-    if instance:
-        await instance.async_unload()
-    return True
+        # Get and remove the instance from the registry
+        instance = hass.data[DOMAIN][entry.entry_id]["device_instances"].pop(device_id, None)
+        if not instance:
+            _LOGGER.debug("No instance found for device %s", device_id)
+            return True
+            
+        _LOGGER.debug("Found instance for device %s, starting unload", device_id)
+        
+        # Unload the instance
+        try:
+            success = await instance.async_unload()
+            if not success:
+                _LOGGER.warning("Instance for device %s reported unload failure", device_id)
+            else:
+                _LOGGER.debug("Successfully unloaded device instance %s", device_id)
+            return success
+            
+        except Exception as err:
+            _LOGGER.error("Error unloading device instance %s: %s", device_id, str(err), exc_info=True)
+            return False
+            
+    except Exception as err:
+        _LOGGER.error("Unexpected error in _unload_device_instance for device %s: %s", 
+                     device_id, str(err), exc_info=True)
+        return False
 
 @callback
 def _handle_device_tracker_update(
