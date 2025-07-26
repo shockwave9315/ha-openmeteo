@@ -48,6 +48,17 @@ class OpenMeteoInstance:
         self.device_id = device_id
         self.coordinator = OpenMeteoDataUpdateCoordinator(hass, entry, device_id)
         self.entities = set()
+        
+        # Initialize coordinates for main instance if this is not a device tracker
+        if device_id is None and hasattr(entry, 'data') and isinstance(entry.data, dict):
+            lat = entry.data.get(CONF_LATITUDE)
+            lon = entry.data.get(CONF_LONGITUDE)
+            if lat is not None and lon is not None:
+                try:
+                    self.coordinator.update_coordinates(float(lat), float(lon))
+                    _LOGGER.debug("Set initial coordinates for main instance in __init__")
+                except (ValueError, TypeError) as e:
+                    _LOGGER.warning("Could not set coordinates in instance init: %s", str(e))
 
     async def async_init(self) -> None:
         await self.coordinator.async_config_entry_first_refresh()
@@ -77,30 +88,33 @@ class OpenMeteoInstance:
         self.entities.discard(entity_id)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up OpenMeteo from a config entry.
+    
+    Args:
+        hass: The Home Assistant instance
+        entry: The config entry
+        
+    Returns:
+        bool: True if setup was successful, False otherwise
+    """
     hass.data.setdefault(DOMAIN, {})
 
-    instance = OpenMeteoInstance(hass, entry)
-    
-    # For main instance, ensure coordinates are set in the coordinator
-    if hasattr(entry, 'data') and isinstance(entry.data, dict):
-        lat = entry.data.get(CONF_LATITUDE)
-        lon = entry.data.get(CONF_LONGITUDE)
-        if lat is not None and lon is not None:
-            try:
-                instance.coordinator.update_coordinates(float(lat), float(lon))
-                _LOGGER.debug("Set initial coordinates for main instance: lat=%s, lon=%s", lat, lon)
-            except (ValueError, TypeError) as err:
-                _LOGGER.error("Invalid coordinates in entry data: lat=%s, lon=%s: %s", 
-                            lat, lon, str(err))
-                return False
-    
-    await instance.async_init()
-    
-    # Store the instance with consistent key 'main_instance' for backward compatibility
-    hass.data[DOMAIN][entry.entry_id] = {
-        "main_instance": instance,
-        "device_instances": {}
-    }
+    try:
+        # Create and initialize the main instance
+        instance = OpenMeteoInstance(hass, entry)
+        await instance.async_init()
+        
+        # Store the instance with consistent key 'main_instance' for backward compatibility
+        hass.data[DOMAIN][entry.entry_id] = {
+            "main_instance": instance,
+            "device_instances": {}
+        }
+        
+        _LOGGER.debug("Successfully initialized main instance for entry %s", entry.entry_id)
+        
+    except Exception as err:
+        _LOGGER.error("Failed to set up OpenMeteo: %s", str(err), exc_info=True)
+        return False
 
     if entry.data.get("track_devices", False):
         await _setup_device_tracking(hass, entry)
@@ -164,26 +178,42 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle options update.
+    
+    Args:
+        hass: The Home Assistant instance
+        entry: The config entry being updated
+    """
     if DOMAIN not in hass.data or entry.entry_id not in hass.data[DOMAIN]:
+        _LOGGER.debug("No entry data found for %s, skipping options update", entry.entry_id)
         return
 
     entry_data = hass.data[DOMAIN][entry.entry_id]
-
-    old_track_devices = entry_data["entry"].data.get("track_devices", False)
-    new_track_devices = entry.data.get("track_devices", False)
+    
+    # Check if device tracking setting has changed
+    old_track_devices = entry.data.get("track_devices", False)
+    new_track_devices = entry.options.get("track_devices", False)
 
     if old_track_devices != new_track_devices:
+        _LOGGER.debug("Device tracking setting changed, reloading integration")
         await hass.config_entries.async_reload(entry.entry_id)
-    else:
-        entry_data["entry"] = entry
-        if "main_instance" in entry_data:
-            entry_data["main_instance"].coordinator.update_interval = timedelta(
-                seconds=entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-            )
-        for device_id, instance in entry_data["device_instances"].items():
-            instance.coordinator.update_interval = timedelta(
-                seconds=entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-            )
+        return
+        
+    # Update scan interval for all instances
+    new_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+    update_interval = timedelta(seconds=new_interval)
+    
+    # Update main instance if it exists
+    if "main_instance" in entry_data and entry_data["main_instance"] is not None:
+        entry_data["main_instance"].coordinator.update_interval = update_interval
+        _LOGGER.debug("Updated scan interval for main instance to %s seconds", new_interval)
+    
+    # Update all device instances
+    for device_id, instance in entry_data.get("device_instances", {}).items():
+        if hasattr(instance, 'coordinator'):
+            instance.coordinator.update_interval = update_interval
+            _LOGGER.debug("Updated scan interval for device %s to %s seconds", 
+                         device_id, new_interval)
         async_dispatcher_send(hass, SIGNAL_UPDATE_ENTITIES, entry.entry_id)
 
 async def _setup_device_tracking(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -254,9 +284,6 @@ async def _create_device_instance(
         
         # Update the coordinates in the coordinator
         instance.coordinator.update_coordinates(lat, lon)
-        
-        # Set up the entry data
-        entry.data = config_data
 
         # Initialize the instance
         await instance.async_init()
@@ -373,20 +400,8 @@ async def _update_device_instance(
                           device_entity_id)
             return
             
-        # For device trackers, update the coordinates in the coordinator
-        if device_entity_id.startswith('device_tracker.'):
-            # Create a basic config for device trackers
-            updated_data = {
-                CONF_NAME: f"{device_entity_id.replace('_', ' ').title()}",
-                "track_devices": True,
-                "device_entity_id": device_entity_id
-            }
-            _LOGGER.debug("Updating device tracker %s", device_entity_id)
-            
-            # Update the entry data with the basic config
-            entry.data = updated_data
-        else:
-            # For main instance, validate entry data
+        # For main instance, validate entry data
+        if not device_entity_id.startswith('device_tracker.'):
             if not hasattr(entry, 'data') or not isinstance(entry.data, dict):
                 _LOGGER.error("Invalid entry data for device %s: entry.data is missing or not a dictionary", 
                             device_entity_id)
@@ -529,8 +544,26 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
         _LOGGER.debug("Updated coordinates to lat=%s, lon=%s", self._latitude, self._longitude)
 
     async def _async_update_data(self) -> dict[str, Any]:
+        """Fetch data from Open-Meteo API.
+        
+        Returns:
+            dict: The weather data from the API
+            
+        Raises:
+            UpdateFailed: If there's an error fetching the data or if coordinates are not available
+        """
+        # Fallback to Home Assistant's default coordinates if none are set
         if self._latitude is None or self._longitude is None:
-            raise UpdateFailed("Coordinates not set for this device")
+            if hasattr(self.hass.config, 'latitude') and hasattr(self.hass.config, 'longitude'):
+                self._latitude = self.hass.config.latitude
+                self._longitude = self.hass.config.longitude
+                self._timezone = self.hass.config.time_zone or "auto"
+                _LOGGER.warning(
+                    "Using Home Assistant's default coordinates: lat=%s, lon=%s, tz=%s",
+                    self._latitude, self._longitude, self._timezone
+                )
+            else:
+                raise UpdateFailed("Coordinates not set and cannot fall back to Home Assistant's default coordinates")
 
         daily_vars = self.entry.options.get(
             CONF_DAILY_VARIABLES,
