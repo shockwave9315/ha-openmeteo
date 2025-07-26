@@ -128,17 +128,44 @@ async def async_setup_entry(
     if "device_id" in config_entry.data:
         # This is a device instance, add sensors for this device
         device_id = config_entry.data["device_id"]
-        coordinator = hass.data[DOMAIN][entry_id]["device_instances"][device_id].coordinator
         
-        entities = [
-            OpenMeteoSensor(coordinator, config_entry, sensor_type, device_id)
-            for sensor_type in SENSOR_TYPES
-        ]
-        
-        async_add_entities(entities)
+        # Safely get the device instance
+        try:
+            device_instances = hass.data[DOMAIN][entry_id].get("device_instances", {})
+            device_instance = device_instances.get(device_id)
+            
+            if not device_instance:
+                _LOGGER.warning("Device instance not found for device_id %s", device_id)
+                return
+                
+            coordinator = device_instance.coordinator
+            if not coordinator:
+                _LOGGER.error("Coordinator not found for device_id %s", device_id)
+                return
+            
+            entities = [
+                OpenMeteoSensor(coordinator, config_entry, sensor_type, device_id)
+                for sensor_type in SENSOR_TYPES
+            ]
+            
+            async_add_entities(entities)
+            _LOGGER.debug("Successfully added sensors for device_id %s", device_id)
+            
+        except Exception as err:
+            _LOGGER.error(
+                "Error setting up sensors for device_id %s: %s",
+                device_id,
+                str(err),
+                exc_info=True
+            )
     else:
-        # This is the main instance, add main sensors
-        coordinator = hass.data[DOMAIN][entry_id]["main_instance"].coordinator
+        # This is the main instance, add main sensors if they exist
+        main_instance = hass.data[DOMAIN][entry_id].get("main_instance")
+        if not main_instance:
+            _LOGGER.debug("Main instance is None, skipping main sensors setup")
+            return
+            
+        coordinator = main_instance.coordinator
         
         entities = [
             OpenMeteoSensor(coordinator, config_entry, sensor_type)
@@ -179,18 +206,39 @@ async def async_setup_entry(
             new_entities = []
             for device_id, instance in device_instances.items():
                 if device_id not in existing_device_ids:
-                    # Pobierz przyjazną nazwę urządzenia z konfiguracji
-                    friendly_name = instance.entry.data.get("friendly_name", f"Open-Meteo {device_id}")
-                    new_entities.extend([
-                        OpenMeteoSensor(
-                            instance.coordinator, 
-                            instance.entry, 
-                            sensor_type, 
-                            device_id,
-                            friendly_name
+                    # Skip if coordinator is not available (race condition during HA restart)
+                    if not instance.coordinator:
+                        _LOGGER.warning(
+                            "Skipping device_id %s due to missing coordinator", 
+                            device_id
                         )
-                        for sensor_type in SENSOR_TYPES
-                    ])
+                        continue
+                        
+                    # Get friendly name from config or use default
+                    friendly_name = instance.entry.data.get(
+                        "friendly_name", 
+                        f"Open-Meteo {device_id}"
+                    )
+                    
+                    try:
+                        new_entities.extend([
+                            OpenMeteoSensor(
+                                instance.coordinator, 
+                                instance.entry, 
+                                sensor_type, 
+                                device_id,
+                                friendly_name
+                            )
+                            for sensor_type in SENSOR_TYPES
+                        ])
+                        _LOGGER.debug("Created sensors for device_id: %s", device_id)
+                    except Exception as err:
+                        _LOGGER.error(
+                            "Error creating sensors for device_id %s: %s",
+                            device_id,
+                            str(err),
+                            exc_info=True
+                        )
             
             if new_entities:
                 async_add_entities(new_entities)
