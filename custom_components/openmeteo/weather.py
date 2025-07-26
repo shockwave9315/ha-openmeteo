@@ -1,6 +1,7 @@
 """Support for Open-Meteo weather service with device tracking."""
 from __future__ import annotations
 
+import hashlib
 import logging
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -35,6 +36,10 @@ from . import OpenMeteoDataUpdateCoordinator, OpenMeteoInstance
 from .const import CONDITION_MAP, DOMAIN, SIGNAL_UPDATE_ENTITIES
 
 _LOGGER = logging.getLogger(__name__)
+
+def stable_hash(input_str: str, length: int = 6) -> str:
+    """Return a short, stable hash of a string."""
+    return hashlib.sha1(input_str.encode()).hexdigest()[:length]
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -302,40 +307,26 @@ class OpenMeteoWeather(WeatherEntity):
                     
                 self._attr_entity_registry_visible_default = len(device_instances) == 0
             
-            # Set up device info with safe defaults
-            if device_id:
-                # For device instances, create a unique device entry
-                self._attr_device_info = {
-                    "identifiers": {(DOMAIN, f"{config_entry.entry_id}-{device_id}")},
-                    "name": self._attr_name or f"Open-Meteo {device_id}",
-                    "manufacturer": "Open-Meteo",
-                    "via_device": (DOMAIN, config_entry.entry_id)  # Link to main device
-                }
-            else:
-                # For main instance
-                self._attr_device_info = {
-                    "identifiers": {(DOMAIN, config_entry.entry_id)},
-                    "name": self._attr_name or "Open-Meteo Weather",
-                    "manufacturer": "Open-Meteo",
-                }
+            # Device info will be handled by the device_info property
+            self._attr_device_info = None
+            
+            # Safely get device-specific data
+            try:
+                self._device_entity_id = config_entry.data.get("device_entity_id")
+                self._device_name = config_entry.data.get("device_name")
+                self._area_overrides = config_entry.data.get("area_overrides", {})
+                self._device_id = device_id
                 
-                # Safely get device-specific data
-                try:
-                    self._device_entity_id = config_entry.data.get("device_entity_id")
-                    self._device_name = config_entry.data.get("device_name")
-                    self._area_overrides = config_entry.data.get("area_overrides", {})
-                    self._device_id = device_id
-                    
-                    # Set a default suggested area that will be updated in async_added_to_hass
-                    self._attr_device_info["suggested_area"] = f"Lokalizacja {device_id[-4:] if device_id else 'unkn'}"
-                except Exception as dev_err:
-                    _LOGGER.error("Error setting up device info: %s", str(dev_err))
-                    # Ensure required attributes are set even if there's an error
-                    self._device_entity_id = None
-                    self._device_name = None
-                    self._area_overrides = {}
-                    self._device_id = device_id
-                    self._attr_device_info["suggested_area"] = "Unknown Location"
+                # Store suggested area for device_info property
+                self._suggested_area = f"Lokalizacja {device_id[-4:] if device_id else 'unkn'}"
+            except Exception as dev_err:
+                _LOGGER.error("Error setting up device info: %s", str(dev_err))
+                # Ensure required attributes are set even if there's an error
+                self._device_entity_id = None
+                self._device_name = None
+                self._area_overrides = {}
+                self._device_id = device_id
+                self._suggested_area = "Unknown Location"
                     
             _LOGGER.debug("Initialized %s weather entity", "device" if device_id else "main")
             
@@ -347,16 +338,51 @@ class OpenMeteoWeather(WeatherEntity):
 
     @property
     def unique_id(self) -> str:
-        """Return a stable and unique ID using entry_id and full device_id (if available)."""
+        """Return unique ID combining entry ID and device ID."""
         try:
-            base = self._config_entry.entry_id
+            entry_id = self._config_entry.entry_id
             if self._device_id:
-                clean_device_id = self._device_id.replace(".", "_")
-                return f"{base}-{clean_device_id}-weather"
-            return f"{base}-main-weather"
+                suffix = stable_hash(self._device_id)
+                return f"{entry_id}-dev{suffix}-weather"
+            return f"{entry_id}-main-weather"
         except Exception as e:
-            _LOGGER.error("Błąd generowania unique_id: %s", e, exc_info=True)
+            _LOGGER.error("Error generating unique_id: %s", e, exc_info=True)
             return f"{getattr(self._config_entry, 'entry_id', 'error')}-fallback-weather"
+            
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device information for the weather entity."""
+        try:
+            entry_id = self._config_entry.entry_id
+            
+            if self._device_id:
+                # For device tracker instances
+                return DeviceInfo(
+                    identifiers={(DOMAIN, f"{entry_id}-{self._device_id}".replace(".", "_"))},
+                    name=self.name or f"Open-Meteo {self._device_id}",
+                    manufacturer="Open-Meteo",
+                    model="Dynamic Tracker Weather",
+                    configuration_url="https://open-meteo.com/",
+                    suggested_area=getattr(self, "_suggested_area", None)
+                )
+            else:
+                # For main instance
+                return DeviceInfo(
+                    identifiers={(DOMAIN, entry_id)},
+                    name=self.name or "Open-Meteo Weather",
+                    manufacturer="Open-Meteo",
+                    model="Main Weather Entity",
+                    configuration_url="https://open-meteo.com/",
+                    suggested_area=getattr(self, "_suggested_area", None)
+                )
+        except Exception as e:
+            _LOGGER.error("Error generating device info: %s", e, exc_info=True)
+            # Return a minimal device info in case of errors
+            return DeviceInfo(
+                identifiers={(DOMAIN, f"error-{entry_id}")},
+                name="Open-Meteo Error",
+                manufacturer="Open-Meteo"
+            )
 
     @property
     def available(self) -> bool:
