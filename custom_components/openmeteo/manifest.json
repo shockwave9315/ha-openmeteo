@@ -6,6 +6,6 @@
   "issue_tracker": "https://github.com/shockwave9315/ha-openmeteo/issues",
   "codeowners": ["@shockwave9315"],
   "iot_class": "cloud_polling",
-  "version": "1.0.37",
+  "version": "1.0.38",
   "requirements": ["aiohttp>=3.8.0", "async-timeout>=4.0.0"]
 }

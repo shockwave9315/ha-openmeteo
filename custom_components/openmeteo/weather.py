@@ -356,27 +356,14 @@ class OpenMeteoWeather(WeatherEntity):
         """Return a unique ID for this entity.
         
         Returns:
-            str: A unique ID that combines entry_id, device_id (or 'main'), and coordinates hash
+            str: A stable unique ID that combines entry_id and device_id (or 'main')
         """
         try:
-            # Base ID with entry_id and device_id (or 'main' for main instance)
-            base_id = f"{self._config_entry.entry_id}-{self._device_id or 'main'}"
-            
-            # Add coordinates hash if available
-            if hasattr(self.coordinator, '_latitude') and hasattr(self.coordinator, '_longitude'):
-                lat = getattr(self.coordinator, '_latitude', 0)
-                lon = getattr(self.coordinator, '_longitude', 0)
-                if lat is not None and lon is not None:
-                    coord_hash = abs(hash((lat, lon))) % 10000
-                    return f"{base_id}-{coord_hash:04d}-weather"
-            
-            # Fallback without coordinates hash
-            return f"{base_id}-weather"
-            
+            return f"{self._config_entry.entry_id}-{self._device_id or 'main'}-weather"
         except Exception as e:
             _LOGGER.error("Error generating unique_id: %s", str(e), exc_info=True)
             # Fallback to a basic unique ID if something goes wrong
-            return f"{self._config_entry.entry_id}-{self._device_id or 'main'}-weather"
+            return f"{self._config_entry.entry_id}-main-weather"
 
     @property
     def available(self) -> bool:
