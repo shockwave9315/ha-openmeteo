@@ -52,9 +52,23 @@ class OpenMeteoInstance:
     async def async_init(self) -> None:
         await self.coordinator.async_config_entry_first_refresh()
 
-    async def async_unload(self) -> None:
+    async def async_unload(self) -> bool:
+        """Unload the instance and all its platforms.
+        
+        Returns:
+            bool: True if all platforms were unloaded successfully, False otherwise.
+        """
+        success = True
         for platform in PLATFORMS:
-            await self.hass.config_entries.async_forward_entry_unload(self.entry, platform)
+            try:
+                result = await self.hass.config_entries.async_forward_entry_unload(self.entry, platform)
+                if not result:
+                    _LOGGER.warning("Failed to unload platform %s", platform)
+                    success = False
+            except Exception as err:
+                _LOGGER.error("Error unloading platform %s: %s", platform, str(err), exc_info=True)
+                success = False
+        return success
 
     def add_entity(self, entity_id: str) -> None:
         self.entities.add(entity_id)
