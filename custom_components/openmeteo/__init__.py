@@ -151,6 +151,8 @@ async def _create_device_instance(
 ) -> Optional[OpenMeteoInstance]:
     """Create a new device instance with validation and error handling."""
     try:
+        _LOGGER.debug("Creating device instance for %s", device_entity_id)
+        
         if not isinstance(state, State) or not hasattr(state, 'attributes'):
             _LOGGER.error("Invalid state object provided for device %s", device_entity_id)
             return None
@@ -162,8 +164,18 @@ async def _create_device_instance(
             _LOGGER.warning("Device %s is missing latitude/longitude in attributes", device_entity_id)
             return None
 
-        if not isinstance(entry.data, dict):
-            _LOGGER.error("Invalid entry data for device %s", device_entity_id)
+        # Validate entry data
+        if not hasattr(entry, 'data') or not isinstance(entry.data, dict):
+            _LOGGER.error("Invalid entry data for device %s: entry.data is missing or not a dictionary", 
+                         device_entity_id)
+            return None
+            
+        # Ensure required fields are present in entry data
+        required_fields = [CONF_LATITUDE, CONF_LONGITUDE, CONF_NAME]
+        missing_fields = [field for field in required_fields if field not in entry.data]
+        if missing_fields:
+            _LOGGER.error("Missing required fields in entry data for device %s: %s", 
+                         device_entity_id, ", ".join(missing_fields))
             return None
 
         device_id = device_entity_id
@@ -223,20 +235,22 @@ async def _unload_device_instance(
 def _handle_device_tracker_update(
     hass: HomeAssistant, entry: ConfigEntry, event: Event
 ) -> None:
+    """Handle device tracker state changes in a thread-safe way."""
     entity_id = event.data.get("entity_id")
     new_state = hass.states.get(entity_id)
 
     if not new_state or new_state.attributes.get("latitude") is None:
-        hass.async_create_task(_unload_device_instance(hass, entry, entity_id))
-        return
-
-    hass.async_create_task(_update_device_instance(hass, entry, entity_id, new_state))
+        hass.add_job(_unload_device_instance(hass, entry, entity_id))
+    else:
+        hass.add_job(_update_device_instance(hass, entry, entity_id, new_state))
 
 async def _update_device_instance(
     hass: HomeAssistant, entry: ConfigEntry, device_entity_id: str, state: State
 ) -> None:
     """Update an existing device instance with new state data."""
     try:
+        _LOGGER.debug("Updating device instance for %s", device_entity_id)
+        
         # Validate input parameters
         if not isinstance(device_entity_id, str) or not device_entity_id:
             _LOGGER.error("Invalid device_entity_id provided")
@@ -251,7 +265,14 @@ async def _update_device_instance(
         lon = state.attributes.get("longitude")
         
         if lat is None or lon is None:
-            _LOGGER.warning("Cannot update device %s: missing latitude/longitude", device_entity_id)
+            _LOGGER.warning("Cannot update device %s: missing latitude/longitude in state attributes", 
+                          device_entity_id)
+            return
+            
+        # Validate entry data
+        if not hasattr(entry, 'data') or not isinstance(entry.data, dict):
+            _LOGGER.error("Invalid entry data for device %s: entry.data is missing or not a dictionary", 
+                         device_entity_id)
             return
             
         device_id = f"{device_entity_id}"
