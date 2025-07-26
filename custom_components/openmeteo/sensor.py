@@ -423,11 +423,12 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         """
         try:
             if not device_id:
-                # Only set device_info for the main instance
+                # Only set device info for main instance
                 self._attr_device_info = {
                     "identifiers": {(DOMAIN, config_entry.entry_id)},
                     "name": "Open-Meteo",
                     "manufacturer": "Open-Meteo",
+                    "suggested_area": "Open-Meteo"
                 }
                 _LOGGER.debug("Set device_info for main instance sensor %s", self._sensor_type)
             else:

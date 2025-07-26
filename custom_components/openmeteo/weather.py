@@ -316,6 +316,7 @@ class OpenMeteoWeather(WeatherEntity):
                     identifiers={(DOMAIN, self._config_entry.entry_id)},
                     name="Open-Meteo",
                     manufacturer="Open-Meteo",
+                    suggested_area="Open-Meteo"
                 )
             # For device trackers, return None as they're managed in __init__.py
             # This prevents duplicate device entries in the registry

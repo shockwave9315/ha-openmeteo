@@ -11,7 +11,10 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_state_change_event
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import (
+    entity_registry as er,
+    device_registry as dr
+)
 from homeassistant.components.device_tracker import DOMAIN as DEVICE_TRACKER_DOMAIN
 from homeassistant.core import Event
 
@@ -136,12 +139,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.debug("Successfully initialized main instance")
             
             # Create main device if needed
-            device_registry = er.async_get(hass)
+            device_registry = dr.async_get(hass)
             device_registry.async_get_or_create(
-                config_entry=entry,
+                config_entry_id=entry.entry_id,
                 identifiers={(DOMAIN, entry.entry_id)},
                 manufacturer="Open-Meteo",
                 name="Open-Meteo",
+                model="Weather",
             )
             
         except Exception as err:
