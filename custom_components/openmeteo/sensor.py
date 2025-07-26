@@ -61,23 +61,33 @@ def _get_hour_index(time_list: tuple[str, ...], now_iso: str) -> int:
     return 0
 
 def get_current_hour_index(data: dict) -> int | None:
-    """Returns the index of the current hour in the hourly data."""
+    """Returns the index of the current hour in the hourly data.
+    
+    Handles both UTC times with 'Z' suffix and without it.
+    """
     try:
         hourly_times = data.get("hourly", {}).get("time", [])
         if not hourly_times:
             _LOGGER.debug("Brak listy godzin w danych")
             return None
 
-        now = dt_util.now().replace(minute=0, second=0, microsecond=0)
-        now_iso = now.isoformat()
+        # Use UTC time, not local
+        now_utc = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
+        now_iso = now_utc.isoformat() + "Z"  # Add 'Z' for UTC
 
         if now_iso in hourly_times:
             return hourly_times.index(now_iso)
 
+        # Try without 'Z' if not found
+        if now_iso.endswith("Z"):
+            now_iso_no_z = now_iso[:-1]
+            if now_iso_no_z in hourly_times:
+                return hourly_times.index(now_iso_no_z)
+
         _LOGGER.debug("Bieżąca godzina %s nie znaleziona w: %s", now_iso, hourly_times[:3])
         return None
     except Exception as e:
-        _LOGGER.warning("Błąd w get_current_hour_index: %s", e)
+        _LOGGER.warning("Błąd w get_current_hour_index: %s", e, exc_info=True)
         return None
 
 def get_hourly_value(data: dict, key: str):
