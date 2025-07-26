@@ -83,18 +83,24 @@ async def async_setup_entry(
             async_add_entities([OpenMeteoWeather(coordinator, config_entry, device_id)])
             
         else:
-            # This is the main instance, add a single weather entity
-            if "main_instance" not in entry_data or not entry_data["main_instance"]:
-                _LOGGER.error("Main instance not found for entry_id: %s", entry_id)
-                return
-                
-            coordinator = entry_data["main_instance"].coordinator
-            if not coordinator:
-                _LOGGER.error("No coordinator found for main instance")
-                return
-                
-            _LOGGER.debug("Setting up main weather entity")
-            async_add_entities([OpenMeteoWeather(coordinator, config_entry)])
+            # This is the main instance, only add it if there are no device instances
+            device_instances = entry_data.get("device_instances", {})
+            
+            if not device_instances:
+                # Only create main instance if there are no device trackers
+                if "main_instance" not in entry_data or not entry_data["main_instance"]:
+                    _LOGGER.error("Main instance not found for entry_id: %s", entry_id)
+                    return
+                    
+                coordinator = entry_data["main_instance"].coordinator
+                if not coordinator:
+                    _LOGGER.error("No coordinator found for main instance")
+                    return
+                    
+                _LOGGER.debug("Setting up main weather entity (no device trackers present)")
+                async_add_entities([OpenMeteoWeather(coordinator, config_entry)])
+            else:
+                _LOGGER.debug("Skipping main weather entity setup - using device trackers instead")
         
         # Add a listener for device instance updates
         @callback
