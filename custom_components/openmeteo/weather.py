@@ -341,17 +341,25 @@ class OpenMeteoWeather(WeatherEntity):
 
     @property
     def unique_id(self) -> str:
-        """Return a unique ID for this entity.
-        
-        Returns:
-            str: A stable unique ID that combines entry_id and device_id (or 'main')
-        """
+        """Return a truly unique and deterministic ID for this weather entity."""
         try:
-            return f"{self._config_entry.entry_id}-{self._device_id or 'main'}-weather"
+            base = self._config_entry.entry_id
+            if self._device_id:
+                # Replace dots with underscores to make the ID safe
+                clean_id = self._device_id.replace(".", "_")
+                unique_id = f"{base}-{clean_id}-weather"
+                _LOGGER.debug("Generated unique_id for device %s: %s", self._device_id, unique_id)
+            else:
+                unique_id = f"{base}-main-weather"
+                _LOGGER.debug("Generated unique_id for main instance: %s", unique_id)
+            return unique_id
         except Exception as e:
-            _LOGGER.error("Error generating unique_id: %s", str(e), exc_info=True)
-            # Fallback to a basic unique ID if something goes wrong
-            return f"{self._config_entry.entry_id}-main-weather"
+            _LOGGER.error("Błąd generowania unique_id: %s (device_id=%s, entry_id=%s)", 
+                         e, 
+                         getattr(self, '_device_id', 'None'),
+                         getattr(getattr(self, '_config_entry', None), 'entry_id', 'None'),
+                         exc_info=True)
+            return f"{getattr(self._config_entry, 'entry_id', 'error')}-fallback-weather"
 
     @property
     def available(self) -> bool:
