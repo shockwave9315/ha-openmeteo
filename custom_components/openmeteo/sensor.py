@@ -91,39 +91,63 @@ def get_current_hour_index(data: dict) -> int | None:
         _LOGGER.warning("Błąd w get_current_hour_index: %s", e, exc_info=True)
         return None
 
-def get_hourly_value(data: dict, key: str):
+def get_hourly_value(data: dict, key: str, device_id: str = None):
     """Safely get hourly value from API response data for the current hour.
     
     Args:
         data: The full API response data
         key: The hourly variable key to retrieve
+        device_id: Optional device ID for better logging
         
     Returns:
         The value if available, None otherwise
     """
     try:
-        # Log current UTC time and available time slots for debugging
+        # Log current UTC and local time for debugging
         now_utc = dt_util.utcnow()
-        now_iso = now_utc.isoformat() + "Z"  # Add 'Z' for UTC
-        hourly_times = data.get("hourly", {}).get("time", [])
-        _LOGGER.debug("Current UTC time: %s, Available times: %s...", now_iso, hourly_times[:3])
+        now_local = dt_util.now()
+        now_iso = now_utc.isoformat() + "Z"
+        
+        # Get hourly data structure
+        hourly_data = data.get("hourly", {})
+        hourly_times = hourly_data.get("time", [])
+        
+        # Log available data structure for debugging
+        _LOGGER.debug(
+            "get_hourly_value: key=%s, device_id=%s, now_utc=%s, now_local=%s",
+            key,
+            device_id,
+            now_iso,
+            now_local.isoformat()
+        )
+        _LOGGER.debug("Available hourly keys: %s", list(hourly_data.keys()))
+        _LOGGER.debug("First 3 time entries: %s", hourly_times[:3])
         
         # Get the current hour index
         idx = get_current_hour_index(data)
+        _LOGGER.debug("Calculated index: %s", idx)
+        
         if idx is None:
-            _LOGGER.warning("Brak dopasowania godziny, używam indeks 0 dla %s", key)
-            return data.get("hourly", {}).get(key, [None])[0]
-
-        return data.get("hourly", {}).get(key, [None])[idx]
-        if value is None:
-            _LOGGER.debug("Value is None for key %s at index %d", key, idx)
-            return None
-            
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            _LOGGER.debug("Could not convert value to float: %s", value)
-            return value
+            _LOGGER.warning(
+                "Brak dopasowania godziny, używam indeks 0 dla %s (device_id: %s, time: %s)",
+                key, 
+                device_id,
+                now_iso
+            )
+            idx = 0
+        
+        # Get the value and log details
+        values = hourly_data.get(key, [None])
+        value = values[idx] if idx < len(values) else None
+        
+        _LOGGER.debug(
+            "Returning value: %s (index: %d, available: %d)",
+            value,
+            idx,
+            len(values)
+        )
+        
+        return value
         
     except Exception as e:
         _LOGGER.debug("Error in get_hourly_value for %s: %s", 
@@ -164,14 +188,14 @@ SENSOR_TYPES = {
         "unit": "UV Index",
         "icon": "mdi:sun-wireless-outline",
         "device_class": None,
-        "value_fn": lambda data: get_hourly_value(data, "uv_index"),
+        "value_fn": lambda data: get_hourly_value(data, "uv_index", getattr(self, '_device_id', None)),
     },
     "precipitation_probability": {
         "name": "Prawdopodobieństwo opadów",
         "unit": PERCENTAGE,
         "icon": "mdi:weather-rainy",
         "device_class": None,
-        "value_fn": lambda data: get_hourly_value(data, "precipitation_probability"),
+        "value_fn": lambda data: get_hourly_value(data, "precipitation_probability", getattr(self, '_device_id', None)),
     },
     "precipitation_total": {
         "name": "Suma opadów (deszcz+śnieg)",
@@ -196,7 +220,7 @@ SENSOR_TYPES = {
         "unit": UnitOfSpeed.KILOMETERS_PER_HOUR,
         "icon": "mdi:weather-windy",
         "device_class": None,
-        "value_fn": lambda data: get_hourly_value(data, "windspeed_10m"),
+        "value_fn": lambda data: get_hourly_value(data, "windspeed_10m", getattr(self, '_device_id', None)),
     },
     "wind_bearing": {
         "name": "Kierunek wiatru",
@@ -210,14 +234,14 @@ SENSOR_TYPES = {
         "unit": UnitOfPressure.HPA,
         "icon": "mdi:gauge",
         "device_class": "pressure",
-        "value_fn": lambda data: get_hourly_value(data, "surface_pressure"),
+        "value_fn": lambda data: get_hourly_value(data, "surface_pressure", getattr(self, '_device_id', None)),
     },
     "visibility": {
         "name": "Widzialność",
         "unit": "km",
         "icon": "mdi:eye",
         "device_class": None,
-        "value_fn": lambda data: data.get("hourly", {}).get("visibility", [None])[0],
+        "value_fn": lambda data: get_hourly_value(data, "visibility", getattr(self, '_device_id', None)),
     },
 }
 
