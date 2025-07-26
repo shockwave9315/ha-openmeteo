@@ -174,28 +174,28 @@ SENSOR_TYPES = {
         "unit": PERCENTAGE,
         "icon": "mdi:water-percent",
         "device_class": "humidity",
-        "value_fn": lambda data: data.get("hourly", {}).get("relativehumidity_2m", [None])[0],
+        "value_fn": None,  # Will be handled in native_value
     },
     "apparent_temperature": {
         "name": "Temperatura odczuwalna",
         "unit": UnitOfTemperature.CELSIUS,
         "icon": "mdi:thermometer-alert",
         "device_class": "temperature",
-        "value_fn": lambda data: data.get("hourly", {}).get("apparent_temperature", [None])[0],
+        "value_fn": None,  # Will be handled in native_value
     },
     "uv_index": {
         "name": "Indeks UV",
         "unit": "UV Index",
         "icon": "mdi:sun-wireless-outline",
         "device_class": None,
-        "value_fn": lambda data: get_hourly_value(data, "uv_index", getattr(self, '_device_id', None)),
+        "value_fn": None,  # Will be handled in native_value
     },
     "precipitation_probability": {
         "name": "Prawdopodobieństwo opadów",
         "unit": PERCENTAGE,
         "icon": "mdi:weather-rainy",
         "device_class": None,
-        "value_fn": lambda data: get_hourly_value(data, "precipitation_probability", getattr(self, '_device_id', None)),
+        "value_fn": None,  # Will be handled in native_value
     },
     "precipitation_total": {
         "name": "Suma opadów (deszcz+śnieg)",
@@ -220,7 +220,7 @@ SENSOR_TYPES = {
         "unit": UnitOfSpeed.KILOMETERS_PER_HOUR,
         "icon": "mdi:weather-windy",
         "device_class": None,
-        "value_fn": lambda data: get_hourly_value(data, "windspeed_10m", getattr(self, '_device_id', None)),
+        "value_fn": None,  # Will be handled in native_value
     },
     "wind_bearing": {
         "name": "Kierunek wiatru",
@@ -234,14 +234,14 @@ SENSOR_TYPES = {
         "unit": UnitOfPressure.HPA,
         "icon": "mdi:gauge",
         "device_class": "pressure",
-        "value_fn": lambda data: get_hourly_value(data, "surface_pressure", getattr(self, '_device_id', None)),
+        "value_fn": None,  # Will be handled in native_value
     },
     "visibility": {
         "name": "Widzialność",
         "unit": "km",
         "icon": "mdi:eye",
         "device_class": None,
-        "value_fn": lambda data: get_hourly_value(data, "visibility", getattr(self, '_device_id', None)),
+        "value_fn": None,  # Will be handled in native_value
     },
 }
 
@@ -632,7 +632,22 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         data = self.coordinator.data
         sensor_type = self._sensor_type
         
-        # Get the value using the configured function
+        # Handle hourly-based sensors
+        if sensor_type in ("uv_index", "precipitation_probability", "wind_gust", "pressure", "visibility"):
+            # Map sensor_type to the corresponding API key
+            api_key = {
+                "wind_gust": "windspeed_10m",
+                "pressure": "surface_pressure",
+            }.get(sensor_type, sensor_type)
+            return get_hourly_value(data, api_key, getattr(self, "_device_id", None))
+            
+        # Handle other hourly sensors with direct access
+        if sensor_type == "humidity":
+            return get_hourly_value(data, "relativehumidity_2m", getattr(self, "_device_id", None))
+        elif sensor_type == "apparent_temperature":
+            return get_hourly_value(data, "apparent_temperature", getattr(self, "_device_id", None))
+        
+        # Get the value using the configured function for other sensors
         value_fn = SENSOR_TYPES[sensor_type].get("value_fn")
         if value_fn:
             try:
