@@ -351,39 +351,21 @@ class OpenMeteoWeather(WeatherEntity):
             return f"{getattr(self._config_entry, 'entry_id', 'error')}-fallback-weather"
             
     @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information for the weather entity."""
+    def device_info(self) -> Optional[DeviceInfo]:
+        """Return device registry information (only for main instance)."""
         try:
-            entry_id = self._config_entry.entry_id
-            
-            if self._device_id:
-                # For device tracker instances
+            if not self._device_id:
+                # Only main instance gets its own device
                 return DeviceInfo(
-                    identifiers={(DOMAIN, f"{entry_id}-{self._device_id}".replace(".", "_"))},
-                    name=self.name or f"Open-Meteo {self._device_id}",
+                    identifiers={(DOMAIN, self._config_entry.entry_id)},
+                    name="Open-Meteo",
                     manufacturer="Open-Meteo",
-                    model="Dynamic Tracker Weather",
-                    configuration_url="https://open-meteo.com/",
-                    suggested_area=getattr(self, "_suggested_area", None)
                 )
-            else:
-                # For main instance
-                return DeviceInfo(
-                    identifiers={(DOMAIN, entry_id)},
-                    name=self.name or "Open-Meteo Weather",
-                    manufacturer="Open-Meteo",
-                    model="Main Weather Entity",
-                    configuration_url="https://open-meteo.com/",
-                    suggested_area=getattr(self, "_suggested_area", None)
-                )
+            # Device tracker instances are already created in __init__.py
+            return None
         except Exception as e:
-            _LOGGER.error("Error generating device info: %s", e, exc_info=True)
-            # Return a minimal device info in case of errors
-            return DeviceInfo(
-                identifiers={(DOMAIN, f"error-{entry_id}")},
-                name="Open-Meteo Error",
-                manufacturer="Open-Meteo"
-            )
+            _LOGGER.warning("Error generating device_info: %s", e, exc_info=True)
+            return None
 
     @property
     def available(self) -> bool:
