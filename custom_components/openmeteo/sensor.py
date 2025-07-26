@@ -24,6 +24,34 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import OpenMeteoDataUpdateCoordinator, OpenMeteoInstance
 from .const import DOMAIN, SIGNAL_UPDATE_ENTITIES
 
+def get_hourly_value(data: dict, key: str):
+    """Safely get hourly value from API response data.
+    
+    Args:
+        data: The full API response data
+        key: The hourly variable key to retrieve
+        
+    Returns:
+        The numeric value if available, None otherwise
+    """
+    try:
+        if not data or not isinstance(data, dict):
+            return None
+            
+        hourly_data = data.get("hourly", {})
+        if not isinstance(hourly_data, dict):
+            return None
+            
+        values = hourly_data.get(key)
+        if not values or not isinstance(values, list) or not values:
+            return None
+            
+        return float(values[0]) if values[0] is not None else None
+        
+    except Exception as e:
+        _LOGGER.debug("Error in get_hourly_value for %s: %s", key, str(e))
+        return None
+
 SENSOR_TYPES = {
     "location": {
         "name": "Lokalizacja",
@@ -58,7 +86,7 @@ SENSOR_TYPES = {
         "unit": "UV Index",
         "icon": "mdi:sun-wireless-outline",
         "device_class": None,
-        "value_fn": lambda data: data.get("hourly", {}).get("uv_index", [None])[0],
+        "value_fn": lambda data: get_hourly_value(data, "uv_index"),
     },
     "precipitation_probability": {
         "name": "Prawdopodobieństwo opadów",
@@ -409,6 +437,49 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
             )
             raise
             
+    def _get_hourly_value(self, data: dict, key: str):
+        """Helper method to safely get hourly values with proper error handling.
+        
+        Args:
+            data: The data dictionary from the coordinator
+            key: The hourly variable key to retrieve
+            
+        Returns:
+            The value if available, None otherwise
+        """
+        try:
+            if not data or not isinstance(data, dict):
+                _LOGGER.debug("Invalid or empty data provided to _get_hourly_value")
+                return None
+                
+            hourly_data = data.get("hourly", {})
+            if not isinstance(hourly_data, dict):
+                _LOGGER.debug("Hourly data is not a dictionary")
+                return None
+                
+            hourly_values = hourly_data.get(key)
+            if not hourly_values or not isinstance(hourly_values, list) or not hourly_values:
+                _LOGGER.debug("No hourly values available for %s", key)
+                return None
+                
+            # Get the first value (current hour)
+            value = hourly_values[0]
+            
+            # Handle cases where the value might be None or invalid
+            if value is None:
+                _LOGGER.debug("Value for %s is None in the API response", key)
+                return None
+                
+            # Convert to float if possible for numeric values
+            try:
+                return float(value) if value is not None else None
+            except (TypeError, ValueError):
+                return value
+                
+        except Exception as e:
+            _LOGGER.debug("Error getting hourly value for %s: %s", key, str(e))
+            return None
+
     def _setup_device_info(self, config_entry, sensor_config, device_id):
         """Configure device information for the sensor.
         
@@ -452,48 +523,32 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         """Return the state of the sensor."""
-        try:
-            # Check if we have all required attributes
-            if not getattr(self, 'coordinator', None):
-                _LOGGER.debug("No coordinator available for sensor %s", self._sensor_type)
-                return None
-                
-            # Check if coordinator has data
-            if not getattr(self.coordinator, 'data', None):
-                _LOGGER.debug("No data available in coordinator for sensor %s", self._sensor_type)
-                return None
-                
-            # Get the value using the sensor's value function
-            if self._sensor_type not in SENSOR_TYPES:
-                _LOGGER.error("Unknown sensor type: %s", self._sensor_type)
-                return None
-                
-            value_fn = SENSOR_TYPES[self._sensor_type].get("value_fn")
-            if not callable(value_fn):
-                _LOGGER.error("Invalid value function for sensor type: %s", self._sensor_type)
-                return None
-                
-            # Safely call the value function
-            value = value_fn(self.coordinator.data)
-            
-            if value is None:
-                _LOGGER.debug("No value available for sensor %s", self._sensor_type)
-                return None
-                
-            # Format the value if it's a number
-            if isinstance(value, (int, float)):
-                return round(float(value), 2)
-                
-            return value
-            
-        except Exception as err:
-            _LOGGER.error(
-                "Error getting value for sensor %s: %s",
-                self._sensor_type,
-                str(err),
-                exc_info=True
-            )
+        if not getattr(self, 'coordinator', None) or not self.coordinator.data:
+            _LOGGER.debug("No coordinator or data available for sensor %s", self._sensor_type)
             return None
+            
+        data = self.coordinator.data
+        sensor_type = self._sensor_type
+        
+        # Get the value using the configured function
+        value_fn = SENSOR_TYPES[sensor_type].get("value_fn")
+        if value_fn:
+            try:
+                value = value_fn(data)
+                # Format the value if it's a number
+                if isinstance(value, (int, float)):
+                    return round(float(value), 2)
+                return value
+            except Exception as e:
+                _LOGGER.warning(
+                    "Error getting value for %s: %s",
+                    sensor_type,
+                    str(e),
+                    exc_info=True
+                )
+                return None
+                
+        return None
 
     @property
     def native_unit_of_measurement(self):
