@@ -2,14 +2,27 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import lru_cache
-from typing import Any, Optional, List
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    DEGREE,
+    LENGTH_KILOMETERS,
+    LENGTH_MILES,
     PERCENTAGE,
+    PRESSURE_HPA,
+    SPEED_KILOMETERS_PER_HOUR,
+    SPEED_MILES_PER_HOUR,
+    TEMP_CELSIUS,
+    TEMP_FAHRENHEIT,
+    UV_INDEX,
+    Platform,
     UnitOfPrecipitationDepth,
     UnitOfPressure,
     UnitOfSpeed,
@@ -18,11 +31,11 @@ from homeassistant.const import (
 
 _LOGGER = logging.getLogger(__name__)
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.util import dt as dt_util
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from . import OpenMeteoDataUpdateCoordinator, OpenMeteoInstance
 from .const import DOMAIN, SIGNAL_UPDATE_ENTITIES
@@ -61,59 +74,51 @@ def _get_hour_index(time_list: tuple[str, ...], now_iso: str) -> int:
     _LOGGER.debug("Current hour %s not found in time list, using index 0", now_iso)
     return 0
 
-def get_current_hour_index(data: dict) -> int | None:
+@lru_cache(maxsize=1)
+def get_current_hour_index(hourly_times: list[str]) -> int:
     """Returns the index of the current hour in the hourly data.
     
-    Handles multiple time formats that might be returned by the Open-Meteo API.
+    Args:
+        hourly_times: List of time strings from the API response
+        
+    Returns:
+        int: Index of the current hour in the list, or 0 if not found
     """
-    try:
-        hourly_times = data.get("hourly", {}).get("time", [])
-        if not hourly_times:
-            _LOGGER.debug("Brak listy godzin w danych")
-            return None
+    if not hourly_times:
+        _LOGGER.warning("Brak godzin w danych hourly.")
+        return 0
 
-        # Get current UTC time, zero out minutes, seconds, and microseconds
-        now_utc = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
-        now_iso_base = now_utc.strftime("%Y-%m-%dT%H")
+    try:
+        # Get current time in local timezone and zero out minutes/seconds
+        now = dt_util.now().replace(minute=0, second=0, microsecond=0)
         
-        # List of possible time formats to try
-        time_formats = [
-            f"{now_iso_base}:00:00Z",      # 2023-01-01T13:00:00Z
-            f"{now_iso_base}:00:00",       # 2023-01-01T13:00:00
-            f"{now_iso_base}:00:00.000Z",  # 2023-01-01T13:00:00.000Z
-            f"{now_iso_base}:00:00+00:00", # 2023-01-01T13:00:00+00:00
-            f"{now_iso_base}:00",          # 2023-01-01T13:00
-            f"{now_iso_base}Z",            # 2023-01-01T13Z
-            now_iso_base,                   # 2023-01-01T13
-        ]
-        
-        # Try each format until we find a match
-        for time_format in time_formats:
-            if time_format in hourly_times:
-                _LOGGER.debug("Found matching time format: %s", time_format)
-                return hourly_times.index(time_format)
-        
-        # Fallback: Try to parse each time string as datetime
-        for i, time_str in enumerate(hourly_times):
+        for idx, time_str in enumerate(hourly_times):
             try:
-                # Try to parse the time string and compare just the hour
-                time_dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
-                if time_dt.hour == now_utc.hour and time_dt.date() == now_utc.date():
-                    _LOGGER.debug("Matched hour using datetime comparison: %s", time_str)
-                    return i
-            except (ValueError, AttributeError):
+                # Normalize timezone format for parsing
+                normalized_time = time_str.replace("Z", "+00:00")
+                time_dt = datetime.fromisoformat(normalized_time)
+                
+                # Compare only hour and date components
+                time_dt = time_dt.replace(minute=0, second=0, microsecond=0)
+                
+                if time_dt == now:
+                    _LOGGER.debug("Znaleziono dopasowanie godziny: %s == %s", time_str, now.isoformat())
+                    return idx
+                    
+            except Exception as e:
+                _LOGGER.debug("Błąd parsowania czasu '%s': %s", time_str, str(e))
                 continue
                 
         _LOGGER.warning(
-            "Nie znaleziono dopasowania dla godziny %s w dostępnych danych. Dostępne czasy: %s",
-            now_utc.isoformat(),
-            hourly_times[:5]  # Show first 5 entries to avoid log spam
+            "Brak dopasowania godziny, używam indeksu 0 (szukana godzina: %s, dostępne: %s...)",
+            now.isoformat(),
+            hourly_times[:3]  # Show first 3 entries for debugging
         )
-        return None
+        return 0
         
     except Exception as e:
-        _LOGGER.error("Błąd w get_current_hour_index: %s", str(e), exc_info=True)
-        return None
+        _LOGGER.error("Błąd krytyczny w get_current_hour_index: %s", str(e), exc_info=True)
+        return 0
 
 def get_hourly_value(data: dict, key: str, device_id: str = None):
     """Safely get hourly value from API response data for the current hour.
@@ -127,34 +132,30 @@ def get_hourly_value(data: dict, key: str, device_id: str = None):
         The value if available, None otherwise
     """
     try:
-        # Log current UTC and local time for debugging
-        now_utc = dt_util.utcnow()
-        now_local = dt_util.now()
-        now_iso = now_utc.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:00:00Z")
-        
         # Get hourly data structure
         hourly_data = data.get("hourly", {})
         hourly_times = hourly_data.get("time", [])
         
-        # Log available data structure for debugging
+        # Log current time for debugging
+        now = dt_util.now()
+        now_iso = now.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:00:00")
+        
         _LOGGER.debug(
-            "get_hourly_value: key=%s, device_id=%s, now_utc=%s, now_local=%s, formatted_now=%s",
+            "get_hourly_value: key=%s, device_id=%s, local_time=%s, formatted_time=%s",
             key,
             device_id,
-            now_utc.isoformat(),
-            now_local.isoformat(),
+            now.isoformat(),
             now_iso
         )
-        _LOGGER.debug("Available hourly keys: %s", list(hourly_data.keys()))
-        if hourly_times:
-            _LOGGER.debug("First time entry: %s (type: %s)", hourly_times[0], type(hourly_times[0]))
-            _LOGGER.debug("First 3 time entries: %s", hourly_times[:3])
-        else:
-            _LOGGER.debug("No hourly time entries found in data")
         
-        # Get the current hour index
-        idx = get_current_hour_index(data)
-        _LOGGER.debug("Calculated index: %s", idx)
+        # Get the current hour index using the cached function
+        idx = get_current_hour_index(tuple(hourly_times))  # Convert to tuple for hashing with lru_cache
+        _LOGGER.debug("Current hour index: %s", idx)
+        
+        # Debug log the available hourly keys and first few time entries
+        if hourly_times:
+            _LOGGER.debug("First 3 time entries: %s", hourly_times[:3])
+            _LOGGER.debug("Available hourly keys: %s", list(hourly_data.keys()))
         
         if idx is None:
             _LOGGER.warning(
