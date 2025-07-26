@@ -138,7 +138,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Create main device if needed
             device_registry = er.async_get(hass)
             device_registry.async_get_or_create(
-                config_entry_id=entry.entry_id,
+                config_entry=entry,
                 identifiers={(DOMAIN, entry.entry_id)},
                 manufacturer="Open-Meteo",
                 name="Open-Meteo",

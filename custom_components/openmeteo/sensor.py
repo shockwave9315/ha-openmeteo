@@ -161,18 +161,28 @@ async def async_setup_entry(
     else:
         # This is the main instance, add main sensors if they exist
         main_instance = hass.data[DOMAIN][entry_id].get("main_instance")
-        if not main_instance:
-            _LOGGER.debug("Main instance is None, skipping main sensors setup")
-            return
-            
-        coordinator = main_instance.coordinator
+        device_instances = hass.data[DOMAIN][entry_id].get("device_instances", {})
         
-        entities = [
-            OpenMeteoSensor(coordinator, config_entry, sensor_type)
-            for sensor_type in SENSOR_TYPES
-        ]
-        
-        async_add_entities(entities)
+        # Only create main instance entities if there are no device instances
+        if not device_instances and main_instance:
+            _LOGGER.debug("Setting up main instance sensors")
+            try:
+                entities = [
+                    OpenMeteoSensor(main_instance.coordinator, config_entry, sensor_type)
+                    for sensor_type in SENSOR_TYPES
+                ]
+                async_add_entities(entities)
+                _LOGGER.debug("Added %d main instance sensors", len(entities))
+            except Exception as err:
+                _LOGGER.error(
+                    "Error creating main instance sensors: %s",
+                    str(err),
+                    exc_info=True
+                )
+        elif device_instances:
+            _LOGGER.debug("Device instances present, skipping main instance sensors")
+        else:
+            _LOGGER.warning("No main instance and no device instances found")
         
         # Add a listener for device instance updates
         @callback
@@ -181,57 +191,78 @@ async def async_setup_entry(
             if entry_id != config_entry.entry_id:
                 return
                 
-            # Get all device instances
-            device_instances = hass.data[DOMAIN][entry_id].get("device_instances", {})
-            
-            # Get all existing entities
-            entity_registry = er.async_get(hass)
-            entities = er.async_entries_for_config_entry(
-                entity_registry, config_entry.entry_id
-            )
-            
-            # Find all device sensor entities
-            device_entities = [
-                entity for entity in entities 
-                if entity.domain == "sensor" and "device_id" in entity.unique_id
-            ]
-            
-            # Find all device IDs that already have entities
-            existing_device_ids = {
-                "_".join(entity.unique_id.split("_")[-2:]) 
-                for entity in device_entities
-            }
-            
-            # Add entities for new device instances
-            new_entities = []
-            for device_id, instance in device_instances.items():
-                if device_id not in existing_device_ids:
-                    # Skip if coordinator is not available (race condition during HA restart)
-                    if not instance.coordinator:
+            try:
+                # Get all device instances
+                domain_data = hass.data.get(DOMAIN, {})
+                entry_data = domain_data.get(entry_id, {})
+                device_instances = entry_data.get("device_instances", {})
+                
+                if not device_instances:
+                    _LOGGER.debug("No device instances found, nothing to update")
+                    return
+                
+                _LOGGER.debug("Updating entities for %d device instances", len(device_instances))
+                
+                # Get all existing entities
+                entity_registry = er.async_get(hass)
+                entities = er.async_entries_for_config_entry(
+                    entity_registry, config_entry.entry_id
+                )
+                
+                # Find all device sensor entities and their device IDs
+                device_entity_map = {}
+                for entity in entities:
+                    if entity.domain == "sensor" and "device_id" in entity.unique_id:
+                        # Extract device ID from unique_id (format: {entry_id}-{device_id}-{sensor_type})
+                        parts = entity.unique_id.split('-')
+                        if len(parts) >= 2:
+                            dev_id = parts[1]  # The part after entry_id
+                            device_entity_map[dev_id] = entity
+                
+                # Add entities for new device instances
+                new_entities = []
+                for device_id, instance in device_instances.items():
+                    if not instance or not hasattr(instance, 'coordinator') or not instance.coordinator:
                         _LOGGER.warning(
-                            "Skipping device_id %s due to missing coordinator", 
+                            "Skipping invalid device instance: %s", 
                             device_id
                         )
                         continue
                         
-                    # Get friendly name from config or use default
-                    friendly_name = instance.entry.data.get(
-                        "friendly_name", 
-                        f"Open-Meteo {device_id}"
-                    )
+                    # Skip if we already have entities for this device
+                    if device_id in device_entity_map:
+                        continue
                     
+                    # Get friendly name from config or use default
+                    friendly_name = None
                     try:
-                        new_entities.extend([
+                        if hasattr(instance, 'entry') and hasattr(instance.entry, 'data'):
+                            friendly_name = instance.entry.data.get(
+                                "friendly_name", 
+                                f"Open-Meteo {device_id}"
+                            )
+                    except Exception as name_err:
+                        _LOGGER.warning(
+                            "Could not get friendly name for device %s: %s",
+                            device_id, str(name_err)
+                        )
+                        friendly_name = f"Open-Meteo {device_id}"
+                    
+                    # Create sensors for this device
+                    try:
+                        device_entities = [
                             OpenMeteoSensor(
                                 instance.coordinator, 
-                                instance.entry, 
+                                config_entry, 
                                 sensor_type, 
                                 device_id,
                                 friendly_name
                             )
                             for sensor_type in SENSOR_TYPES
-                        ])
-                        _LOGGER.debug("Created sensors for device_id: %s", device_id)
+                        ]
+                        new_entities.extend(device_entities)
+                        _LOGGER.debug("Created %d sensors for device_id: %s", 
+                                    len(device_entities), device_id)
                     except Exception as err:
                         _LOGGER.error(
                             "Error creating sensors for device_id %s: %s",
@@ -239,9 +270,18 @@ async def async_setup_entry(
                             str(err),
                             exc_info=True
                         )
-            
-            if new_entities:
-                async_add_entities(new_entities)
+                
+                # Add all new entities at once
+                if new_entities:
+                    _LOGGER.debug("Adding %d new sensor entities", len(new_entities))
+                    async_add_entities(new_entities)
+                    
+            except Exception as update_err:
+                _LOGGER.error(
+                    "Error in _async_update_entities: %s",
+                    str(update_err),
+                    exc_info=True
+                )
         
         # Listen for device instance updates
         config_entry.async_on_unload(

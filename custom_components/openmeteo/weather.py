@@ -50,24 +50,61 @@ async def async_setup_entry(
     """Set up Open-Meteo weather entity based on a config entry."""
     try:
         entry_id = config_entry.entry_id
-        entry_data = hass.data[DOMAIN][entry_id]
-
-        # If this is a device_tracker instance → only add this weather entity
         device_id = config_entry.data.get("device_id")
-        if device_id:
-            instance = entry_data["device_instances"].get(device_id)
-            if instance and instance.coordinator:
-                _LOGGER.debug("Creating weather entity for device tracker: %s", device_id)
-                async_add_entities([OpenMeteoWeather(instance.coordinator, config_entry, device_id)])
-            return  # DONE — Don't add main_instance
         
-        # If this is the main instance — only add if there are no device_instances
-        if not entry_data.get("device_instances"):
-            instance = entry_data.get("main_instance")
-            if instance:
-                async_add_entities([OpenMeteoWeather(instance.coordinator, config_entry)])
-        else:
-            _LOGGER.debug("Skipping main weather entity setup (device_trackers present)")
+        # Get domain data with proper error handling
+        domain_data = hass.data.get(DOMAIN, {})
+        entry_data = domain_data.get(entry_id, {})
+        
+        # If this is a device instance, create a device-specific weather entity
+        if device_id:
+            device_instances = entry_data.get("device_instances", {})
+            device_instance = device_instances.get(device_id)
+            
+            if device_instance and hasattr(device_instance, 'coordinator') and device_instance.coordinator:
+                try:
+                    _LOGGER.debug("Creating device-specific weather for %s", device_id)
+                    weather_entity = OpenMeteoWeather(
+                        device_instance.coordinator,
+                        config_entry,
+                        device_id
+                    )
+                    async_add_entities([weather_entity])
+                    _LOGGER.debug("Successfully created weather entity for device %s", device_id)
+                except Exception as create_err:
+                    _LOGGER.error(
+                        "Error creating weather entity for device %s: %s",
+                        device_id,
+                        str(create_err),
+                        exc_info=True
+                    )
+            else:
+                _LOGGER.warning("No valid device instance found for device_id: %s", device_id)
+            return
+            
+        # This is the main instance, create main weather entity if no device instances exist
+        device_instances = entry_data.get("device_instances", {})
+        main_instance = entry_data.get("main_instance")
+        
+        if device_instances:
+            _LOGGER.debug("Device instances present, skipping main weather entity")
+            return
+            
+        if not main_instance or not hasattr(main_instance, 'coordinator') or not main_instance.coordinator:
+            _LOGGER.warning("No valid main instance found for entry_id: %s", entry_id)
+            return
+            
+        try:
+            _LOGGER.debug("Creating main weather entity")
+            weather_entity = OpenMeteoWeather(main_instance.coordinator, config_entry)
+            async_add_entities([weather_entity])
+            _LOGGER.debug("Successfully created main weather entity")
+        except Exception as main_err:
+            _LOGGER.error(
+                "Error creating main weather entity: %s",
+                str(main_err),
+                exc_info=True
+            )
 
     except Exception as err:
         _LOGGER.exception("Failed to set up Open-Meteo weather entity: %s", err)
@@ -90,7 +127,7 @@ async def async_setup_entry(
                 for e in registry.entities.values()
                 if (e.config_entry_id == config_entry.entry_id and 
                     e.domain == "weather" and 
-                    getattr(e, 'platform', '').startswith(DOMAIN))
+                    e.unique_id.startswith(f"{entry_id}-"))
             ]
 
             # Remove old entities
@@ -100,10 +137,23 @@ async def async_setup_entry(
 
             # Re-add all device tracker entities
             for device_id, instance in device_instances.items():
-                if instance and instance.coordinator:
+                if instance and hasattr(instance, 'coordinator') and instance.coordinator:
+                    friendly_name = None
+                    if hasattr(instance, 'entry') and hasattr(instance.entry, 'data'):
+                        friendly_name = instance.entry.data.get("friendly_name")
+                        if not friendly_name:
+                            _LOGGER.debug("No friendly_name found in entry data for device %s", device_id)
+                    else:
+                        _LOGGER.debug("Could not access entry data for device %s", device_id)
+                    
                     _LOGGER.debug("Re-adding weather entity for tracker: %s", device_id)
                     async_add_entities([
-                        OpenMeteoWeather(instance.coordinator, config_entry, device_id)
+                        OpenMeteoWeather(
+                            instance.coordinator, 
+                            config_entry, 
+                            device_id,
+                            friendly_name
+                        )
                     ])
 
         except Exception as e:
@@ -139,7 +189,8 @@ class OpenMeteoWeather(WeatherEntity):
         self, 
         coordinator: OpenMeteoDataUpdateCoordinator, 
         config_entry: ConfigEntry, 
-        device_id: str | None = None 
+        device_id: str | None = None,
+        friendly_name: str | None = None
     ) -> None:
         """Initialize the Open-Meteo weather.
         
@@ -177,13 +228,19 @@ class OpenMeteoWeather(WeatherEntity):
             # Set up unique ID and name based on whether this is a device instance or not
             if device_id:
                 # This is a device instance - include both entry_id and device_id in the unique_id
-                friendly_name = config_entry.data.get("friendly_name")
+                if not friendly_name and hasattr(config_entry, 'data') and config_entry.data:
+                    friendly_name = config_entry.data.get("friendly_name")
+                    if not friendly_name:
+                        _LOGGER.debug("No friendly_name found in config entry for device %s", device_id)
+                
                 if friendly_name:
                     self._attr_name = f"{friendly_name} Weather"
+                    _LOGGER.debug("Using friendly name for device %s: %s", device_id, friendly_name)
                 else:
                     # Fallback to a generated name if friendly_name is not available
                     device_name = device_id.split('.')[-1].replace('_', ' ').title()
                     self._attr_name = f"{device_name} Weather"
+                    _LOGGER.debug("Using generated name for device %s: %s", device_id, self._attr_name)
                 
                 # Let the unique_id property handle the unique ID generation
                 self._attr_entity_registry_visible_default = True
