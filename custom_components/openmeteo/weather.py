@@ -309,15 +309,21 @@ class OpenMeteoWeather(WeatherEntity):
                 self._attr_entity_registry_visible_default = len(device_instances) == 0
             
             # Set up device info with safe defaults
-            self._attr_device_info = {
-                "identifiers": {(DOMAIN, config_entry.entry_id)},
-                "name": self._attr_name or "Open-Meteo Weather",
-                "manufacturer": "Open-Meteo",
-            }
-            
-            # Add device ID to device info if this is a device instance
             if device_id:
-                self._attr_device_info["via_device"] = (DOMAIN, config_entry.entry_id)
+                # For device instances, create a unique device entry
+                self._attr_device_info = {
+                    "identifiers": {(DOMAIN, f"{config_entry.entry_id}-{device_id}")},
+                    "name": self._attr_name or f"Open-Meteo {device_id}",
+                    "manufacturer": "Open-Meteo",
+                    "via_device": (DOMAIN, config_entry.entry_id)  # Link to main device
+                }
+            else:
+                # For main instance
+                self._attr_device_info = {
+                    "identifiers": {(DOMAIN, config_entry.entry_id)},
+                    "name": self._attr_name or "Open-Meteo Weather",
+                    "manufacturer": "Open-Meteo",
+                }
                 
                 # Safely get device-specific data
                 try:

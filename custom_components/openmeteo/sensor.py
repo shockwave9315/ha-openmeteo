@@ -324,9 +324,17 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     def _setup_device_info(self, config_entry, sensor_config, device_id):
         """Konfiguruje informacje o urządzeniu dla czujnika."""
         try:
+            # Use device_id in identifiers if this is a device instance
+            if device_id:
+                identifiers = {(DOMAIN, f"{config_entry.entry_id}-{device_id}")}
+                name = self._attr_name.replace(f" {sensor_config.get('name', '')}", "").strip() or f"Open-Meteo {device_id}"
+            else:
+                identifiers = {(DOMAIN, config_entry.entry_id)}
+                name = self._attr_name.replace(f" {sensor_config.get('name', '')}", "").strip() or "Open-Meteo"
+                
             self._attr_device_info = {
-                "identifiers": {(DOMAIN, config_entry.entry_id)},
-                "name": self._attr_name.replace(f" {sensor_config.get('name', '')}", "").strip() or "Open-Meteo",
+                "identifiers": identifiers,
+                "name": name,
                 "manufacturer": "Open-Meteo",
             }
             
