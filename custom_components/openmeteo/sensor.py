@@ -243,16 +243,34 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
             self._attr_should_poll = False
             
             # Set unique identifier and name based on device instance or main instance
-            if device_id and friendly_name:
+            sensor_name = sensor_config.get('name', '').strip()
+            
+            if device_id:
                 # This is a device instance
-                self._attr_name = f"{friendly_name} {sensor_config.get('name', '')}".strip()
-                self._attr_unique_id = f"{config_entry.entry_id}-{sensor_type}-{device_id}"
+                if friendly_name:
+                    self._attr_name = f"{friendly_name} {sensor_name}".strip()
+                else:
+                    # Fallback to device_id if friendly_name is not available
+                    device_name = device_id.split('.')[-1].replace('_', ' ').title()
+                    self._attr_name = f"{device_name} {sensor_name}".strip()
+                
+                # Create a more unique ID with entry_id, device_id, and coordinates hash
+                coord_hash = ""
+                if hasattr(coordinator, '_latitude') and hasattr(coordinator, '_longitude'):
+                    coord_hash = f"-{abs(hash((coordinator._latitude, coordinator._longitude))) % 10000:04d}"
+                
+                self._attr_unique_id = f"{config_entry.entry_id}-{device_id}{coord_hash}-{sensor_type}"
                 self._attr_entity_registry_visible_default = True
             else:
                 # This is the main instance
                 base_name = config_entry.data.get('name', 'Open-Meteo') if config_entry.data else 'Open-Meteo'
-                self._attr_name = f"{base_name} {sensor_config.get('name', '')}".strip()
-                self._attr_unique_id = f"{config_entry.entry_id}-{sensor_type}"
+                self._attr_name = f"{base_name} {sensor_name}".strip()
+                self._attr_unique_id = f"{config_entry.entry_id}-main-{sensor_type}"
+                
+                # Add coordinates hash to ensure uniqueness for main instance
+                if hasattr(coordinator, '_latitude') and hasattr(coordinator, '_longitude'):
+                    coord_hash = abs(hash((coordinator._latitude, coordinator._longitude))) % 10000
+                    self._attr_unique_id = f"{self._attr_unique_id}-{coord_hash:04d}"
                 
                 # Show main entity only if there are no device instances
                 try:

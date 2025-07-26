@@ -3,13 +3,12 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from typing import Any, Optional
-
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback, State
+from homeassistant.core import HomeAssistant, Event, callback
+from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady, async_forward_entry_setup
+from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.components.device_tracker import DOMAIN as DEVICE_TRACKER_DOMAIN
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers import entity_registry as er
@@ -298,10 +297,13 @@ async def _create_device_instance(
         # Set up platforms for the new instance
         for platform in PLATFORMS:
             try:
-                await hass.config_entries.async_forward_entry_setup(entry, platform)
+                await async_forward_entry_setup(hass, entry, platform)
             except Exception as platform_err:
-                _LOGGER.error("Failed to setup platform %s for device %s: %s", 
-                            platform, device_entity_id, str(platform_err))
+                _LOGGER.error(
+                    "Failed to setup platform %s for device %s: %s",
+                    platform, device_entity_id, str(platform_err),
+                    exc_info=isinstance(platform_err, Exception) and not isinstance(platform_err, UpdateFailed)
+                )
                 # Continue with other platforms even if one fails
                 continue
 

@@ -269,14 +269,32 @@ class OpenMeteoWeather(WeatherEntity):
             
             # Set up unique ID and name based on whether this is a device instance or not
             if device_id:
-                # This is a device instance
-                self._attr_name = config_entry.data.get("friendly_name", f"Open-Meteo {device_id}")
-                self._attr_unique_id = f"{config_entry.entry_id}-weather-{device_id}"
+                # This is a device instance - include both entry_id and device_id in the unique_id
+                friendly_name = config_entry.data.get("friendly_name")
+                if friendly_name:
+                    self._attr_name = f"{friendly_name} Weather"
+                else:
+                    # Fallback to a generated name if friendly_name is not available
+                    device_name = device_id.split('.')[-1].replace('_', ' ').title()
+                    self._attr_name = f"{device_name} Weather"
+                
+                # Create a more unique ID by combining entry_id, device_id, and a hash of the coordinates
+                # to avoid conflicts after restart or reconfiguration
+                coord_hash = ""
+                if hasattr(coordinator, '_latitude') and hasattr(coordinator, '_longitude'):
+                    coord_hash = f"-{abs(hash((coordinator._latitude, coordinator._longitude))) % 10000:04d}"
+                
+                self._attr_unique_id = f"{config_entry.entry_id}-{device_id}{coord_hash}-weather"
                 self._attr_entity_registry_visible_default = True
             else:
-                # This is the main instance
-                self._attr_name = config_entry.data.get("name", "Open-Meteo")
-                self._attr_unique_id = f"{config_entry.entry_id}-weather"
+                # This is the main instance - use entry_id in the unique_id
+                self._attr_name = config_entry.data.get("name", "Open-Meteo Weather")
+                self._attr_unique_id = f"{config_entry.entry_id}-main-weather"
+                
+                # Add coordinates hash to ensure uniqueness if there are multiple main instances
+                if hasattr(coordinator, '_latitude') and hasattr(coordinator, '_longitude'):
+                    coord_hash = abs(hash((coordinator._latitude, coordinator._longitude))) % 10000
+                    self._attr_unique_id = f"{self._attr_unique_id}-{coord_hash:04d}"
                 
                 # Safely check for device instances
                 device_instances = {}
