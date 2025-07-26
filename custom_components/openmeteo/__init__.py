@@ -184,13 +184,26 @@ async def _create_device_instance(
                          device_entity_id)
             return None
             
-        # Ensure required fields are present in entry data
-        required_fields = [CONF_LATITUDE, CONF_LONGITUDE, CONF_NAME]
-        missing_fields = [field for field in required_fields if field not in entry.data]
-        if missing_fields:
-            _LOGGER.error("Missing required fields in entry data for device %s: %s", 
-                         device_entity_id, ", ".join(missing_fields))
-            return None
+        # Create a copy of entry data to avoid modifying the original
+        config_data = dict(entry.data)
+        
+        # For device trackers, we only need coordinates and name
+        if device_entity_id.startswith('device_tracker.'):
+            # Ensure we have required fields, use defaults if missing
+            if CONF_LATITUDE not in config_data:
+                config_data[CONF_LATITUDE] = float(lat)
+            if CONF_LONGITUDE not in config_data:
+                config_data[CONF_LONGITUDE] = float(lon)
+            if CONF_NAME not in config_data:
+                config_data[CONF_NAME] = f"{device_entity_id.replace('_', ' ').title()}"
+        else:
+            # For main instance, ensure all required fields are present
+            required_fields = [CONF_LATITUDE, CONF_LONGITUDE, CONF_NAME]
+            missing_fields = [field for field in required_fields if field not in config_data]
+            if missing_fields:
+                _LOGGER.error("Missing required fields in entry data for device %s: %s", 
+                            device_entity_id, ", ".join(missing_fields))
+                return None
 
         device_id = device_entity_id
         
@@ -288,6 +301,22 @@ async def _update_device_instance(
             _LOGGER.error("Invalid entry data for device %s: entry.data is missing or not a dictionary", 
                          device_entity_id)
             return
+            
+        # For device trackers, ensure we have required fields
+        if device_entity_id.startswith('device_tracker.'):
+            # Create a copy of entry data to avoid modifying the original
+            updated_data = dict(entry.data)
+            
+            # Ensure we have required fields, use current values if missing
+            if CONF_LATITUDE not in updated_data:
+                updated_data[CONF_LATITUDE] = float(lat)
+            if CONF_LONGITUDE not in updated_data:
+                updated_data[CONF_LONGITUDE] = float(lon)
+            if CONF_NAME not in updated_data:
+                updated_data[CONF_NAME] = f"{device_entity_id.replace('_', ' ').title()}"
+                
+            # Update the entry data with the ensured values
+            entry.data = updated_data
             
         device_id = f"{device_entity_id}"
         
