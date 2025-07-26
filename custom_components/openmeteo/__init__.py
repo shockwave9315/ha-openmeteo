@@ -112,27 +112,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         bool: True if setup was successful, False otherwise
     """
     hass.data.setdefault(DOMAIN, {})
-
-    try:
-        # Create and initialize the main instance
-        instance = OpenMeteoInstance(hass, entry)
-        await instance.async_init()
-        
-        # Store the instance with consistent key 'main_instance' for backward compatibility
-        hass.data[DOMAIN][entry.entry_id] = {
-            "main_instance": instance,
-            "device_instances": {}
-        }
-        
-        _LOGGER.debug("Successfully initialized main instance for entry %s", entry.entry_id)
-        
-    except Exception as err:
-        _LOGGER.error("Failed to set up OpenMeteo: %s", str(err), exc_info=True)
-        return False
-
-    if entry.data.get("track_devices", False):
+    
+    # Initialize the data structure for this entry
+    hass.data[DOMAIN][entry.entry_id] = {
+        "main_instance": None,
+        "device_instances": {}
+    }
+    
+    # Check if we should track devices
+    track_devices = entry.data.get("track_devices", False)
+    
+    if track_devices:
+        # If we're tracking devices, don't create the main instance
+        _LOGGER.debug("Device tracking is enabled, skipping main instance creation")
         await _setup_device_tracking(hass, entry)
+    else:
+        # Only create and initialize the main instance if not using device tracking
+        try:
+            _LOGGER.debug("Creating main instance for entry %s", entry.entry_id)
+            instance = OpenMeteoInstance(hass, entry)
+            await instance.async_init()
+            hass.data[DOMAIN][entry.entry_id]["main_instance"] = instance
+            _LOGGER.debug("Successfully initialized main instance")
+            
+            # Create main device if needed
+            device_registry = er.async_get(hass)
+            device_registry.async_get_or_create(
+                config_entry_id=entry.entry_id,
+                identifiers={(DOMAIN, entry.entry_id)},
+                manufacturer="Open-Meteo",
+                name="Open-Meteo",
+            )
+            
+        except Exception as err:
+            _LOGGER.error("Failed to set up OpenMeteo main instance: %s", str(err), exc_info=True)
+            return False
 
+    # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
