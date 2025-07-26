@@ -178,46 +178,41 @@ async def _create_device_instance(
             _LOGGER.warning("Device %s is missing latitude/longitude in attributes", device_entity_id)
             return None
 
-        # Validate entry data
-        if not hasattr(entry, 'data') or not isinstance(entry.data, dict):
-            _LOGGER.error("Invalid entry data for device %s: entry.data is missing or not a dictionary", 
-                         device_entity_id)
-            return None
-            
-        # Create a copy of entry data to avoid modifying the original
-        config_data = dict(entry.data)
+        device_id = device_entity_id
         
-        # For device trackers, we only need coordinates and name
-        if device_entity_id.startswith('device_tracker.'):
-            # Ensure we have required fields, use defaults if missing
-            if CONF_LATITUDE not in config_data:
-                config_data[CONF_LATITUDE] = float(lat)
-            if CONF_LONGITUDE not in config_data:
-                config_data[CONF_LONGITUDE] = float(lon)
-            if CONF_NAME not in config_data:
-                config_data[CONF_NAME] = f"{device_entity_id.replace('_', ' ').title()}"
-        else:
-            # For main instance, ensure all required fields are present
+        # Create a basic config with required fields
+        config_data = {
+            CONF_NAME: f"{device_entity_id.replace('_', ' ').title()}",
+            "track_devices": True,
+            "device_entity_id": device_entity_id
+        }
+        
+        # For main instance, ensure we have required fields
+        if not device_entity_id.startswith('device_tracker.'):
+            if not hasattr(entry, 'data') or not isinstance(entry.data, dict):
+                _LOGGER.error("Invalid entry data for device %s: entry.data is missing or not a dictionary", 
+                            device_entity_id)
+                return None
+                
             required_fields = [CONF_LATITUDE, CONF_LONGITUDE, CONF_NAME]
-            missing_fields = [field for field in required_fields if field not in config_data]
+            missing_fields = [field for field in required_fields if field not in entry.data]
             if missing_fields:
                 _LOGGER.error("Missing required fields in entry data for device %s: %s", 
                             device_entity_id, ", ".join(missing_fields))
                 return None
-
-        device_id = device_entity_id
+            
+            config_data.update(entry.data)
         
-        # Create a copy of entry data to avoid modifying the original
-        config_data = dict(entry.data)
+        # Create the instance
+        instance = OpenMeteoInstance(hass, entry, device_id)
         
-        # Update with device-specific coordinates
-        config_data.update({
-            CONF_LATITUDE: float(lat),
-            CONF_LONGITUDE: float(lon),
-        })
+        # Update the coordinates in the coordinator
+        instance.coordinator.update_coordinates(lat, lon)
+        
+        # Set up the entry data
+        entry.data = config_data
 
         # Initialize the instance
-        instance = OpenMeteoInstance(hass, entry, device_id)
         await instance.async_init()
 
         # Store the instance
@@ -296,27 +291,24 @@ async def _update_device_instance(
                           device_entity_id)
             return
             
-        # Validate entry data
-        if not hasattr(entry, 'data') or not isinstance(entry.data, dict):
-            _LOGGER.error("Invalid entry data for device %s: entry.data is missing or not a dictionary", 
-                         device_entity_id)
-            return
-            
-        # For device trackers, ensure we have required fields
+        # For device trackers, update the coordinates in the coordinator
         if device_entity_id.startswith('device_tracker.'):
-            # Create a copy of entry data to avoid modifying the original
-            updated_data = dict(entry.data)
+            # Create a basic config for device trackers
+            updated_data = {
+                CONF_NAME: f"{device_entity_id.replace('_', ' ').title()}",
+                "track_devices": True,
+                "device_entity_id": device_entity_id
+            }
+            _LOGGER.debug("Updating device tracker %s", device_entity_id)
             
-            # Ensure we have required fields, use current values if missing
-            if CONF_LATITUDE not in updated_data:
-                updated_data[CONF_LATITUDE] = float(lat)
-            if CONF_LONGITUDE not in updated_data:
-                updated_data[CONF_LONGITUDE] = float(lon)
-            if CONF_NAME not in updated_data:
-                updated_data[CONF_NAME] = f"{device_entity_id.replace('_', ' ').title()}"
-                
-            # Update the entry data with the ensured values
+            # Update the entry data with the basic config
             entry.data = updated_data
+        else:
+            # For main instance, validate entry data
+            if not hasattr(entry, 'data') or not isinstance(entry.data, dict):
+                _LOGGER.error("Invalid entry data for device %s: entry.data is missing or not a dictionary", 
+                            device_entity_id)
+                return
             
         device_id = f"{device_entity_id}"
         
@@ -335,15 +327,8 @@ async def _update_device_instance(
                     _LOGGER.error("Invalid instance or coordinator for device %s", device_id)
                     return
                     
-                # Create a copy of the data to avoid modifying the original
-                updated_data = dict(instance.coordinator.entry.data)
-                updated_data.update({
-                    CONF_LATITUDE: float(lat),
-                    CONF_LONGITUDE: float(lon),
-                })
-                
-                # Update the coordinator's entry data
-                instance.coordinator.entry.data = updated_data
+                # Update the coordinates in the coordinator
+                instance.coordinator.update_coordinates(lat, lon)
                 
                 # Refresh the coordinator
                 try:
@@ -383,6 +368,17 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
             self.device_id = device_id
             self._data: dict[str, Any] = {}
             self._last_update_success = False
+            
+            # Store coordinates in instance variables
+            self._latitude = None
+            self._longitude = None
+            self._timezone = "auto"
+            
+            # Initialize coordinates from entry data if available
+            if hasattr(entry, 'data') and isinstance(entry.data, dict):
+                self._latitude = entry.data.get(CONF_LATITUDE)
+                self._longitude = entry.data.get(CONF_LONGITUDE)
+                self._timezone = entry.data.get(CONF_TIME_ZONE, "auto")
             
             # Validate and get scan interval
             try:
@@ -444,10 +440,15 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
             )
             raise
 
+    def update_coordinates(self, latitude: float, longitude: float) -> None:
+        """Update the coordinates for this coordinator."""
+        self._latitude = float(latitude)
+        self._longitude = float(longitude)
+        _LOGGER.debug("Updated coordinates to lat=%s, lon=%s", self._latitude, self._longitude)
+
     async def _async_update_data(self) -> dict[str, Any]:
-        latitude = self.entry.data[CONF_LATITUDE]
-        longitude = self.entry.data[CONF_LONGITUDE]
-        timezone = self.entry.data.get(CONF_TIME_ZONE, "auto")
+        if self._latitude is None or self._longitude is None:
+            raise UpdateFailed("Coordinates not set for this device")
 
         daily_vars = self.entry.options.get(
             CONF_DAILY_VARIABLES,
@@ -459,9 +460,9 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
         params = {
-            "latitude": latitude,
-            "longitude": longitude,
-            "timezone": timezone,
+            "latitude": self._latitude,
+            "longitude": self._longitude,
+            "timezone": self._timezone,
             "current_weather": "true",
             "daily": daily_vars,
             "hourly": hourly_vars,
@@ -486,10 +487,10 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
                         raise UpdateFailed(f"API error: {response.status}")
 
                     data = await response.json()
-                    # Dodajemy dane lokalizacyjne do głównego słownika danych
-                    data["latitude"] = latitude
-                    data["longitude"] = longitude
-                    data["timezone"] = timezone
+                    # Add location data to the main data dictionary
+                    data["latitude"] = self._latitude
+                    data["longitude"] = self._longitude
+                    data["timezone"] = self._timezone
                     data["_metadata"] = {
                         "last_update": datetime.now(timezone.utc).isoformat(),
                     }
