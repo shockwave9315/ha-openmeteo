@@ -69,11 +69,13 @@ def _get_hour_index(time_list: tuple[str, ...], now_iso: str) -> int:
     return 0
 
 @lru_cache(maxsize=1)
-def get_current_hour_index(hourly_times: list[str]) -> int:
+def get_current_hour_index(hourly_times: tuple[str]) -> int:
     """Returns the index of the current hour in the hourly data.
     
+    Handles various time formats and timezones that might be returned by the API.
+    
     Args:
-        hourly_times: List of time strings from the API response
+        hourly_times: Tuple of time strings from the API response
         
     Returns:
         int: Index of the current hour in the list, or 0 if not found
@@ -83,32 +85,66 @@ def get_current_hour_index(hourly_times: list[str]) -> int:
         return 0
 
     try:
-        # Get current time in local timezone and zero out minutes/seconds
-        now = dt_util.now().replace(minute=0, second=0, microsecond=0)
+        # Get current time in UTC (since API times are typically in UTC)
+        now_utc = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
+        now_local = dt_util.now().replace(minute=0, second=0, microsecond=0)
         
+        # Log available times for debugging
+        _LOGGER.debug("Szukana godzina (UTC): %s", now_utc.isoformat())
+        _LOGGER.debug("Szukana godzina (lokalna): %s", now_local.isoformat())
+        _LOGGER.debug("Dostępne godziny z API: %s", hourly_times[:24])  # First 24 hours
+        
+        # Try different matching strategies
         for idx, time_str in enumerate(hourly_times):
             try:
-                # Normalize timezone format for parsing
-                normalized_time = time_str.replace("Z", "+00:00")
-                time_dt = datetime.fromisoformat(normalized_time)
+                # Strategy 1: Direct string comparison (fast path)
+                if time_str.startswith(now_utc.strftime("%Y-%m-%dT%H")):
+                    _LOGGER.debug("Znaleziono dopasowanie przez prefix: %s ~ %s", 
+                                time_str, now_utc.strftime("%Y-%m-%dT%H"))
+                    return idx
                 
-                # Compare only hour and date components
+                # Strategy 2: Parse and compare datetime objects
+                # Normalize timezone format for parsing
+                normalized_time = time_str.replace("Z", "+00:00") if "Z" in time_str else time_str
+                if "+" not in normalized_time and "-" not in normalized_time[11:]:
+                    # If no timezone info, assume UTC
+                    normalized_time += "+00:00"
+                    
+                time_dt = datetime.fromisoformat(normalized_time)
                 time_dt = time_dt.replace(minute=0, second=0, microsecond=0)
                 
-                if time_dt == now:
-                    _LOGGER.debug("Znaleziono dopasowanie godziny: %s == %s", time_str, now.isoformat())
+                # Compare with both UTC and local time
+                if time_dt == now_utc or time_dt == now_local:
+                    _LOGGER.debug("Znaleziono dokładne dopasowanie: %s", time_str)
                     return idx
                     
             except Exception as e:
                 _LOGGER.debug("Błąd parsowania czasu '%s': %s", time_str, str(e))
                 continue
                 
+        # Fallback: Try to find the closest hour
         _LOGGER.warning(
-            "Brak dopasowania godziny, używam indeksu 0 (szukana godzina: %s, dostępne: %s...)",
-            now.isoformat(),
-            hourly_times[:3]  # Show first 3 entries for debugging
+            "Brak dokładnego dopasowania godziny, próbuję znaleźć najbliższą..."
         )
-        return 0
+        
+        # If we get here, try a more lenient match
+        target_hour = now_utc.strftime("%Y-%m-%dT%H")
+        for idx, time_str in enumerate(hourly_times):
+            if time_str.startswith(target_hour):
+                _LOGGER.debug("Znaleziono przybliżone dopasowanie: %s ~ %s", 
+                            time_str, target_hour)
+                return idx
+        
+        # If still no match, log more details and return 0
+        _LOGGER.warning(
+            "Nie udało się znaleźć dopasowania dla godziny. \n"
+            "Szukana godzina (UTC): %s\n"
+            "Dostępne godziny z API: %s... (pierwsze 5 z %d)",
+            now_utc.isoformat(),
+            hourly_times[:5],
+            len(hourly_times)
+        )
+        
         
     except Exception as e:
         _LOGGER.error("Błąd krytyczny w get_current_hour_index: %s", str(e), exc_info=True)
@@ -578,32 +614,15 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
                 _LOGGER.debug("Invalid or empty data provided to _get_hourly_value")
                 return None
                 
-            hourly_data = data.get("hourly", {})
-            if not isinstance(hourly_data, dict):
-                _LOGGER.debug("Hourly data is not a dictionary")
-                return None
-                
-            hourly_values = hourly_data.get(key)
-            if not hourly_values or not isinstance(hourly_values, list) or not hourly_values:
-                _LOGGER.debug("No hourly values available for %s", key)
-                return None
-                
-            # Get the first value (current hour)
-            value = hourly_values[0]
-            
-            # Handle cases where the value might be None or invalid
-            if value is None:
-                _LOGGER.debug("Value for %s is None in the API response", key)
-                return None
-                
-            # Convert to float if possible for numeric values
-            try:
-                return float(value) if value is not None else None
-            except (TypeError, ValueError):
-                return value
+            # Use the global get_hourly_value function which handles time-based lookups
+            return get_hourly_value(
+                data=data,
+                key=key,
+                device_id=getattr(self, '_device_id', None)
+            )
                 
         except Exception as e:
-            _LOGGER.debug("Error getting hourly value for %s: %s", key, str(e))
+            _LOGGER.debug("Error getting hourly value for %s: %s", key, str(e), exc_info=True)
             return None
 
     def _setup_device_info(self, config_entry, sensor_config, device_id):
