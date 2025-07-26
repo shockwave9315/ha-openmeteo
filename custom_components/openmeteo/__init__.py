@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 from homeassistant.core import HomeAssistant, Event, callback
-from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady, async_forward_entry_setup
+from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -48,8 +48,22 @@ class OpenMeteoInstance:
         self.coordinator = OpenMeteoDataUpdateCoordinator(hass, entry, device_id)
         self.entities = set()
         
-        # Initialize coordinates for main instance if this is not a device tracker
-        if device_id is None and hasattr(entry, 'data') and isinstance(entry.data, dict):
+        # Initialize coordinates for main instance or device tracker
+        if device_id is not None:
+            # Handle device tracker coordinates
+            state = hass.states.get(device_id)
+            if state and state.attributes.get("latitude") is not None:
+                try:
+                    lat = float(state.attributes["latitude"])
+                    lon = float(state.attributes["longitude"])
+                    self.coordinator.update_coordinates(lat, lon)
+                    _LOGGER.debug("Set coordinates for tracked device %s: (%s, %s)", 
+                                device_id, lat, lon)
+                except (ValueError, TypeError) as e:
+                    _LOGGER.warning("Invalid lat/lon for device %s: %s", 
+                                  device_id, str(e))
+        elif hasattr(entry, 'data') and isinstance(entry.data, dict):
+            # Handle main instance coordinates from config entry
             lat = entry.data.get(CONF_LATITUDE)
             lon = entry.data.get(CONF_LONGITUDE)
             if lat is not None and lon is not None:
@@ -294,19 +308,7 @@ async def _create_device_instance(
             
         hass.data[DOMAIN][entry.entry_id].setdefault("device_instances", {})[device_id] = instance
 
-        # Set up platforms for the new instance
-        for platform in PLATFORMS:
-            try:
-                await async_forward_entry_setup(hass, entry, platform)
-            except Exception as platform_err:
-                _LOGGER.error(
-                    "Failed to setup platform %s for device %s: %s",
-                    platform, device_entity_id, str(platform_err),
-                    exc_info=isinstance(platform_err, Exception) and not isinstance(platform_err, UpdateFailed)
-                )
-                # Continue with other platforms even if one fails
-                continue
-
+        # Platforms are already loaded in async_setup_entry, no need to forward setup again
         _LOGGER.debug("Successfully created device instance for %s", device_entity_id)
         return instance
         
