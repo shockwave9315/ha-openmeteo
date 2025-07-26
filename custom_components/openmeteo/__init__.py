@@ -639,6 +639,9 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
             CONF_HOURLY_VARIABLES,
             self.entry.data.get(CONF_HOURLY_VARIABLES, DEFAULT_HOURLY_VARIABLES)
         )
+        
+        # Log the hourly variables being requested
+        _LOGGER.debug("Requesting hourly variables: %s", hourly_vars)
 
         params = {
             "latitude": self._latitude,

@@ -106,9 +106,13 @@ def get_hourly_value(data: dict, key: str):
             _LOGGER.debug("No data or invalid data format")
             return None
             
+        # Log available hourly keys for debugging
+        hourly_keys = list(data.get("hourly", {}).keys()) if isinstance(data.get("hourly"), dict) else []
+        _LOGGER.debug("Available hourly keys in response: %s", hourly_keys)
+        
         # Get the current hour index
         idx = get_current_hour_index(data)
-        _LOGGER.debug("Using index %d for key %s", idx, key)
+        _LOGGER.debug("Using index %d for key %s (available keys: %s)", idx, key, hourly_keys)
         
         # Get the value for the current hour
         hourly_data = data.get("hourly", {})
