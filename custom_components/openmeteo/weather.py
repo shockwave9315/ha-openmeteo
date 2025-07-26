@@ -247,7 +247,11 @@ class OpenMeteoWeather(WeatherEntity):
             
     @property
     def device_info(self) -> Optional[DeviceInfo]:
-        """Return device registry information (only for main instance)."""
+        """Return device registry information.
+        
+        Only the main instance should return a DeviceInfo object.
+        Device tracker entities should return None as their device is managed in __init__.py
+        """
         try:
             if not self._device_id:
                 # Only main instance gets its own device
@@ -257,7 +261,7 @@ class OpenMeteoWeather(WeatherEntity):
                     manufacturer="Open-Meteo",
                 )
             # For device trackers, return None as they're managed in __init__.py
-            # via_device is not needed here as it's handled by the device registry
+            # This prevents duplicate device entries in the registry
             return None
         except Exception as e:
             _LOGGER.warning("Error generating device_info: %s", e, exc_info=True)

@@ -192,6 +192,23 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 unload_ok = False
         else:
             _LOGGER.debug("No main instance to unload")
+            
+        # Unload platforms
+        for platform in PLATFORMS:
+            try:
+                # Skip if platform wasn't loaded
+                if not hasattr(hass.data.get("entity_components", {}).get(platform), "async_unload_entry"):
+                    _LOGGER.debug("Skipping unload for platform %s (not loaded)", platform)
+                    continue
+                    
+                _LOGGER.debug("Unloading platform %s", platform)
+                if not await hass.config_entries.async_forward_entry_unload(entry, platform):
+                    _LOGGER.warning("Failed to unload platform %s", platform)
+                    unload_ok = False
+            except Exception as err:
+                _LOGGER.error("Error unloading platform %s: %s", 
+                            platform, str(err), exc_info=True)
+                unload_ok = False
 
         # Clean up entry data if unload was successful
         if unload_ok:
