@@ -322,58 +322,50 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
             raise
             
     def _setup_device_info(self, config_entry, sensor_config, device_id):
-        """Konfiguruje informacje o urządzeniu dla czujnika."""
-        try:
-            # Use device_id in identifiers if this is a device instance
-            if device_id:
-                identifiers = {(DOMAIN, f"{config_entry.entry_id}-{device_id}")}
-                name = self._attr_name.replace(f" {sensor_config.get('name', '')}", "").strip() or f"Open-Meteo {device_id}"
-            else:
-                identifiers = {(DOMAIN, config_entry.entry_id)}
-                name = self._attr_name.replace(f" {sensor_config.get('name', '')}", "").strip() or "Open-Meteo"
-                
-            self._attr_device_info = {
-                "identifiers": identifiers,
-                "name": name,
-                "manufacturer": "Open-Meteo",
-            }
+        """Configure device information for the sensor.
+        
+        Args:
+            config_entry: The config entry for this integration
+            sensor_config: Configuration dictionary for this sensor type
+            device_id: The device ID if this is a device instance, None for main instance
             
-            # Dodaj ID urządzenia do informacji o urządzeniu, jeśli to instancja urządzenia
-            if device_id and hasattr(self, '_attr_device_info'):
-                self._attr_device_info["via_device"] = (DOMAIN, config_entry.entry_id)
-                
-                # Pobierz dane konfiguracyjne z obsługą błędów
-                config_data = config_entry.data or {}
-                device_name = config_data.get("device_name")
-                area_overrides = config_data.get("area_overrides", {})
-                device_entity_id = config_data.get("device_entity_id")
-                
-                # Ustaw sugerowany obszar na podstawie dostępnych danych
-                if device_entity_id and device_entity_id in area_overrides:
-                    self._attr_device_info["suggested_area"] = str(area_overrides[device_entity_id])
-                elif device_name:
-                    self._attr_device_info["suggested_area"] = str(device_name)
-                elif " - " in self._attr_name:
-                    self._attr_device_info["suggested_area"] = str(self._attr_name.split(" - ")[-1].strip())
-                
-                # Ustaw domyślną dostępność na False, aby uniknąć błędów przed pierwszą aktualizacją
-                self._attr_available = False
-                
+        Note:
+            - For device instances, we don't set device_info as the device is managed in __init__.py
+            - Only the main instance (when no device_id) gets device_info
+        """
+        try:
+            if not device_id:
+                # Only set device_info for the main instance
+                self._attr_device_info = {
+                    "identifiers": {(DOMAIN, config_entry.entry_id)},
+                    "name": "Open-Meteo",
+                    "manufacturer": "Open-Meteo",
+                }
+                _LOGGER.debug("Set device_info for main instance sensor %s", self._sensor_type)
+            else:
+                # For device instances, don't set device_info as the device is managed in __init__.py
+                self._attr_device_info = None
+                _LOGGER.debug("Skipping device_info for device instance %s (%s)", 
+                            device_id, self._sensor_type)
         except Exception as e:
-            _LOGGER.error("Błąd podczas konfigurowania informacji o urządzeniu: %s", str(e), exc_info=True)
-            raise
+            _LOGGER.warning(
+                "Error configuring device info for %s: %s",
+                self._sensor_type,
+                str(e),
+                exc_info=True
+            )
 
     @property
     def native_value(self):
         """Return the state of the sensor."""
         try:
             # Check if we have all required attributes
-            if not hasattr(self, 'coordinator') or not self.coordinator:
+            if not getattr(self, 'coordinator', None):
                 _LOGGER.debug("No coordinator available for sensor %s", self._sensor_type)
                 return None
                 
-            # Initialize coordinator data if it's None
-            if not hasattr(self.coordinator, 'data') or self.coordinator.data is None:
+            # Check if coordinator has data
+            if not getattr(self.coordinator, 'data', None):
                 _LOGGER.debug("No data available in coordinator for sensor %s", self._sensor_type)
                 return None
                 
@@ -388,30 +380,25 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
                 return None
                 
             # Safely call the value function
-            try:
-                value = value_fn(self.coordinator.data)
-                
-                if value is None:
-                    _LOGGER.debug("No value available for sensor %s", self._sensor_type)
-                    return None
-                    
-                # Format the value if it's a number
-                if isinstance(value, (int, float)):
-                    return round(float(value), 2)
-                    
-                return value
-                
-            except Exception as value_err:
-                _LOGGER.error(
-                    "Error getting value for sensor %s: %s",
-                    self._sensor_type,
-                    str(value_err),
-                    exc_info=True
-                )
-                return None
+            value = value_fn(self.coordinator.data)
             
-        except (KeyError, IndexError, TypeError, AttributeError) as err:
-            _LOGGER.debug("Error getting sensor value for %s: %s", self._sensor_type, err)
+            if value is None:
+                _LOGGER.debug("No value available for sensor %s", self._sensor_type)
+                return None
+                
+            # Format the value if it's a number
+            if isinstance(value, (int, float)):
+                return round(float(value), 2)
+                
+            return value
+            
+        except Exception as err:
+            _LOGGER.error(
+                "Error getting value for sensor %s: %s",
+                self._sensor_type,
+                str(err),
+                exc_info=True
+            )
             return None
 
     @property
