@@ -278,23 +278,11 @@ class OpenMeteoWeather(WeatherEntity):
                     device_name = device_id.split('.')[-1].replace('_', ' ').title()
                     self._attr_name = f"{device_name} Weather"
                 
-                # Create a more unique ID by combining entry_id, device_id, and a hash of the coordinates
-                # to avoid conflicts after restart or reconfiguration
-                coord_hash = ""
-                if hasattr(coordinator, '_latitude') and hasattr(coordinator, '_longitude'):
-                    coord_hash = f"-{abs(hash((coordinator._latitude, coordinator._longitude))) % 10000:04d}"
-                
-                self._attr_unique_id = f"{config_entry.entry_id}-{device_id}{coord_hash}-weather"
+                # Let the unique_id property handle the unique ID generation
                 self._attr_entity_registry_visible_default = True
             else:
-                # This is the main instance - use entry_id in the unique_id
+                # This is the main instance
                 self._attr_name = config_entry.data.get("name", "Open-Meteo Weather")
-                self._attr_unique_id = f"{config_entry.entry_id}-main-weather"
-                
-                # Add coordinates hash to ensure uniqueness if there are multiple main instances
-                if hasattr(coordinator, '_latitude') and hasattr(coordinator, '_longitude'):
-                    coord_hash = abs(hash((coordinator._latitude, coordinator._longitude))) % 10000
-                    self._attr_unique_id = f"{self._attr_unique_id}-{coord_hash:04d}"
                 
                 # Safely check for device instances
                 device_instances = {}
