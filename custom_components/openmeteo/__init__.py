@@ -664,8 +664,14 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
             import async_timeout
             from datetime import datetime, timezone
 
+            # Log the full URL with parameters for debugging
+            from urllib.parse import urlencode
+            url = f"{URL}?{urlencode(params, doseq=True)}"
+            _LOGGER.debug("Making API request to: %s", url)
+            
             async with async_timeout.timeout(30):
                 session = async_get_clientsession(self.hass)
+                _LOGGER.debug("Request parameters: %s", params)
                 async with session.get(URL, params=params) as response:
                     if response.status != 200:
                         raise UpdateFailed(f"API error: {response.status}")
