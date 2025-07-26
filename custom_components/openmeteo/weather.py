@@ -49,183 +49,75 @@ async def async_setup_entry(
 ) -> None:
     """Set up Open-Meteo weather entity based on a config entry."""
     try:
-        if not hass or not config_entry or not async_add_entities:
-            _LOGGER.error("Invalid parameters provided to async_setup_entry")
-            return
-            
         entry_id = config_entry.entry_id
-        
-        # Validate that the integration is properly set up in hass.data
-        if DOMAIN not in hass.data or not hass.data[DOMAIN]:
-            _LOGGER.error("Open-Meteo integration not properly initialized in hass.data")
-            return
-            
-        if entry_id not in hass.data[DOMAIN]:
-            _LOGGER.error("No entry data found for entry_id: %s", entry_id)
-            return
-            
         entry_data = hass.data[DOMAIN][entry_id]
+
+        # If this is a device_tracker instance → only add this weather entity
+        device_id = config_entry.data.get("device_id")
+        if device_id:
+            instance = entry_data["device_instances"].get(device_id)
+            if instance and instance.coordinator:
+                _LOGGER.debug("Creating weather entity for device tracker: %s", device_id)
+                async_add_entities([OpenMeteoWeather(instance.coordinator, config_entry, device_id)])
+            return  # DONE — Don't add main_instance
         
-        # Check if this is a device instance
-        if "device_id" in config_entry.data:
-            # This is a device instance, add a single weather entity
-            device_id = config_entry.data["device_id"]
-            
-            # Validate device_instances exists and contains the device_id
-            if "device_instances" not in entry_data or not entry_data["device_instances"]:
-                _LOGGER.error("No device instances found for entry_id: %s", entry_id)
-                return
-                
-            if device_id not in entry_data["device_instances"]:
-                _LOGGER.error("Device ID %s not found in device instances", device_id)
-                return
-                
-            coordinator = entry_data["device_instances"][device_id].coordinator
-            if not coordinator:
-                _LOGGER.error("No coordinator found for device %s", device_id)
-                return
-                
-            _LOGGER.debug("Setting up weather entity for device %s", device_id)
-            async_add_entities([OpenMeteoWeather(coordinator, config_entry, device_id)])
-            
+        # If this is the main instance — only add if there are no device_instances
+        if not entry_data.get("device_instances"):
+            instance = entry_data.get("main_instance")
+            if instance:
+                async_add_entities([OpenMeteoWeather(instance.coordinator, config_entry)])
         else:
-            # This is the main instance, only add it if there are no device instances
-            device_instances = entry_data.get("device_instances", {})
-            
-            if not device_instances:
-                # Only create main instance if there are no device trackers
-                if "main_instance" not in entry_data or not entry_data["main_instance"]:
-                    _LOGGER.error("Main instance not found for entry_id: %s", entry_id)
-                    return
-                    
-                coordinator = entry_data["main_instance"].coordinator
-                if not coordinator:
-                    _LOGGER.error("No coordinator found for main instance")
-                    return
-                    
-                _LOGGER.debug("Setting up main weather entity (no device trackers present)")
-                async_add_entities([OpenMeteoWeather(coordinator, config_entry)])
-            else:
-                _LOGGER.debug("Skipping main weather entity setup - using device trackers instead")
-        
-        # Add a listener for device instance updates
-        @callback
-        def _async_update_entities(entry_id: str) -> None:
-            """Update entities when device instances change."""
-            try:
-                if not entry_id or entry_id != config_entry.entry_id:
-                    return
-                    
-                # Safely get device instances
-                try:
-                    if (DOMAIN not in hass.data or 
-                            entry_id not in hass.data[DOMAIN] or 
-                            "device_instances" not in hass.data[DOMAIN][entry_id]):
-                        _LOGGER.error("Cannot update entities: missing device instances data")
-                        return
-                        
-                    device_instances = hass.data[DOMAIN][entry_id]["device_instances"]
-                    
-                    # Get all existing entities
-                    try:
-                        entity_registry = er.async_get(hass)
-                        if not entity_registry:
-                            _LOGGER.error("Failed to get entity registry")
-                            return
-                            
-                        entities = er.async_entries_for_config_entry(
-                            entity_registry, config_entry.entry_id
-                        )
-                        
-                        # Remove old entities
-                        if entities:
-                            for entity in entities:
-                                try:
-                                    if entity.unique_id and entity.unique_id.startswith(f"{config_entry.entry_id}-weather-"):
-                                        entity_registry.async_remove(entity.entity_id)
-                                        _LOGGER.debug("Removed old entity: %s", entity.entity_id)
-                                except Exception as remove_err:
-                                    _LOGGER.error("Error removing entity %s: %s", 
-                                                getattr(entity, 'entity_id', 'unknown'), 
-                                                str(remove_err))
-                        
-                        # Add new entities
-                        for device_id, instance in device_instances.items():
-                            try:
-                                if not hasattr(instance, 'coordinator') or not instance.coordinator:
-                                    _LOGGER.error("Invalid coordinator for device %s", device_id)
-                                    continue
-                                    
-                                _LOGGER.debug("Adding new entity for device %s", device_id)
-                                async_add_entities([OpenMeteoWeather(instance.coordinator, config_entry, device_id)])
-                                
-                            except Exception as add_err:
-                                _LOGGER.error("Failed to add entity for device %s: %s", 
-                                            device_id, str(add_err), exc_info=True)
-                                
-                    except Exception as registry_err:
-                        _LOGGER.error("Error accessing entity registry: %s", str(registry_err), exc_info=True)
-                        
-                except Exception as data_err:
-                    _LOGGER.error("Error processing device instances: %s", str(data_err), exc_info=True)
-                    
-            except Exception as err:
-                _LOGGER.error("Unexpected error in _async_update_entities: %s", str(err), exc_info=True)
-            
-            # Get all device instances
-            try:
-                device_instances = hass.data[DOMAIN][entry_id].get("device_instances", {})
-            except Exception as err:
-                _LOGGER.error("Error getting device instances: %s", str(err), exc_info=True)
-                return
-            
-            # Get all existing entities
-            try:
-                entity_registry = er.async_get(hass)
-                entities = er.async_entries_for_config_entry(
-                    entity_registry, config_entry.entry_id
-                )
-            except Exception as err:
-                _LOGGER.error("Error getting entity registry: %s", str(err), exc_info=True)
-                return
-            entities = er.async_entries_for_config_entry(
-                entity_registry, config_entry.entry_id
-            )
-            
-            # Find all device weather entities
-            device_entities = [
-                entity for entity in entities 
-                if entity.domain == "weather" and "device_id" in entity.unique_id
-            ]
-            
-            # Find all device IDs that already have entities
-            existing_device_ids = {
-                entity.unique_id.split("_")[-1] 
-                for entity in device_entities
-            }
-            
-            # Add entities for new device instances
-            for device_id, instance in device_instances.items():
-                if device_id not in existing_device_ids:
-                    async_add_entities([
-                        OpenMeteoWeather(instance.coordinator, instance.entry, device_id)
-                    ])
-        
-        # Listen for device instance updates
-        config_entry.async_on_unload(
-            async_dispatcher_connect(
-                hass, 
-                SIGNAL_UPDATE_ENTITIES, 
-                _async_update_entities
-            )
-        )
-        
-        # Initial update
-        _async_update_entities(config_entry.entry_id)
-        
+            _LOGGER.debug("Skipping main weather entity setup (device_trackers present)")
+
     except Exception as err:
-        _LOGGER.error("Unexpected error in async_setup_entry: %s", str(err), exc_info=True)
-        return
+        _LOGGER.exception("Failed to set up Open-Meteo weather entity: %s", err)
+
+    # Add a listener for device instance updates
+    @callback
+    def _async_update_entities(entry_id: str) -> None:
+        """Update weather entities when device trackers change."""
+        try:
+            if entry_id != config_entry.entry_id:
+                return
+
+            # Get current device instances
+            device_instances = hass.data[DOMAIN][entry_id].get("device_instances", {})
+            registry = er.async_get(hass)
+
+            # Find all existing weather entities for this config entry
+            existing_entities = [
+                e.entity_id
+                for e in registry.entities.values()
+                if e.config_entry_id == config_entry.entry_id and e.domain == "weather"
+            ]
+
+            # Remove old entities
+            for entity_id in existing_entities:
+                _LOGGER.debug("Removing stale weather entity: %s", entity_id)
+                registry.async_remove(entity_id)
+
+            # Re-add all device tracker entities
+            for device_id, instance in device_instances.items():
+                if instance and instance.coordinator:
+                    _LOGGER.debug("Re-adding weather entity for tracker: %s", device_id)
+                    async_add_entities([
+                        OpenMeteoWeather(instance.coordinator, config_entry, device_id)
+                    ])
+
+        except Exception as e:
+            _LOGGER.exception("Error while dynamically updating weather entities: %s", e)
+
+    # Register the update listener
+    config_entry.async_on_unload(
+        async_dispatcher_connect(
+            hass,
+            f"{DOMAIN}_{entry_id}_update_entities",
+            _async_update_entities,
+        )
+    )
+
+    # Initial update call
+    _async_update_entities(entry_id)
 
 class OpenMeteoWeather(WeatherEntity):
     """Implementation of an Open-Meteo weather entity with device tracking support."""
@@ -361,7 +253,8 @@ class OpenMeteoWeather(WeatherEntity):
                     name="Open-Meteo",
                     manufacturer="Open-Meteo",
                 )
-            # Device tracker instances are already created in __init__.py
+            # For device trackers, return None as they're managed in __init__.py
+            # via_device is not needed here as it's handled by the device registry
             return None
         except Exception as e:
             _LOGGER.warning("Error generating device_info: %s", e, exc_info=True)
