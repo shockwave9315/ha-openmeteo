@@ -60,36 +60,25 @@ def _get_hour_index(time_list: tuple[str, ...], now_iso: str) -> int:
     _LOGGER.debug("Current hour %s not found in time list, using index 0", now_iso)
     return 0
 
-def get_current_hour_index(data: dict) -> int:
-    """Get the index of the current hour in the hourly data.
-    
-    Args:
-        data: The API response data containing hourly time information
-        
-    Returns:
-        int: The index of the current hour, or 0 if not found
-    """
+def get_current_hour_index(data: dict) -> int | None:
+    """Returns the index of the current hour in the hourly data."""
     try:
-        time_list = data.get("hourly", {}).get("time", [])
-        if not time_list or not isinstance(time_list, list):
-            _LOGGER.debug("No hourly time data available")
-            return 0
-            
-        # Get current UTC time in ISO format (without microseconds)
-        now_iso = datetime.utcnow().replace(minute=0, second=0, microsecond=0).isoformat()
-        
-        # Convert list to tuple for caching (lists are not hashable)
-        time_tuple = tuple(time_list)
-        
-        # Get the index using the cached function
-        idx = _get_hour_index(time_tuple, now_iso)
-        if idx > 0:
-            _LOGGER.debug("Found current hour at index %d: %s", idx, now_iso)
-        return idx
-            
+        hourly_times = data.get("hourly", {}).get("time", [])
+        if not hourly_times:
+            _LOGGER.debug("Brak listy godzin w danych")
+            return None
+
+        now = dt_util.now().replace(minute=0, second=0, microsecond=0)
+        now_iso = now.isoformat()
+
+        if now_iso in hourly_times:
+            return hourly_times.index(now_iso)
+
+        _LOGGER.debug("Bieżąca godzina %s nie znaleziona w: %s", now_iso, hourly_times[:3])
+        return None
     except Exception as e:
-        _LOGGER.debug("Error in get_current_hour_index: %s", str(e), exc_info=True)
-        return 0
+        _LOGGER.warning("Błąd w get_current_hour_index: %s", e)
+        return None
 
 def get_hourly_value(data: dict, key: str):
     """Safely get hourly value from API response data for the current hour.
@@ -112,6 +101,10 @@ def get_hourly_value(data: dict, key: str):
         
         # Get the current hour index
         idx = get_current_hour_index(data)
+        if idx is None:
+            _LOGGER.debug("Could not determine current hour index for key %s", key)
+            return None
+        
         _LOGGER.debug("Using index %d for key %s (available keys: %s)", idx, key, hourly_keys)
         
         # Get the value for the current hour
