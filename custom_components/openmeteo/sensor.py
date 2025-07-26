@@ -72,18 +72,24 @@ def get_current_hour_index(data: dict) -> int | None:
             _LOGGER.debug("Brak listy godzin w danych")
             return None
 
-        # Use UTC time, not local
+        # Get current UTC time, zero out minutes, seconds, and microseconds
         now_utc = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
-        now_iso = now_utc.isoformat() + "Z"  # Add 'Z' for UTC
+        # Format as YYYY-MM-DDTHH:00:00Z
+        now_iso = now_utc.strftime("%Y-%m-%dT%H:00:00Z")
 
+        # Try exact match first
         if now_iso in hourly_times:
             return hourly_times.index(now_iso)
 
-        # Try without 'Z' if not found
-        if now_iso.endswith("Z"):
-            now_iso_no_z = now_iso[:-1]
-            if now_iso_no_z in hourly_times:
-                return hourly_times.index(now_iso_no_z)
+        # Try without 'Z' suffix if not found
+        now_iso_no_z = now_iso[:-1]  # Remove 'Z'
+        if now_iso_no_z in hourly_times:
+            return hourly_times.index(now_iso_no_z)
+            
+        # Try with seconds precision
+        now_iso_with_sec = now_utc.strftime("%Y-%m-%dT%H:00:00.000Z")
+        if now_iso_with_sec in hourly_times:
+            return hourly_times.index(now_iso_with_sec)
 
         _LOGGER.debug("Bieżąca godzina %s nie znaleziona w: %s", now_iso, hourly_times[:3])
         return None
