@@ -62,18 +62,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
     else:
         _LOGGER.warning("No weather entities created (no main_instance and no devices).")
 
-# Register the update listener (only for main instance!)
-    if not device_id:
-        config_entry.async_on_unload(
-            async_dispatcher_connect(
-                hass,
-                SIGNAL_UPDATE_ENTITIES,
-                _async_update_entities,
-            )
-        )
-        
-        # Initial update only if no device_id
-        _async_update_entities(entry_id)
+
 
 class OpenMeteoWeather(WeatherEntity):
     """Implementation of an Open-Meteo weather entity with device tracking support."""
@@ -1489,8 +1478,9 @@ class OpenMeteoWeather(WeatherEntity):
                          getattr(self, 'entity_id', 'nieznana'), 
                          bool(self.coordinator.data) if hasattr(self.coordinator, 'data') else 'brak danych')
                          
-            # Wymuś aktualizację interfejsu użytkownika
-            self.async_write_ha_state()
+            # Wymuś aktualizację interfejsu użytkownika (jeśli mamy już entity_id)
+            if getattr(self, 'entity_id', None):
+                self.async_write_ha_state()
             
         except Exception as e:
             _LOGGER.error("Błąd podczas aktualizacji danych dla encji %s: %s", 
