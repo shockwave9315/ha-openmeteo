@@ -164,7 +164,7 @@ async def async_setup_entry(
         config_entry.async_on_unload(
             async_dispatcher_connect(
                 hass,
-                f"{DOMAIN}_{entry_id}_update_entities",
+                SIGNAL_UPDATE_ENTITIES,
                 _async_update_entities,
             )
         )
@@ -1438,7 +1438,7 @@ class OpenMeteoWeather(WeatherEntity):
             self.async_on_remove(
                 async_dispatcher_connect(
                     self.hass,
-                    f"{DOMAIN}_update_entities_{self._config_entry.entry_id}",
+                    SIGNAL_UPDATE_ENTITIES,
                     self._check_device_removed,
                 )
             )
