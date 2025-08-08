@@ -11,30 +11,27 @@ from zoneinfo import ZoneInfo
 import aiohttp
 import async_timeout
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_REQUEST_CONNECT_TIMEOUT,
-    CONF_REQUEST_TOTAL_TIMEOUT,
-    CONF_API_MAX_RETRIES,
-    CONF_API_RETRY_BASE,
-    DEFAULT_REQUEST_CONNECT_TIMEOUT,
-    DEFAULT_REQUEST_TOTAL_TIMEOUT,
-    DEFAULT_API_MAX_RETRIES,
-    DEFAULT_API_RETRY_BASE,
     CONF_DAILY_VARIABLES,
     CONF_HOURLY_VARIABLES,
     CONF_LATITUDE,
     CONF_LONGITUDE,
     CONF_SCAN_INTERVAL,
     CONF_TIME_ZONE,
+    CONF_TRACKED_ENTITY_ID,
+    CONF_TRACKING_MODE,
     DEFAULT_DAILY_VARIABLES,
     DEFAULT_HOURLY_VARIABLES,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    TRACKING_MODE_DEVICE,
+    TRACKING_MODE_FIXED,
     URL,
 )
 
@@ -44,127 +41,121 @@ PLATFORMS = ["weather", "sensor"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Open-Meteo from a config entry."""
-    # Inicjalizacja koordynatora
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
-    
-    # Pobierz dane po raz pierwszy
+    await coordinator.async_initialize()
+
     await coordinator.async_config_entry_first_refresh()
-    
-    # Zapisz koordynator w danych HASS
+
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    # Załaduj platformy (weather i sensor)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    
-    # Dodaj opcję aktualizacji konfiguracji
+
     entry.async_on_unload(entry.add_update_listener(async_update_options))
-    
+
     return True
+
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    # Odładujemy wszystkie platformy
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    
-    if unload_ok:
-        # Usuń dane związane z tą konfiguracją
-        hass.data[DOMAIN].pop(entry.entry_id, None)
-        
-        # Jeśli to była ostatnia konfiguracja, usuń domenę
-        if not hass.data[DOMAIN]:
-            hass.data.pop(DOMAIN)
-    
-    return unload_ok
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    if coordinator.unsub_tracker:
+        coordinator.unsub_tracker()
+
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Update options."""
+    """Handle options update."""
     await hass.config_entries.async_reload(entry.entry_id)
 
+
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching data from the Open-Meteo API."""
+    """Class to manage fetching Open-Meteo data."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        """Initialize."""
+        """Initialize the data update coordinator."""
+        self.config_entry = entry
         self.hass = hass
-        self.entry = entry
-        self._data: dict[str, Any] = {}
-        
-        # Pobierz interwał z konfiguracji lub użyj domyślnego
-        scan_interval_seconds = entry.options.get(
-            CONF_SCAN_INTERVAL,
-            entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        self.unsub_tracker = None
+        self.latitude = self._get_config(CONF_LATITUDE, hass.config.latitude)
+        self.longitude = self._get_config(CONF_LONGITUDE, hass.config.longitude)
+
+        scan_interval = timedelta(
+            minutes=self._get_config(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         )
-        
-        # Upewnij się, że to int
-        if not isinstance(scan_interval_seconds, int):
-            scan_interval_seconds = int(scan_interval_seconds)
-        
-        # Konwertuj na timedelta tylko dla update_interval
-        update_interval = timedelta(seconds=scan_interval_seconds)
-        
+
         super().__init__(
             hass,
             _LOGGER,
-            name="OpenMeteo",
-            update_interval=update_interval,
+            name=DOMAIN,
+            update_interval=scan_interval,
         )
-        
-        # Zapisz oryginalną wartość (sekundy) jako atrybut
-        self.scan_interval_seconds = scan_interval_seconds
+
+    async def async_initialize(self) -> None:
+        """Initialize the coordinator."""
+        tracking_mode = self._get_config(CONF_TRACKING_MODE, TRACKING_MODE_FIXED)
+        if tracking_mode == TRACKING_MODE_DEVICE:
+            entity_id = self._get_config(CONF_TRACKED_ENTITY_ID)
+            if entity_id:
+                self.unsub_tracker = async_track_state_change_event(
+                    self.hass, [entity_id], self._async_handle_location_update
+                )
+                # Set initial location from tracked entity
+                await self._update_location_from_entity(entity_id)
+
+    @callback
+    async def _async_handle_location_update(self, event) -> None:
+        """Handle location update from tracked entity."""
+        new_state = event.data.get("new_state")
+        if not new_state or not new_state.attributes:
+            return
+
+        self.latitude = new_state.attributes.get("latitude")
+        self.longitude = new_state.attributes.get("longitude")
+        await self.async_request_refresh()
+
+    async def _update_location_from_entity(self, entity_id: str) -> None:
+        """Update location from the tracked entity's current state."""
+        state = self.hass.states.get(entity_id)
+        if state and state.attributes:
+            self.latitude = state.attributes.get("latitude", self.latitude)
+            self.longitude = state.attributes.get("longitude", self.longitude)
+
+    def _get_config(self, key: str, default: Any = None) -> Any:
+        """Get configuration from options or data."""
+        return self.config_entry.options.get(key, self.config_entry.data.get(key, default))
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Open-Meteo API."""
-        latitude = self.entry.data[CONF_LATITUDE]
-        longitude = self.entry.data[CONF_LONGITUDE]
-        timezone = self.entry.data.get(CONF_TIME_ZONE, "auto")
+        timezone = self._get_config(CONF_TIME_ZONE, "auto")
 
         default_hourly = list(DEFAULT_HOURLY_VARIABLES)
         default_daily = list(DEFAULT_DAILY_VARIABLES)
 
-        if "pressure_msl" not in default_hourly:
-            default_hourly.append("pressure_msl")
-        if "surface_pressure" not in default_hourly:
-            default_hourly.append("surface_pressure")
-        if "visibility" not in default_hourly:
-            default_hourly.append("visibility")
-
-        daily_vars = self.entry.options.get(
-            CONF_DAILY_VARIABLES, self.entry.data.get(CONF_DAILY_VARIABLES, default_daily)
-        )
-        hourly_vars = self.entry.options.get(
-            CONF_HOURLY_VARIABLES, self.entry.data.get(CONF_HOURLY_VARIABLES, default_hourly)
-        )
+        hourly_variables = self._get_config(CONF_HOURLY_VARIABLES, default_hourly)
+        daily_variables = self._get_config(CONF_DAILY_VARIABLES, default_daily)
 
         params = {
-            "latitude": latitude,
-            "longitude": longitude,
-            "timezone": timezone,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
             "current_weather": "true",
-            "hourly": ",".join(sorted(set(hourly_vars))),
-            "daily": ",".join(sorted(set(daily_vars))),
+            "hourly": ",".join(hourly_variables),
+            "daily": ",".join(daily_variables),
+            "timezone": timezone,
+            "forecast_days": 16,
             "temperature_unit": "celsius",
             "windspeed_unit": "kmh",
             "precipitation_unit": "mm",
+            "timeformat": "iso8601",
         }
 
         session = async_get_clientsession(self.hass)
 
         try:
-            # Networking options from UI
-            opts = self.config_entry.options if hasattr(self, 'config_entry') else {}
-            req_connect_timeout = int(opts.get(CONF_REQUEST_CONNECT_TIMEOUT, DEFAULT_REQUEST_CONNECT_TIMEOUT))
-            req_total_timeout = int(opts.get(CONF_REQUEST_TOTAL_TIMEOUT, DEFAULT_REQUEST_TOTAL_TIMEOUT))
-            api_max_retries = int(opts.get(CONF_API_MAX_RETRIES, DEFAULT_API_MAX_RETRIES))
-            api_retry_base = float(opts.get(CONF_API_RETRY_BASE, DEFAULT_API_RETRY_BASE))
-            attempts = api_max_retries + 1
-            backoff = api_retry_base
-            last_err = None
-            for attempt in range(attempts):
-                try:
-                    timeout = aiohttp.ClientTimeout(total=req_total_timeout, connect=req_connect_timeout)
-                    async with session.get(URL, params=params, timeout=timeout) as response:
-if response.status != 200:
+            async with async_timeout.timeout(10):
+                async with session.get(URL, params=params) as response:
+                    if response.status != 200:
                         error_text = await response.text()
                         _LOGGER.error(
                             "Error %s from Open-Meteo API: %s",
@@ -176,17 +167,14 @@ if response.status != 200:
                     data = await response.json()
 
                     data["location"] = {
-                        "latitude": latitude,
-                        "longitude": longitude,
+                        "latitude": self.latitude,
+                        "longitude": self.longitude,
                         "timezone": timezone,
                     }
-                        # success
-                        break
-
 
                     if "hourly" in data and "time" in data["hourly"]:
                         try:
-                            user_tz = ZoneInfo(timezone if timezone != "auto" else "UTC")
+                            user_tz = ZoneInfo(timezone) if timezone != "auto" else dt_util.get_time_zone(self.hass.config.time_zone)
                             now = dt_util.now(user_tz)
                             times = data["hourly"]["time"]
                             future_indices = []
@@ -221,20 +209,27 @@ if response.status != 200:
             _LOGGER.error("Unexpected error from Open-Meteo API: %s", err, exc_info=True)
             raise UpdateFailed(f"Unexpected error from Open-Meteo API: {err}") from err
 
-    def _om_parse_time_local_safe(self, time_str, user_tz):
-        """Parse Open-Meteo time that may be UTC (with Z) or local w/o offset; return aware datetime in user tz."""
-        # Normalize common Z format
-        ts = time_str
+    
+    def _om_parse_time_local_safe(self, time_val, user_tz):
+        """Parse Open-Meteo time (UNIX or ISO) and return aware datetime in user tz."""
+        # UNIX timestamp (seconds)
+        if isinstance(time_val, (int, float)):
+            dt = datetime.fromtimestamp(time_val, tz=timezone.utc)
+            return dt.astimezone(user_tz)
+        # ISO string (with or without Z / milliseconds)
+        ts = time_val
         try:
             dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
         except Exception:
-            # Try stripping milliseconds if malformed
-            if '.' in ts:
+            if isinstance(ts, str) and '.' in ts:
                 ts2 = ts.split('.', 1)[0]
                 dt = datetime.fromisoformat(ts2.replace('Z', '+00:00'))
             else:
-                raise
+                # Fallback: try coercion to int
+                try:
+                    dt = datetime.fromtimestamp(int(ts), tz=timezone.utc)
+                except Exception:
+                    raise
         if dt.tzinfo is None:
-            # Open-Meteo sometimes returns local time without offset when timezone parameter is used.
             dt = dt.replace(tzinfo=user_tz)
         return dt.astimezone(user_tz)
