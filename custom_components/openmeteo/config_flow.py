@@ -76,10 +76,10 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
-    
+    """Handle options flow for Open-Meteo."""
+
     def __init__(self, config_entry):
         self.config_entry = config_entry
-"""Handle options flow for Open-Meteo."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -89,9 +89,9 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=user_input)
 
         # Użycie wartości z opcji lub danych konfiguracyjnych jako domyślnych
-        current_daily = self.options.get(CONF_DAILY_VARIABLES, DEFAULT_DAILY_VARIABLES)
-        current_hourly = self.options.get(CONF_HOURLY_VARIABLES, DEFAULT_HOURLY_VARIABLES)
-        scan_interval = self.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        current_daily = self.config_entry.options.get(CONF_DAILY_VARIABLES, DEFAULT_DAILY_VARIABLES)
+        current_hourly = self.config_entry.options.get(CONF_HOURLY_VARIABLES, DEFAULT_HOURLY_VARIABLES)
+        scan_interval = self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         
         # Schemat formularza opcji
         options_schema = {

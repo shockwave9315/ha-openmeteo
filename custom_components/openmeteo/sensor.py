@@ -4,7 +4,9 @@ from __future__ import annotations
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    DEGREE,
     PERCENTAGE,
+    UnitOfLength,
     UnitOfPrecipitationDepth,
     UnitOfPressure,
     UnitOfSpeed,
@@ -59,9 +61,8 @@ SENSOR_TYPES = {
         "icon": "mdi:cup-water",
         "device_class": "precipitation",
         "value_fn": lambda data: (
-            data.get("hourly", {}).get("precipitation", [0])[0] or 0
-        ) + (
-            data.get("hourly", {}).get("snowfall", [0])[0] or 0
+            (data.get("hourly", {}).get("precipitation", [0])[0] or 0) + 
+            (data.get("hourly", {}).get("snowfall", [0])[0] or 0)
         ),
     },
     "wind_speed": {
@@ -80,7 +81,7 @@ SENSOR_TYPES = {
     },
     "wind_bearing": {
         "name": "Kierunek wiatru",
-        "unit": "°",
+        "unit": DEGREE,
         "icon": "mdi:compass",
         "device_class": None,
         "value_fn": lambda data: data.get("current_weather", {}).get("winddirection"),
@@ -94,7 +95,7 @@ SENSOR_TYPES = {
     },
     "visibility": {
         "name": "Widzialność",
-        "unit": "km",
+        "unit": UnitOfLength.KILOMETERS,
         "icon": "mdi:eye",
         "device_class": None,
         "value_fn": lambda data: data.get("hourly", {}).get("visibility", [None])[0],
@@ -129,10 +130,10 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
-        self._sensor_type = "precipitation_total" if sensor_type == "precipitation" else sensor_type
-        
-        self._attr_name = f"{config_entry.data.get('name', 'Open-Meteo')} {SENSOR_TYPES[self._sensor_type]['name']}"
-        self._attr_unique_id = f"{config_entry.entry_id}-{self._sensor_type}"
+        self._sensor_type = sensor_type
+
+        self._attr_name = f"{config_entry.data.get('name', 'Open-Meteo')} {SENSOR_TYPES[sensor_type]['name']}"
+        self._attr_unique_id = f"{config_entry.entry_id}-{sensor_type}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
             "name": "Open-Meteo",

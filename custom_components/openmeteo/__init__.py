@@ -106,34 +106,27 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Open-Meteo API."""
-        # Pobierz dane konfiguracyjne
         latitude = self.entry.data[CONF_LATITUDE]
         longitude = self.entry.data[CONF_LONGITUDE]
         timezone = self.entry.data.get(CONF_TIME_ZONE, "auto")
-        
-        # Utwórz kopie domyślnych list, aby nie modyfikować oryginalnych
+
         default_hourly = list(DEFAULT_HOURLY_VARIABLES)
         default_daily = list(DEFAULT_DAILY_VARIABLES)
-        
-        # Dodaj brakujące parametry, jeśli ich nie ma
+
         if "pressure_msl" not in default_hourly:
             default_hourly.append("pressure_msl")
         if "surface_pressure" not in default_hourly:
             default_hourly.append("surface_pressure")
         if "visibility" not in default_hourly:
             default_hourly.append("visibility")
-        
-        # Pobierz wybrane zmienne z opcji lub użyj domyślnych
+
         daily_vars = self.entry.options.get(
-            CONF_DAILY_VARIABLES,
-            self.entry.data.get(CONF_DAILY_VARIABLES, default_daily)
+            CONF_DAILY_VARIABLES, self.entry.data.get(CONF_DAILY_VARIABLES, default_daily)
         )
         hourly_vars = self.entry.options.get(
-            CONF_HOURLY_VARIABLES,
-            self.entry.data.get(CONF_HOURLY_VARIABLES, default_hourly)
+            CONF_HOURLY_VARIABLES, self.entry.data.get(CONF_HOURLY_VARIABLES, default_hourly)
         )
 
-        # Parametry zapytania
         params = {
             "latitude": latitude,
             "longitude": longitude,
@@ -146,95 +139,79 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
             "precipitation_unit": "mm",
         }
 
-        # Inicjalizacja sesji HTTP
         session = async_get_clientsession(self.hass)
-        
+
         try:
             async with async_timeout.timeout(10):
                 async with session.get(URL, params=params) as response:
                     if response.status != 200:
                         error_text = await response.text()
                         _LOGGER.error(
-                            "Error %s from Open-Meteo API: %s", 
+                            "Error %s from Open-Meteo API: %s",
                             response.status,
-                            error_text[:200]  # Ogranicz długość logowanego błędu
+                            error_text[:200],
                         )
                         raise UpdateFailed(f"Error {response.status} from Open-Meteo API")
-                    
+
                     data = await response.json()
-                    
-                    # Dodaj dodatkowe informacje o lokalizacji
+
                     data["location"] = {
                         "latitude": latitude,
                         "longitude": longitude,
                         "timezone": timezone,
                     }
 
-                    # Przycięcie danych godzinowych do bieżącej godziny
                     if "hourly" in data and "time" in data["hourly"]:
-                        from datetime import datetime, timezone as tz
-                        from zoneinfo import ZoneInfo
-
-from datetime import datetime, timezone as tz
-
-def _om_parse_time_local_safe(time_str, user_tz):
-    """Parse Open-Meteo time that may be UTC (with Z) or local w/o offset; return aware datetime in user tz."""
-    # Normalize common Z format
-    ts = time_str
-    try:
-        dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
-    except Exception:
-        # Try stripping milliseconds if malformed
-        if '.' in ts:
-            ts2 = ts.split('.', 1)[0]
-            dt = datetime.fromisoformat(ts2.replace('Z', '+00:00'))
-        else:
-            raise
-    if dt.tzinfo is None:
-        # Open-Meteo sometimes returns local time without offset when timezone parameter is used.
-        dt = dt.replace(tzinfo=user_tz)
-    return dt.astimezone(user_tz)
-
-                        
                         try:
-                            # Pobierz bieżący czas w strefie czasowej użytkownika
                             user_tz = ZoneInfo(timezone if timezone != "auto" else "UTC")
                             now = datetime.now(tz.utc).astimezone(user_tz)
-                            
-                            # Znajdź indeks pierwszej godziny w przyszłości
                             times = data["hourly"]["time"]
                             future_indices = []
-                            
+
                             for i, time_str in enumerate(times):
                                 try:
-                                    # Konwersja czasu z odpowiednią strefą czasową
-                                    dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
-                                    dt = dt.replace(tzinfo=tz.utc).astimezone(user_tz)
+                                    dt = self._om_parse_time_local_safe(time_str, user_tz)
                                     if dt >= now:
                                         future_indices.append(i)
                                 except (ValueError, TypeError) as e:
                                     _LOGGER.debug("Error parsing time %s: %s", time_str, e)
                                     continue
-                            
+
                             if future_indices:
                                 first_future = future_indices[0]
-                                # Przytnij dane godzinowe
                                 for key in list(data["hourly"].keys()):
                                     if isinstance(data["hourly"][key], list) and len(data["hourly"][key]) == len(times):
                                         data["hourly"][key] = data["hourly"][key][first_future:]
-                            
+
                         except Exception as e:
                             _LOGGER.error("Error processing hourly data: %s", str(e), exc_info=True)
-                            # Kontynuuj bez przycinania w przypadku błędu
-                    
+
                     return data
-                    
-        except asyncio.TimeoutError:
+
+        except asyncio.TimeoutError as err:
             _LOGGER.error("Timeout while connecting to Open-Meteo API")
-            raise UpdateFailed("Timeout while connecting to Open-Meteo API")
+            raise UpdateFailed("Timeout while connecting to Open-Meteo API") from err
         except aiohttp.ClientError as err:
             _LOGGER.error("Error connecting to Open-Meteo API: %s", err)
-            raise UpdateFailed(f"Error connecting to Open-Meteo API: {err}")
+            raise UpdateFailed(f"Error connecting to Open-Meteo API: {err}") from err
         except Exception as err:
             _LOGGER.error("Unexpected error from Open-Meteo API: %s", err, exc_info=True)
-            raise UpdateFailed(f"Unexpected error from Open-Meteo API: {err}")
+            raise UpdateFailed(f"Unexpected error from Open-Meteo API: {err}") from err
+
+    def _om_parse_time_local_safe(self, time_str, user_tz):
+        """Parse Open-Meteo time that may be UTC (with Z) or local w/o offset; return aware datetime in user tz."""
+        # Normalize common Z format
+        ts = time_str
+        try:
+            dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+        except Exception:
+            # Try stripping milliseconds if malformed
+            if '.' in ts:
+                ts2 = ts.split('.', 1)[0]
+                dt = datetime.fromisoformat(ts2.replace('Z', '+00:00'))
+            else:
+                raise
+        if dt.tzinfo is None:
+            # Open-Meteo sometimes returns local time without offset when timezone parameter is used.
+            dt = dt.replace(tzinfo=user_tz)
+        return dt.astimezone(user_tz)

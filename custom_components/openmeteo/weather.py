@@ -133,12 +133,17 @@ class OpenMeteoWeather(WeatherEntity):
 
         daily = self.coordinator.data["daily"]
         time_entries = daily.get("time", [])
+        if not time_entries:
+            return []
+
         forecast_data = []
 
         for i, time_entry in enumerate(time_entries):
             if i >= 7:  # Limit to 7 days
                 break
 
+            # The API returns a date string, but we need a datetime object for HA.
+            # We'll assume noon for the forecast time.
             forecast_time = dt_util.parse_datetime(f"{time_entry}T12:00:00")
             forecast = {
                 ATTR_FORECAST_TIME: forecast_time,

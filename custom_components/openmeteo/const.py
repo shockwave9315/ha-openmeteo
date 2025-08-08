@@ -26,11 +26,11 @@ CONF_HOURLY_VARIABLES = "hourly_variables"
 CONF_LATITUDE = "latitude"
 CONF_LONGITUDE = "longitude"
 CONF_ALTITUDE = "altitude"
-CONF_TIME_ZONE = "time_zone"  # Uwaga: w pliku __init__.py jest używane CONF_TIME_ZONE
+CONF_TIME_ZONE = "time_zone"
 CONF_SCAN_INTERVAL = "scan_interval"
+
 # Default values
-# Default values
-DEFAULT_NAME = "Open-Meteo"  # Dodaj tę linię
+DEFAULT_NAME = "Open-Meteo"
 DEFAULT_SCAN_INTERVAL = 600  # 10 minutes
 
 DEFAULT_DAILY_VARIABLES = [
@@ -46,7 +46,6 @@ DEFAULT_HOURLY_VARIABLES = [
     "temperature_2m",
     "relativehumidity_2m",
     "apparent_temperature",
-    "apparent_temperature",
     "precipitation",
     "snowfall",
     "precipitation_probability",
@@ -57,7 +56,6 @@ DEFAULT_HOURLY_VARIABLES = [
     "pressure_msl",
     "surface_pressure",
     "visibility",
-    "precipitation_probability",
     "cloudcover",
     "is_day",
     "uv_index",
@@ -99,31 +97,4 @@ CONDITION_MAP = {
     95: ATTR_CONDITION_LIGHTNING_RAINY,  # Thunderstorm
     96: ATTR_CONDITION_LIGHTNING_RAINY,  # Thunderstorm with slight hail
     99: ATTR_CONDITION_LIGHTNING_RAINY,  # Thunderstorm with heavy hail
-}
-
-# w pliku /custom_components/openmeteo/const.py
-TRANSLATED_VARIABLES = {
-    # Daily
-    "temperature_2m_max": "Temperatura maksymalna",
-    "temperature_2m_min": "Temperatura minimalna",
-    "precipitation_sum": "Suma opadów (dzienna)",
-    "windspeed_10m_max": "Maksymalna prędkość wiatru",
-    "winddirection_10m_dominant": "Dominujący kierunek wiatru",
-    # Hourly
-    "temperature_2m": "Temperatura",
-    "relativehumidity_2m": "Wilgotność",
-    "apparent_temperature": "Temperatura odczuwalna",
-    "precipitation": "Suma opadów (godzinowa)",
-    "snowfall": "Opady śniegu",
-    "weathercode": "Kod pogody",
-    "windspeed_10m": "Prędkość wiatru",
-    "winddirection_10m": "Kierunek wiatru",
-    "windgusts_10m": "Porywy wiatru",
-    "pressure_msl": "Ciśnienie (na poziomie morza)",
-    "surface_pressure": "Ciśnienie (na powierzchni)",
-    "visibility": "Widzialność",
-    "precipitation_probability": "Prawdopodobieństwo opadów",
-    "cloudcover": "Zachmurzenie",
-    "is_day": "Czy jest dzień?",
-    "uv_index": "Indeks UV",
 }
