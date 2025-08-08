@@ -165,51 +165,37 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
                     timeout = aiohttp.ClientTimeout(total=req_total_timeout, connect=req_connect_timeout)
                     async with session.get(URL, params=params, timeout=timeout) as response:
                         if response.status != 200:
-                                                error_text = await response.text()
-                                                _LOGGER.error(
-                                                    "Error %s from Open-Meteo API: %s",
-                                                    response.status,
-                                                    error_text[:200],
-                                                )
-                                                raise UpdateFailed(f"Error {response.status} from Open-Meteo API")
-
-                                            data = await response.json()
-
-                                            data["location"] = {
-                                                "latitude": latitude,
-                                                "longitude": longitude,
-                                                "timezone": timezone,
-                                            }
-                                                # success
-                                                break
-
-
-                                            if "hourly" in data and "time" in data["hourly"]:
-                                                try:
-                                                    user_tz = ZoneInfo(timezone if timezone != "auto" else "UTC")
-                                                    now = dt_util.now(user_tz)
-                                                    times = data["hourly"]["time"]
-                                                    future_indices = []
-
-                                                    for i, time_str in enumerate(times):
-                                                        try:
-                                                            dt = self._om_parse_time_local_safe(time_str, user_tz)
-                                                            if dt >= now:
-                                                                future_indices.append(i)
-                                                        except (ValueError, TypeError) as e:
-                                                            _LOGGER.debug("Error parsing time %s: %s", time_str, e)
-                                                            continue
-
-                                                    if future_indices:
-                                                        first_future = future_indices[0]
-                                                        for key in list(data["hourly"].keys()):
-                                                            if isinstance(data["hourly"][key], list) and len(data["hourly"][key]) == len(times):
-                                                                data["hourly"][key] = data["hourly"][key][first_future:]
-
-                                                except Exception as e:
-                                                    _LOGGER.error("Error processing hourly data: %s", str(e), exc_info=True)
-
-                                            return data
+                            error_text = await response.text()
+                            _LOGGER.warning(
+                                "Error %s from Open-Meteo API: %s", response.status, error_text[:200]
+                            )
+                            raise UpdateFailed(f"Error {response.status} from Open-Meteo API")
+                        data = await response.json()
+                        # Slice hourly from current/next hour if available
+                        if "hourly" in data and "time" in data["hourly"]:
+                            try:
+                                user_tz = dt_util.get_time_zone(self.hass.config.time_zone) if timezone == "auto" else ZoneInfo(timezone)
+                                now = dt_util.now(user_tz)
+                                times = data["hourly"]["time"]
+                                future_indices = []
+                                for i, time_str in enumerate(times):
+                                    try:
+                                        dtv = self._om_parse_time_local_safe(time_str, user_tz)
+                                        if dtv >= now:
+                                            future_indices.append(i)
+                                    except (ValueError, TypeError):
+                                        continue
+                                if future_indices:
+                                    first_future = future_indices[0]
+                                    for key in list(data["hourly"].keys()):
+                                        arr = data["hourly"][key]
+                                        if isinstance(arr, list):
+                                            data["hourly"][key] = arr[first_future:]
+                            except Exception as e:
+                                _LOGGER.debug("Hourly slice failed: %s", e)
+                        data["location"] = {"latitude": latitude, "longitude": longitude, "timezone": timezone}
+                        # success
+                        break
                 except (asyncio.TimeoutError, aiohttp.ClientError) as err:
                     last_err = err
                     if attempt < attempts - 1:
