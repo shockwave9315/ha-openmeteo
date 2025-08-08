@@ -42,53 +42,38 @@ def stable_hash(input_str: str, length: int = 6) -> str:
     """Return a short, stable hash of a string."""
     return hashlib.sha1(input_str.encode()).hexdigest()[:length]
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
-    """Set up Open-Meteo weather entity based on a config entry."""
-    entry_id = config_entry.entry_id
-    entities_to_add = []
+async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
+    """Create weather entities for main instance and per-device instances."""
+    entry_data = hass.data.get(DOMAIN, {}).get(config_entry.entry_id, {})
+    main_instance = entry_data.get("main_instance")
+    device_instances = entry_data.get("device_instances", {}) or {}
 
-    try:
-        domain_data = hass.data.get(DOMAIN, {})
-        entry_data = domain_data.get(entry_id, {})
+    entities = []
+    if main_instance is not None:
+        entities.append(OpenMeteoWeather(main_instance.coordinator, config_entry))
+    for device_id, instance in device_instances.items():
+        try:
+            entities.append(OpenMeteoWeather(instance.coordinator, config_entry, device_id=device_id))
+        except Exception as err:
+            _LOGGER.error("Cannot create device weather for %s: %s", device_id, err)
 
-        # Create main weather entity
-        main_instance = entry_data.get("main_instance")
-        if main_instance and hasattr(main_instance, 'coordinator'):
-            _LOGGER.debug("Creating main weather entity for entry_id: %s", entry_id)
-            entities_to_add.append(OpenMeteoWeather(main_instance.coordinator, config_entry))
-        else:
-            _LOGGER.warning("No valid main_instance found for entry %s", entry_id)
+    if entities:
+        async_add_entities(entities, True)
+    else:
+        _LOGGER.warning("No weather entities created (no main_instance and no devices).")
 
-        # Create weather entities for device trackers
-        device_instances = entry_data.get("device_instances", {})
-        for device_id, device_instance in device_instances.items():
-            if device_instance and hasattr(device_instance, 'coordinator'):
-                _LOGGER.debug("Creating weather entity for device_id: %s", device_id)
-                entities_to_add.append(
-                    OpenMeteoWeather(device_instance.coordinator, config_entry, device_id=device_id)
-                )
-
-        if entities_to_add:
-            async_add_entities(entities_to_add)
-        else:
-            _LOGGER.warning("No weather entities were created for entry %s", entry_id)
-
-        # Listener for dynamic updates (placeholder for future logic)
-        @callback
-        def _async_update_entities(update_entry_id: str) -> None:
-            if update_entry_id == entry_id:
-                _LOGGER.info("Device tracker update signal received for %s. Dynamic add/remove not implemented.", entry_id)
-
+# Register the update listener (only for main instance!)
+    if not device_id:
         config_entry.async_on_unload(
-            async_dispatcher_connect(hass, SIGNAL_UPDATE_ENTITIES, _async_update_entities)
+            async_dispatcher_connect(
+                hass,
+                SIGNAL_UPDATE_ENTITIES,
+                _async_update_entities,
+            )
         )
-
-    except Exception as e:
-        _LOGGER.exception("Failed to set up Open-Meteo weather entities for entry %s: %s", entry_id, e)
+        
+        # Initial update only if no device_id
+        _async_update_entities(entry_id)
 
 class OpenMeteoWeather(WeatherEntity):
     """Implementation of an Open-Meteo weather entity with device tracking support."""
@@ -176,7 +161,7 @@ class OpenMeteoWeather(WeatherEntity):
                 except Exception as err:
                     _LOGGER.warning("Error checking for device instances: %s", str(err))
                     
-                self._attr_entity_registry_visible_default = len(device_instances) == 0
+                self._attr_entity_registry_visible_default = True
             
             # Device info will be handled by the device_info property
             self._attr_device_info = None

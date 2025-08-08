@@ -40,7 +40,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["weather", "sensor"]
+PLATFORMS = ["weather", "sensor", Platform.WEATHER]
 SIGNAL_UPDATE_ENTITIES = f"{DOMAIN}_update_entities"
 
 class OpenMeteoInstance:
