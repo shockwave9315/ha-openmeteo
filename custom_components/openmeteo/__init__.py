@@ -147,6 +147,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
             "temperature_unit": "celsius",
             "windspeed_unit": "kmh",
             "precipitation_unit": "mm",
+            "timeformat": "unixtime",
         }
 
         session = async_get_clientsession(self.hass)
