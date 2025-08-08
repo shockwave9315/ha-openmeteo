@@ -358,62 +358,51 @@ class OpenMeteoWeather(WeatherEntity):
         """
         try:
             entity_id = getattr(self, 'entity_id', 'nieznana')
-            
-            # Sprawdź dostępność i poprawność danych
+
             if not self.available:
-                _LOGGER.debug("Weather entity %s: Encja niedostępna w metodzie native_temperature", 
-                            entity_id)
+                _LOGGER.debug("Weather entity %s: Not available in native_temperature", entity_id)
                 return None
-                
-            # Sprawdź czy koordynator i jego dane istnieją
-            if not hasattr(self, 'coordinator') or not hasattr(self.coordinator, 'data'):
-                _LOGGER.debug("Weather entity %s: Brak danych koordynatora w metodzie native_temperature", 
-                            entity_id)
+
+            if not hasattr(self, 'coordinator') or not isinstance(self.coordinator.data, dict):
+                _LOGGER.debug("Weather entity %s: Coordinator data is missing or invalid in native_temperature", entity_id)
                 return None
-                
-            # Sprawdź czy dane koordynatora mają oczekiwany format
-            if not isinstance(self.coordinator.data, dict):
-                _LOGGER.warning("Weather entity %s: Nieprawidłowy format danych koordynatora w native_temperature: %s", 
-                             entity_id, type(self.coordinator.data).__name__)
-                return None
-                
-            if "current_weather" not in self.coordinator.data:
-                _LOGGER.debug("Weather entity %s: Brak sekcji 'current_weather' w danych koordynatora", 
-                            entity_id)
-                return None
-            
-            # Pobierz dane o aktualnej pogodzie
-            current_weather = self.coordinator.data.get("current_weather", {})
+
+            # Determine the source of current_weather data
+            current_weather = None
+            if self._device_id:
+                # This is a device entity, data might be nested
+                device_data = self.coordinator.data.get(self._device_id, {})
+                if isinstance(device_data, dict):
+                    current_weather = device_data.get("current_weather")
+            else:
+                # This is the main entity
+                current_weather = self.coordinator.data.get("current_weather")
+
             if not isinstance(current_weather, dict):
-                _LOGGER.warning("Weather entity %s: Nieprawidłowy format danych current_weather w native_temperature: %s", 
-                             entity_id, type(current_weather).__name__)
+                _LOGGER.debug("Weather entity %s: 'current_weather' data is missing or not a dict.", entity_id)
                 return None
-                
-            # Pobierz temperaturę
+
+            # Get temperature
             temp = current_weather.get("temperature")
             if temp is None:
-                _LOGGER.debug("Weather entity %s: Brak danych o temperaturze. Dostępne klucze: %s", 
+                _LOGGER.debug("Weather entity %s: Temperature data is missing. Available keys: %s",
                             entity_id, ", ".join(map(str, current_weather.keys())))
                 return None
-                
-            # Spróbuj przekonwertować na float
+
+            # Try to convert to float
             try:
                 temp_float = float(temp)
-                _LOGGER.debug("Weather entity %s: Pobrano temperaturę: %.1f°C", 
+                _LOGGER.debug("Weather entity %s: Fetched temperature: %.1f°C",
                              entity_id, temp_float)
                 return temp_float
-                
             except (TypeError, ValueError) as e:
-                _LOGGER.warning("Weather entity %s: Nie można przekonwertować temperatury '%s' na float: %s", 
+                _LOGGER.warning("Weather entity %s: Could not convert temperature '%s' to float: %s",
                              entity_id, str(temp), str(e))
                 return None
-                
+
         except Exception as e:
-            _LOGGER.error("Krytyczny błąd w metodzie native_temperature dla encji %s: %s\nSzczegóły: %s", 
-                         getattr(self, 'entity_id', 'nieznana'), 
-                         str(e), 
-                         f"data={getattr(self, 'coordinator', {}).__dict__ if hasattr(self, 'coordinator') else 'brak koordynatora'}",
-                         exc_info=True)
+            _LOGGER.error("Critical error in native_temperature for entity %s: %s",
+                         getattr(self, 'entity_id', 'unknown'), str(e), exc_info=True)
             return None
 
     @property
@@ -691,76 +680,53 @@ class OpenMeteoWeather(WeatherEntity):
             Wartość jest normalizowana do zakresu 0-360 stopni. W przypadku braku danych lub błędów
             zwraca None i loguje odpowiednie komunikaty. Wartość jest pobierana z klucza 'winddirection'.
         """
-        entity_id = getattr(self, 'entity_id', 'nieznana')
-        
+        entity_id = getattr(self, 'entity_id', 'unknown')
+
         try:
-            # Sprawdź dostępność i poprawność danych
             if not self.available:
-                _LOGGER.debug("Weather entity %s: Encja niedostępna w metodzie wind_bearing", 
-                            entity_id)
+                _LOGGER.debug("Weather entity %s: Not available in wind_bearing", entity_id)
                 return None
-                
-            # Sprawdź czy koordynator i jego dane istnieją
-            if not hasattr(self, 'coordinator') or not hasattr(self.coordinator, 'data'):
-                _LOGGER.warning("Weather entity %s: Brak danych koordynatora w metodzie wind_bearing", 
-                             entity_id)
+
+            if not hasattr(self, 'coordinator') or not isinstance(self.coordinator.data, dict):
+                _LOGGER.debug("Weather entity %s: Coordinator data is missing or invalid in wind_bearing", entity_id)
                 return None
-                
-            # Sprawdź czy dane koordynatora mają oczekiwany format
-            if not isinstance(self.coordinator.data, dict):
-                _LOGGER.warning("Weather entity %s: Nieprawidłowy format danych koordynatora w wind_bearing: %s", 
-                             entity_id, type(self.coordinator.data).__name__)
+
+            # Determine the source of current_weather data
+            current_weather = None
+            if self._device_id:
+                # This is a device entity, data might be nested
+                device_data = self.coordinator.data.get(self._device_id, {})
+                if isinstance(device_data, dict):
+                    current_weather = device_data.get("current_weather")
+            else:
+                # This is the main entity
+                current_weather = self.coordinator.data.get("current_weather")
+
+            if not isinstance(current_weather, dict):
+                _LOGGER.debug("Weather entity %s: 'current_weather' data is missing or not a dict.", entity_id)
                 return None
-                
-            if not self.coordinator.data or "current_weather" not in self.coordinator.data:
-                _LOGGER.debug("Weather entity %s: Brak sekcji 'current_weather' w danych koordynatora", 
-                            entity_id)
-                return None
-            
-            # Pobierz dane o aktualnej pogodzie
-            current_weather = self.coordinator.data.get("current_weather", {})
-            if not current_weather or not isinstance(current_weather, dict):
-                _LOGGER.debug("Weather entity %s: Brak lub nieprawidłowy format danych current_weather w wind_bearing: %s", 
-                           entity_id, type(current_weather).__name__)
-                return None
-                
-            # Pobierz kierunek wiatru (klucz 'winddirection' wg dokumentacji Open-Meteo)
+
+            # Get wind direction
             wind_direction = current_weather.get("winddirection")
-            
-            # Sprawdź czy mamy jakąkolwiek wartość kierunku wiatru
             if wind_direction is None:
-                _LOGGER.debug("Weather entity %s: Brak danych o kierunku wiatru. Dostępne klucze: %s", 
+                _LOGGER.debug("Weather entity %s: Wind direction data is missing. Available keys: %s",
                             entity_id, ", ".join(map(str, current_weather.keys())))
                 return None
-                
-            # Spróbuj przekonwertować na float i znormalizować do zakresu 0-360 stopni
+
+            # Try to convert to float and normalize
             try:
-                wind_bearing = float(wind_direction)
-                
-                # Normalizacja do zakresu 0-360 stopni
-                wind_bearing = wind_bearing % 360.0
-                
-                # Sprawdź czy wartość jest w rozsądnym zakresie (0-360°)
-                if not (0 <= wind_bearing <= 360):
-                    _LOGGER.warning("Weather entity %s: Nieprawidłowa wartość kierunku wiatru: %.1f°. Normalizuję do zakresu 0-360°.", 
-                                 entity_id, wind_bearing)
-                    wind_bearing = wind_bearing % 360.0
-                
-                _LOGGER.debug("Weather entity %s: Pobrano kierunek wiatru: %.1f°", 
-                             entity_id, wind_bearing)
-                return wind_bearing
-                
+                wind_bearing_float = float(wind_direction) % 360.0
+                _LOGGER.debug("Weather entity %s: Fetched wind bearing: %.1f°",
+                             entity_id, wind_bearing_float)
+                return wind_bearing_float
             except (TypeError, ValueError) as e:
-                _LOGGER.warning("Weather entity %s: Nie można przekonwertować wartości kierunku wiatru '%s' na float: %s", 
+                _LOGGER.warning("Weather entity %s: Could not convert wind direction '%s' to float: %s",
                              entity_id, str(wind_direction), str(e))
                 return None
-                
+
         except Exception as e:
-            _LOGGER.error("Krytyczny błąd w metodzie wind_bearing dla encji %s: %s\nSzczegóły: %s\nTraceback: %s", 
-                         entity_id, 
-                         str(e), 
-                         f"coordinator_present={hasattr(self, 'coordinator')}",
-                         exc_info=True)
+            _LOGGER.error("Critical error in wind_bearing for entity %s: %s",
+                         getattr(self, 'entity_id', 'unknown'), str(e), exc_info=True)
             return None
 
     @property
