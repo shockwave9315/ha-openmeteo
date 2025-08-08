@@ -19,6 +19,8 @@ from homeassistant.helpers import (
 from homeassistant.components.device_tracker import DOMAIN as DEVICE_TRACKER_DOMAIN
 from homeassistant.core import Event
 
+from homeassistant.const import Platform
+
 from .const import (
     CONF_DAILY_VARIABLES,
     CONF_HOURLY_VARIABLES,
