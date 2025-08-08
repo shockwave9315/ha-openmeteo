@@ -100,13 +100,6 @@ SENSOR_TYPES = {
         "device_class": None,
         "value_fn": lambda data: data.get("hourly", {}).get("visibility", [None])[0] / 1000,
     },
-    "location": {
-        "name": "Location",
-        "unit": None,
-        "icon": "mdi:map-marker",
-        "device_class": None,
-        "value_fn": lambda data: f"{data.get('location', {}).get('latitude')}, {data.get('location', {}).get('longitude')}",
-    },
 }
 
 

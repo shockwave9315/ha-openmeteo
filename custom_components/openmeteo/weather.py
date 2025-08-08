@@ -1,7 +1,7 @@
 """Support for Open-Meteo weather service."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 import logging
 from typing import Any
 
@@ -125,59 +125,47 @@ class OpenMeteoWeather(WeatherEntity):
             return None
         return self.coordinator.data["hourly"].get("visibility", [None])[0]
 
-    
     @property
     def forecast_daily(self) -> list[dict[str, Any]]:
-        """Return daily forecast with proper local dates (no repeated weekday labels)."""
+        """Return the daily forecast in the format required by the UI."""
         if not self.available or "daily" not in self.coordinator.data:
             return []
+
         daily = self.coordinator.data["daily"]
-        times = daily.get("time", []) or []
-        if not times:
+        time_entries = daily.get("time", [])
+        if not time_entries:
             return []
 
-        tz = dt_util.get_time_zone(self.hass.config.time_zone)
-        parsed = []
-        for t in times:
-            try:
-                if isinstance(t, (int, float)):
-                    dtv = datetime.fromtimestamp(t, tz=timezone.utc).astimezone(tz)
-                else:
-                    if "T" in t:
-                        dtv = dt_util.parse_datetime(t) or datetime.fromisoformat(t.replace("Z","+00:00"))
-                    else:
-                        dtv = dt_util.parse_datetime(f"{t}T12:00:00")
-                    if dtv is None:
-                        continue
-                    if dtv.tzinfo is None:
-                        dtv = dtv.replace(tzinfo=tz)
-                    dtv = dtv.astimezone(tz)
-                dtv = dtv.replace(hour=12, minute=0, second=0, microsecond=0)
-                parsed.append(dtv)
-            except Exception:
-                continue
+        forecast_data = []
 
-        if not parsed:
-            return []
-        max_days = min(len(parsed), 7)
-        out = []
-        for i in range(max_days):
-            fc = {
-                ATTR_FORECAST_TIME: parsed[i],
-                ATTR_FORECAST_CONDITION: self._get_condition(daily.get("weathercode", [None]*len(parsed))[i], is_day=True),
-                ATTR_FORECAST_TEMP: daily.get("temperature_2m_max", [None]*len(parsed))[i],
-                ATTR_FORECAST_TEMP_LOW: daily.get("temperature_2m_min", [None]*len(parsed))[i],
-                ATTR_FORECAST_PRECIPITATION: daily.get("precipitation_sum", [0]*len(parsed))[i],
+        for i, time_entry in enumerate(time_entries):
+            if i >= 7:  # Limit to 7 days
+                break
+
+            # The API returns a date string, but we need a datetime object for HA.
+            # We'll assume noon for the forecast time.
+            forecast_time = dt_util.parse_datetime(f"{time_entry}T12:00:00")
+            forecast = {
+                ATTR_FORECAST_TIME: forecast_time,
+                ATTR_FORECAST_CONDITION: self._get_condition(
+                    daily.get("weathercode", [None] * len(time_entries))[i],
+                    is_day=True  # Daily forecast always assumes day
+                ),
+                ATTR_FORECAST_TEMP: daily.get("temperature_2m_max", [None] * len(time_entries))[i],
+                ATTR_FORECAST_TEMP_LOW: daily.get("temperature_2m_min", [None] * len(time_entries))[i],
+                ATTR_FORECAST_PRECIPITATION: daily.get("precipitation_sum", [0] * len(time_entries))[i],
             }
-            if "windspeed_10m_max" in daily:
-                fc[ATTR_FORECAST_WIND_SPEED] = daily["windspeed_10m_max"][i]
-            if "winddirection_10m_dominant" in daily:
-                fc[ATTR_FORECAST_WIND_BEARING] = daily["winddirection_10m_dominant"][i]
-            if "precipitation_probability_max" in daily:
-                fc[ATTR_FORECAST_PRECIPITATION_PROBABILITY] = daily["precipitation_probability_max"][i]
-            out.append(fc)
-        return out
 
+            if "windspeed_10m_max" in daily and "winddirection_10m_dominant" in daily:
+                forecast[ATTR_FORECAST_WIND_SPEED] = daily["windspeed_10m_max"][i]
+                forecast[ATTR_FORECAST_WIND_BEARING] = daily["winddirection_10m_dominant"][i]
+
+            if "precipitation_probability_max" in daily:
+                forecast[ATTR_FORECAST_PRECIPITATION_PROBABILITY] = daily["precipitation_probability_max"][i]
+
+            forecast_data.append(forecast)
+
+        return forecast_data
 
     def _get_condition(self, weather_code: int | None, is_day: bool = True) -> str | None:
         """Return the condition from weather code."""
@@ -193,84 +181,40 @@ class OpenMeteoWeather(WeatherEntity):
         # based on the sun's state and this base condition.
         return CONDITION_MAP.get(weather_code)
 
-    
     @property
     def forecast_hourly(self) -> list[dict[str, Any]]:
-        """Return the hourly forecast starting from current/next hour."""
+        """Return the hourly forecast in the format required by the UI."""
         if not self.available or "hourly" not in self.coordinator.data:
             return []
+
         hourly = self.coordinator.data["hourly"]
-        times = hourly.get("time", []) or []
-        if not times:
-            return []
+        time_entries = hourly.get("time", [])
+        forecast_data = []
 
-        tz = dt_util.get_time_zone(self.hass.config.time_zone)
-        parsed_times = []
-        for t in times:
-            try:
-                if isinstance(t, (int, float)):
-                    dtv = datetime.fromtimestamp(t, tz=timezone.utc).astimezone(tz)
-                else:
-                    dtv = dt_util.parse_datetime(t) or datetime.fromisoformat(t.replace("Z","+00:00"))
-                    if dtv.tzinfo is None:
-                        dtv = dtv.replace(tzinfo=tz)
-                    dtv = dtv.astimezone(tz)
-                parsed_times.append(dtv)
-            except Exception:
-                continue
-        if not parsed_times:
-            return []
-
-        now_local = dt_util.now(tz)
-        start_idx = 0
-        for i, dtv in enumerate(parsed_times):
-            if dtv >= now_local:
-                start_idx = i
+        for i, time_entry in enumerate(time_entries):
+            if i >= 24:  # Limit to 24 hours
                 break
 
-        def _slice(key):
-            arr = hourly.get(key, []) or []
-            return arr[start_idx:] if isinstance(arr, list) else []
+            is_day = hourly.get("is_day", [1] * len(time_entries))[i] == 1
+            weather_code = hourly.get("weathercode", [None] * len(time_entries))[i]
+            
+            forecast = {
+                ATTR_FORECAST_TIME: dt_util.parse_datetime(time_entry),
+                ATTR_FORECAST_CONDITION: self._get_condition(weather_code, is_day),
+                ATTR_FORECAST_TEMP: hourly.get("temperature_2m", [None] * len(time_entries))[i],
+                ATTR_FORECAST_PRECIPITATION: hourly.get("precipitation", [0] * len(time_entries))[i],
+            }
 
-        is_day_arr = _slice("is_day")
-        code_arr = _slice("weathercode")
-        temp_arr = _slice("temperature_2m")
-        precip_arr = _slice("precipitation")
-        prob_arr = _slice("precipitation_probability")
-        wind_arr = _slice("windspeed_10m")
-        wdir_arr = _slice("winddirection_10m")
-        times_arr = parsed_times[start_idx:]
+            if "windspeed_10m" in hourly and "winddirection_10m" in hourly:
+                forecast[ATTR_FORECAST_WIND_SPEED] = hourly["windspeed_10m"][i]
+                forecast[ATTR_FORECAST_WIND_BEARING] = hourly["winddirection_10m"][i]
 
-        lens = [len(times_arr), len(temp_arr), len(code_arr)]
-        min_len = min([l for l in lens if l > 0]) if any(lens) else 0
-        horizon = 48
-        max_len = min(min_len, horizon)
-        if max_len <= 0:
-            return []
+            if "precipitation_probability" in hourly:
+                forecast[ATTR_FORECAST_PRECIPITATION_PROBABILITY] = hourly["precipitation_probability"][i]
 
-        out = []
-        for i in range(max_len):
-            try:
-                t = times_arr[i]
-                is_day = bool(is_day_arr[i]) if i < len(is_day_arr) else True
-                code = code_arr[i] if i < len(code_arr) else None
-                forecast = {
-                    ATTR_FORECAST_TIME: t,
-                    ATTR_FORECAST_CONDITION: self._get_condition(code, is_day),
-                    ATTR_FORECAST_TEMP: temp_arr[i] if i < len(temp_arr) else None,
-                    ATTR_FORECAST_PRECIPITATION: precip_arr[i] if i < len(precip_arr) else None,
-                }
-                if i < len(prob_arr):
-                    forecast[ATTR_FORECAST_PRECIPITATION_PROBABILITY] = prob_arr[i]
-                if i < len(wind_arr):
-                    forecast[ATTR_FORECAST_WIND_SPEED] = wind_arr[i]
-                if i < len(wdir_arr):
-                    forecast[ATTR_FORECAST_WIND_BEARING] = wdir_arr[i]
-                out.append(forecast)
-            except Exception:
-                continue
-        return out
+            forecast_data.append(forecast)
 
+        return forecast_data
 
     # These async forecast methods are for newer HA versions and call the properties
     async def async_forecast_daily(self) -> list[dict[str, Any]]:

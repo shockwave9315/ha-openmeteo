@@ -20,8 +20,6 @@ MANUFACTURER = "Open-Meteo"
 NAME = "Open-Meteo"
 
 # Configuration keys
-CONF_TRACKING_MODE = "tracking_mode"
-CONF_TRACKED_ENTITY_ID = "tracked_entity_id"
 CONF_NAME = "name"
 CONF_DAILY_VARIABLES = "daily_variables"
 CONF_HOURLY_VARIABLES = "hourly_variables"
@@ -30,10 +28,6 @@ CONF_LONGITUDE = "longitude"
 CONF_ALTITUDE = "altitude"
 CONF_TIME_ZONE = "time_zone"
 CONF_SCAN_INTERVAL = "scan_interval"
-
-# Tracking modes
-TRACKING_MODE_FIXED = "fixed"
-TRACKING_MODE_DEVICE = "device"
 
 # Default values
 DEFAULT_NAME = "Open-Meteo"
@@ -104,3 +98,14 @@ CONDITION_MAP = {
     96: ATTR_CONDITION_LIGHTNING_RAINY,  # Thunderstorm with slight hail
     99: ATTR_CONDITION_LIGHTNING_RAINY,  # Thunderstorm with heavy hail
 }
+
+# ---- Networking options (OptionsFlow) ----
+CONF_REQUEST_CONNECT_TIMEOUT = "connect_timeout"
+CONF_REQUEST_TOTAL_TIMEOUT = "total_timeout"
+CONF_API_MAX_RETRIES = "api_max_retries"
+CONF_API_RETRY_BASE = "api_retry_base"
+
+DEFAULT_REQUEST_CONNECT_TIMEOUT = 5
+DEFAULT_REQUEST_TOTAL_TIMEOUT = 15
+DEFAULT_API_MAX_RETRIES = 2
+DEFAULT_API_RETRY_BASE = 1.0
