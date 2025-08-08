@@ -111,21 +111,28 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> OpenMeteoOptionsFlow:
         """Get the options flow for this handler."""
-        return OpenMeteoOptionsFlow(config_entry)
+        return OpenMeteoOptionsFlow()
 
 
 class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow for Open-Meteo."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry):
-        self.config_entry = config_entry
+    def __init__(self):
+        # HA injects self.config_entry automatically; keep init for future state.
+        pass
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Manage the options."""
+        errors: dict[str, str] = {}
         if user_input is not None:
             # Combine existing options with user input
             updated_data = {**self.config_entry.options, **user_input}
-            return self.async_create_entry(title="", data=updated_data)
+            mode = updated_data.get(CONF_TRACKING_MODE, TRACKING_MODE_FIXED)
+            tracked = updated_data.get(CONF_TRACKED_ENTITY_ID)
+            if mode == TRACKING_MODE_DEVICE and not tracked:
+                errors['tracked_entity_id'] = 'required'
+            else:
+                return self.async_create_entry(title="", data=updated_data)
 
         # Get all device tracker and person entities
         tracking_entities = self.hass.states.async_all(("device_tracker", "person"))
@@ -165,4 +172,5 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(schema),
+            errors=errors,
         )
