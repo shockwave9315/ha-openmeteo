@@ -141,6 +141,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
             "longitude": self.longitude,
             "current_weather": "true",
             "hourly": ",".join(hourly_variables),
+            "past_days": 0,
             "daily": ",".join(daily_variables),
             "timezone": timezone,
             "forecast_days": 16,
