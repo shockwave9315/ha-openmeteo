@@ -111,11 +111,14 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> OpenMeteoOptionsFlow:
         """Get the options flow for this handler."""
-        return OpenMeteoOptionsFlow()
+        return OpenMeteoOptionsFlow(config_entry)
 
 
 class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow for Open-Meteo."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry):
+        self.config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Manage the options."""
@@ -161,5 +164,5 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(schema),
+            data_schema=vol.Schema(options_schema),
         )
