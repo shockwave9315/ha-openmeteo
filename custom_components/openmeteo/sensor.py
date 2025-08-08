@@ -319,15 +319,6 @@ async def async_setup_entry(
             async_add_entities(entities)
             _LOGGER.debug("Successfully added sensors for device_id %s", device_id)
             
-                # Listen for device instance updates for this entity
-                self.async_on_remove(
-                    async_dispatcher_connect(
-                        self.hass,
-                        SIGNAL_UPDATE_ENTITIES,
-                        _check_device_removed,
-                    )
-                )
-
         except Exception as err:
             _LOGGER.error(
                 "Error setting up sensors for device_id %s: %s",
