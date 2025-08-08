@@ -46,7 +46,6 @@ DEFAULT_DAILY_VARIABLES = [
     "precipitation_sum",
     "windspeed_10m_max",
     "winddirection_10m_dominant",
-    "uv_index_max",
 ]
 
 DEFAULT_HOURLY_VARIABLES = [
@@ -65,6 +64,7 @@ DEFAULT_HOURLY_VARIABLES = [
     "visibility",
     "cloudcover",
     "is_day",
+    "uv_index",
 ]
 
 # API

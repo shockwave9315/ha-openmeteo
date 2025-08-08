@@ -46,7 +46,7 @@ SENSOR_TYPES = {
         "unit": "UV Index",
         "icon": "mdi:sun-wireless-outline",
         "device_class": None,
-        "value_fn": lambda data: data.get("daily", {}).get("uv_index_max", [None])[0],
+        "value_fn": lambda data: data.get("hourly", {}).get("uv_index", [None])[0],
     },
     "precipitation_probability": {
         "name": "Prawdopodobieństwo opadów",
