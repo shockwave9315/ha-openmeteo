@@ -162,10 +162,7 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data:
             return None
         
-        if self._sensor_type in ("latitude", "longitude"):
-            value = self.coordinator.data["location"].get(self._sensor_type)
-        else:
-            value = SENSOR_TYPES[self._sensor_type]["value_fn"](self.coordinator.data)
+        value = SENSOR_TYPES[self._sensor_type]["value_fn"](self.coordinator.data)
         
         if isinstance(value, (int, float)):
             return round(value, 2)
