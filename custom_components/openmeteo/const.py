@@ -68,11 +68,9 @@ DEFAULT_HOURLY_VARIABLES = [
     "pressure_msl",
     "surface_pressure",
     "visibility",
-    "precipitation_probability",
     "cloudcover",
     "is_day",
-    "uv_index",
-]
+    "uv_index",]
 
 # API
 URL = "https://api.open-meteo.com/v1/forecast"

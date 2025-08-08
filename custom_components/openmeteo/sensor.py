@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 
 from homeassistant.components.sensor import (
@@ -88,7 +88,7 @@ def get_current_hour_index(times: list[str], device_id: str = None) -> int:
         
         # Przygotuj szukane formaty godzin (lokalna i UTC)
         now_local_hour = now.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:00")
-        now_utc_hour = now.astimezone(datetime.timezone.utc).replace(
+        now_utc_hour = now.astimezone(timezone.utc).replace(
             minute=0, second=0, microsecond=0
         ).strftime("%Y-%m-%dT%H:00")
         
@@ -231,7 +231,7 @@ SENSOR_TYPES = {
     },
     "uv_index": {
         "name": "Indeks UV",
-        "unit": "UV Index",
+        "unit": UV_INDEX,
         "icon": "mdi:sun-wireless-outline",
         "device_class": None,
         "value_fn": None,  # Will be handled in native_value
@@ -259,7 +259,7 @@ SENSOR_TYPES = {
         "unit": UnitOfSpeed.KILOMETERS_PER_HOUR,
         "icon": "mdi:weather-windy",
         "device_class": None,
-        "value_fn": lambda data: data.get("current_weather", {}).get("windspeed"),
+        "value_fn": None,
     },
     "wind_gust": {
         "name": "Porywy wiatru",
@@ -270,7 +270,7 @@ SENSOR_TYPES = {
     },
     "wind_bearing": {
         "name": "Kierunek wiatru",
-        "unit": "°",
+        "unit": DEGREE,
         "icon": "mdi:compass",
         "device_class": None,
         "value_fn": lambda data: data.get("current_weather", {}).get("winddirection"),
@@ -284,7 +284,7 @@ SENSOR_TYPES = {
     },
     "visibility": {
         "name": "Widzialność",
-        "unit": "km",
+        "unit": UnitOfLength.KILOMETERS,
         "icon": "mdi:eye",
         "device_class": None,
         "value_fn": None,  # Will be handled in native_value
@@ -519,22 +519,13 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
                     self._attr_name = f"{device_name} {sensor_name}".strip()
                 
                 # Create a more unique ID with entry_id, device_id, and coordinates hash
-                coord_hash = ""
-                if hasattr(coordinator, '_latitude') and hasattr(coordinator, '_longitude'):
-                    coord_hash = f"-{abs(hash((coordinator._latitude, coordinator._longitude))) % 10000:04d}"
-                
-                self._attr_unique_id = f"{config_entry.entry_id}-{device_id}{coord_hash}-{sensor_type}"
+                self._attr_unique_id = f"{config_entry.entry_id}-{device_id}-{sensor_type}"
                 self._attr_entity_registry_visible_default = True
             else:
                 # This is the main instance
                 base_name = config_entry.data.get('name', 'Open-Meteo') if config_entry.data else 'Open-Meteo'
                 self._attr_name = f"{base_name} {sensor_name}".strip()
                 self._attr_unique_id = f"{config_entry.entry_id}-main-{sensor_type}"
-                
-                # Add coordinates hash to ensure uniqueness for main instance
-                if hasattr(coordinator, '_latitude') and hasattr(coordinator, '_longitude'):
-                    coord_hash = abs(hash((coordinator._latitude, coordinator._longitude))) % 10000
-                    self._attr_unique_id = f"{self._attr_unique_id}-{coord_hash:04d}"
                 
                 # Show main entity only if there are no device instances
                 try:
@@ -665,12 +656,28 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         if sensor_type in ("uv_index", "precipitation_probability", "wind_gust", "pressure", "visibility"):
             # Map sensor_type to the corresponding API key
             api_key = {
-                "wind_gust": "windspeed_10m",
+                "wind_gust": "windgusts_10m",
                 "pressure": "surface_pressure",
             }.get(sensor_type, sensor_type)
-            return get_hourly_value(data, api_key, getattr(self, "_device_id", None))
+            val = get_hourly_value(data, api_key, getattr(self, "_device_id", None))
+            if sensor_type == "visibility" and isinstance(val, (int, float)):
+                val = round(val / 1000.0, 2)
+            return val
             
         # Handle other hourly sensors with direct access
+        if sensor_type == "precipitation_total":
+            rain = get_hourly_value(data, "precipitation", getattr(self, "_device_id", None)) or 0
+            snow = get_hourly_value(data, "snowfall", getattr(self, "_device_id", None)) or 0
+            try:
+                rain = float(rain)
+            except Exception:
+                rain = 0.0
+            try:
+                snow = float(snow)
+            except Exception:
+                snow = 0.0
+            return round(rain + snow, 2)
+        
         if sensor_type == "humidity":
             return get_hourly_value(data, "relativehumidity_2m", getattr(self, "_device_id", None))
         elif sensor_type == "apparent_temperature":
@@ -838,7 +845,10 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
                 hasattr(self.coordinator, 'data') and self.coordinator.data is not None):
                 
                 self.async_write_ha_state()
-                
+                            # Listen for device instance updates
+            self.async_on_remove(
+                async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITIES, _check_device_removed)
+            )
         except Exception as err:
             _LOGGER.error(
                 "Error in _handle_coordinator_update for sensor %s: %s",
