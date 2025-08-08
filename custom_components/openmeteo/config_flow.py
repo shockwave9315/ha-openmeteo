@@ -169,6 +169,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
         area_overrides = self.options.get(CONF_AREA_OVERRIDES, {})
         
         # Schemat formularza opcji
+        # Schemat formularza opcji
         options_schema = {
             vol.Optional(
                 CONF_SCAN_INTERVAL,
@@ -178,40 +179,38 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                 CONF_DAILY_VARIABLES, 
                 default=current_daily
             ): cv.multi_select(
-                {var: TRANSLATED_VARIABLES.get(var, var.replace("_", " ").title()) 
-                 for var in DEFAULT_DAILY_VARIABLES
-            vol.Optional(
-                CONF_REQUEST_CONNECT_TIMEOUT,
-                default=options.get(CONF_REQUEST_CONNECT_TIMEOUT, DEFAULT_REQUEST_CONNECT_TIMEOUT),
-            ): vol.All(int, vol.Range(min=1, max=60)),
-            vol.Optional(
-                CONF_REQUEST_TOTAL_TIMEOUT,
-                default=options.get(CONF_REQUEST_TOTAL_TIMEOUT, DEFAULT_REQUEST_TOTAL_TIMEOUT),
-            ): vol.All(int, vol.Range(min=5, max=300)),
-            vol.Optional(
-                CONF_API_MAX_RETRIES,
-                default=options.get(CONF_API_MAX_RETRIES, DEFAULT_API_MAX_RETRIES),
-            ): vol.All(int, vol.Range(min=0, max=5)),
-            vol.Optional(
-                CONF_API_RETRY_BASE,
-                default=options.get(CONF_API_RETRY_BASE, DEFAULT_API_RETRY_BASE),
-            ): vol.All(vol.Coerce(float), vol.Range(min=0, max=30.0)),
-        }
+                {var: TRANSLATED_VARIABLES.get(var, var.replace('_', ' ').title())
+                 for var in DEFAULT_DAILY_VARIABLES}
             ),
             vol.Optional(
                 CONF_HOURLY_VARIABLES, 
                 default=current_hourly
             ): cv.multi_select(
-                {var: TRANSLATED_VARIABLES.get(var, var.replace("_", " ").title())
+                {var: TRANSLATED_VARIABLES.get(var, var.replace('_', ' ').title())
                  for var in DEFAULT_HOURLY_VARIABLES}
             ),
             vol.Optional(
                 CONF_TRACK_DEVICES,
                 default=current_track_devices
             ): bool,
+            # Networking options
+            vol.Optional(
+                CONF_REQUEST_CONNECT_TIMEOUT,
+                default=self.options.get(CONF_REQUEST_CONNECT_TIMEOUT, DEFAULT_REQUEST_CONNECT_TIMEOUT),
+            ): vol.All(int, vol.Range(min=1, max=60)),
+            vol.Optional(
+                CONF_REQUEST_TOTAL_TIMEOUT,
+                default=self.options.get(CONF_REQUEST_TOTAL_TIMEOUT, DEFAULT_REQUEST_TOTAL_TIMEOUT),
+            ): vol.All(int, vol.Range(min=5, max=300)),
+            vol.Optional(
+                CONF_API_MAX_RETRIES,
+                default=self.options.get(CONF_API_MAX_RETRIES, DEFAULT_API_MAX_RETRIES),
+            ): vol.All(int, vol.Range(min=0, max=5)),
+            vol.Optional(
+                CONF_API_RETRY_BASE,
+                default=self.options.get(CONF_API_RETRY_BASE, DEFAULT_API_RETRY_BASE),
+            ): vol.All(vol.Coerce(float), vol.Range(min=0, max=30.0)),
         }
-        
-        # Dodaj opcje związane ze śledzeniem urządzeń tylko jeśli są dostępne
         if trackable_devices:
             options_schema.update({
                 vol.Optional(
