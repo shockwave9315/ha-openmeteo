@@ -98,7 +98,7 @@ SENSOR_TYPES = {
         "unit": UnitOfLength.KILOMETERS,
         "icon": "mdi:eye",
         "device_class": None,
-        "value_fn": lambda data: data.get("hourly", {}).get("visibility", [None])[0],
+        "value_fn": lambda data: data.get("hourly", {}).get("visibility", [None])[0] / 1000,
     },
 }
 
