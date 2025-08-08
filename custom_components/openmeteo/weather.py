@@ -1107,48 +1107,59 @@ class OpenMeteoWeather(WeatherEntity):
                 _LOGGER.debug("Weather entity %s: Brak danych o czasie w prognozie godzinowej", 
                             entity_id)
                 return None
-                
             # Pobierz pozostałe dane pogodowe
             temperature_2m = hourly.get("temperature_2m", [])
             weather_code = hourly.get("weathercode", [])
             precipitation = hourly.get("precipitation", [])
             precipitation_probability = hourly.get("precipitation_probability", [])
             
-            # Sprawdź czy mamy wystarczającą ilość danych
-            if not all(isinstance(x, list) and len(x) == len(time_entries) 
-                      for x in [temperature_2m, weather_code, precipitation, precipitation_probability]):
-                _LOGGER.warning("Weather entity %s: Nieprawidłowa długość danych w prognozie godzinowej. Czas: %d, Temp: %d, Kod: %d, Opad: %d, Prawd. opadu: %d", 
-                             entity_id, 
-                             len(time_entries) if isinstance(time_entries, list) else 0,
-                             len(temperature_2m) if isinstance(temperature_2m, list) else 0,
-                             len(weather_code) if isinstance(weather_code, list) else 0,
-                             len(precipitation) if isinstance(precipitation, list) else 0,
-                             len(precipitation_probability) if isinstance(precipitation_probability, list) else 0)
-                return None
+            # Ujednolicenie długości serii: tniemy wszystkie do wspólnego minimum i do horyzontu
+            try:
+                series_lengths = [
+                    len(time_entries) if isinstance(time_entries, list) else 0,
+                    len(temperature_2m) if isinstance(temperature_2m, list) else 0,
+                    len(weather_code) if isinstance(weather_code, list) else 0,
+                    len(precipitation) if isinstance(precipitation, list) else 0,
+                    len(precipitation_probability) if isinstance(precipitation_probability, list) else 0,
+                ]
+                min_len = min([l for l in series_lengths if l > 0]) if any(series_lengths) else 0
+                # Ogranicz do horyzontu
+                try:
+                    horizon = HOURLY_FORECAST_HORIZON
+                except Exception:
+                    horizon = 48
+                max_hours = min(min_len, horizon)
+            except Exception:
+                max_hours = min(len(time_entries), 48) if isinstance(time_entries, list) else 0
+            
+            if max_hours <= 0:
+                _LOGGER.debug("Weather entity %s: Brak spójnych danych dla forecast_hourly", entity_id)
+                return []
             
             # Przygotuj listę prognoz godzinowych
             forecast_hourly = []
-            for i, time_entry in enumerate(time_entries[:48]):  # Ogranicz do 48h (2 dni)
+            for i in range(max_hours):
                 try:
+                    time_entry = time_entries[i]
+                    temp_val = float(temperature_2m[i]) if i < len(temperature_2m) else None
+                    code_val = int(weather_code[i]) if i < len(weather_code) else None
+                    precip_val = float(precipitation[i]) if i < len(precipitation) else None
+                    prob_val = int(precipitation_probability[i]) if i < len(precipitation_probability) else None
+                    
                     forecast_entry = {
                         "datetime": time_entry,
-                        "temperature": float(temperature_2m[i]) if i < len(temperature_2m) else None,
-                        "condition": self._get_condition(
-                            int(weather_code[i]) if i < len(weather_code) else None,
-                            is_day=self._is_daytime(time_entry)
-                        ),
-                        "precipitation": float(precipitation[i]) if i < len(precipitation) else None,
-                        "precipitation_probability": int(precipitation_probability[i]) if i < len(precipitation_probability) else None,
+                        "temperature": temp_val,
+                        "condition": self._get_condition(code_val, is_day=self._is_daytime(time_entry)),
+                        "precipitation": precip_val,
+                        "precipitation_probability": prob_val,
                     }
                     forecast_hourly.append(forecast_entry)
                 except (TypeError, ValueError, IndexError) as e:
-                    _LOGGER.warning("Weather entity %s: Błąd przetwarzania prognozy godzinowej dla indeksu %d: %s", 
-                                 entity_id, i, str(e))
+                    _LOGGER.debug("Weather entity %s: Pomijam błędny rekord forecast_hourly[%d]: %s", entity_id, i, e)
                     continue
             
-            _LOGGER.debug("Weather entity %s: Wygenerowano %d prognoz godzinowych", 
-                         entity_id, len(forecast_hourly))
             return forecast_hourly
+
             
         except Exception as e:
             _LOGGER.error("Krytyczny błąd w metodzie forecast_hourly dla encji %s: %s\nSzczegóły: %s\nTraceback: %s", 
