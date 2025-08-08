@@ -147,7 +147,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
             "temperature_unit": "celsius",
             "windspeed_unit": "kmh",
             "precipitation_unit": "mm",
-            "timeformat": "unixtime",
+            "timeformat": "iso8601",
         }
 
         session = async_get_clientsession(self.hass)
@@ -174,7 +174,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
 
                     if "hourly" in data and "time" in data["hourly"]:
                         try:
-                            user_tz = ZoneInfo(timezone if timezone != "auto" else "UTC")
+                            user_tz = ZoneInfo(timezone) if timezone != "auto" else dt_util.get_time_zone(self.hass.config.time_zone)
                             now = dt_util.now(user_tz)
                             times = data["hourly"]["time"]
                             future_indices = []
@@ -209,20 +209,27 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.error("Unexpected error from Open-Meteo API: %s", err, exc_info=True)
             raise UpdateFailed(f"Unexpected error from Open-Meteo API: {err}") from err
 
-    def _om_parse_time_local_safe(self, time_str, user_tz):
-        """Parse Open-Meteo time that may be UTC (with Z) or local w/o offset; return aware datetime in user tz."""
-        # Normalize common Z format
-        ts = time_str
+    
+    def _om_parse_time_local_safe(self, time_val, user_tz):
+        """Parse Open-Meteo time (UNIX or ISO) and return aware datetime in user tz."""
+        # UNIX timestamp (seconds)
+        if isinstance(time_val, (int, float)):
+            dt = datetime.fromtimestamp(time_val, tz=timezone.utc)
+            return dt.astimezone(user_tz)
+        # ISO string (with or without Z / milliseconds)
+        ts = time_val
         try:
             dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
         except Exception:
-            # Try stripping milliseconds if malformed
-            if '.' in ts:
+            if isinstance(ts, str) and '.' in ts:
                 ts2 = ts.split('.', 1)[0]
                 dt = datetime.fromisoformat(ts2.replace('Z', '+00:00'))
             else:
-                raise
+                # Fallback: try coercion to int
+                try:
+                    dt = datetime.fromtimestamp(int(ts), tz=timezone.utc)
+                except Exception:
+                    raise
         if dt.tzinfo is None:
-            # Open-Meteo sometimes returns local time without offset when timezone parameter is used.
             dt = dt.replace(tzinfo=user_tz)
         return dt.astimezone(user_tz)
