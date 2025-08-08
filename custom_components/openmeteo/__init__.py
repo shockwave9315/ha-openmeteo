@@ -175,14 +175,14 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
 
                     if "hourly" in data and "time" in data["hourly"]:
                         try:
-                            user_tz = ZoneInfo(timezone if timezone != "auto" else "UTC")
+                            user_tz = ZoneInfo(timezone) if timezone != 'auto' else dt_util.get_time_zone(self.hass.config.time_zone)
                             now = dt_util.now(user_tz)
                             times = data["hourly"]["time"]
                             future_indices = []
 
                             for i, time_str in enumerate(times):
                                 try:
-                                    dt = self._om_parse_time_local_safe(time_str, user_tz)
+                                    dt = self._om_om_parse_time_local_safe(time_str, user_tz)
                                     if dt >= now:
                                         future_indices.append(i)
                                 except (ValueError, TypeError) as e:
@@ -210,7 +210,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.error("Unexpected error from Open-Meteo API: %s", err, exc_info=True)
             raise UpdateFailed(f"Unexpected error from Open-Meteo API: {err}") from err
 
-    def _om_parse_time_local_safe(self, time_str, user_tz):
+    def _om_om_parse_time_local_safe(self, time_str, user_tz):
         """Parse Open-Meteo time that may be UTC (with Z) or local w/o offset; return aware datetime in user tz."""
         # Normalize common Z format
         ts = time_str
