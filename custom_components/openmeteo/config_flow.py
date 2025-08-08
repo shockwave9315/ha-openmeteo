@@ -75,8 +75,11 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
-class OpenMeteoOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
-    """Handle options flow for Open-Meteo."""
+class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
+    
+    def __init__(self, config_entry):
+        self.config_entry = config_entry
+"""Handle options flow for Open-Meteo."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None

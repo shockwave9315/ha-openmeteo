@@ -139,8 +139,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
             "longitude": longitude,
             "timezone": timezone,
             "current_weather": "true",
-            "hourly": hourly_vars,
-            "daily": daily_vars,
+            "hourly": ",".join(sorted(set(hourly_vars))),
+            "daily": ",".join(sorted(set(daily_vars))),
             "temperature_unit": "celsius",
             "windspeed_unit": "kmh",
             "precipitation_unit": "mm",
@@ -174,6 +174,27 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
                     if "hourly" in data and "time" in data["hourly"]:
                         from datetime import datetime, timezone as tz
                         from zoneinfo import ZoneInfo
+
+from datetime import datetime, timezone as tz
+
+def _om_parse_time_local_safe(time_str, user_tz):
+    """Parse Open-Meteo time that may be UTC (with Z) or local w/o offset; return aware datetime in user tz."""
+    # Normalize common Z format
+    ts = time_str
+    try:
+        dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+    except Exception:
+        # Try stripping milliseconds if malformed
+        if '.' in ts:
+            ts2 = ts.split('.', 1)[0]
+            dt = datetime.fromisoformat(ts2.replace('Z', '+00:00'))
+        else:
+            raise
+    if dt.tzinfo is None:
+        # Open-Meteo sometimes returns local time without offset when timezone parameter is used.
+        dt = dt.replace(tzinfo=user_tz)
+    return dt.astimezone(user_tz)
+
                         
                         try:
                             # Pobierz bieżący czas w strefie czasowej użytkownika
