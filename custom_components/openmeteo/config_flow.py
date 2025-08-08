@@ -100,7 +100,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
-class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
+class OpenMeteoOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
     """Handle options flow for Open-Meteo."""
 
     async def async_step_init(
