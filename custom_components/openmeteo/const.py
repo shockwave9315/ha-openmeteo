@@ -20,6 +20,8 @@ MANUFACTURER = "Open-Meteo"
 NAME = "Open-Meteo"
 
 # Configuration keys
+CONF_TRACKING_MODE = "tracking_mode"
+CONF_TRACKED_ENTITY_ID = "tracked_entity_id"
 CONF_NAME = "name"
 CONF_DAILY_VARIABLES = "daily_variables"
 CONF_HOURLY_VARIABLES = "hourly_variables"
@@ -28,6 +30,10 @@ CONF_LONGITUDE = "longitude"
 CONF_ALTITUDE = "altitude"
 CONF_TIME_ZONE = "time_zone"
 CONF_SCAN_INTERVAL = "scan_interval"
+
+# Tracking modes
+TRACKING_MODE_FIXED = "fixed"
+TRACKING_MODE_DEVICE = "device"
 
 # Default values
 DEFAULT_NAME = "Open-Meteo"
