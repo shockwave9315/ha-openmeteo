@@ -167,8 +167,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
                     data = await response.json()
 
                     data["location"] = {
-                        "latitude": latitude,
-                        "longitude": longitude,
+                        "latitude": self.latitude,
+                        "longitude": self.longitude,
                         "timezone": timezone,
                     }
 
