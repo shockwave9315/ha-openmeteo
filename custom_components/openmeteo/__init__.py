@@ -14,6 +14,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_DAILY_VARIABLES,
@@ -164,7 +165,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
                     if "hourly" in data and "time" in data["hourly"]:
                         try:
                             user_tz = ZoneInfo(timezone if timezone != "auto" else "UTC")
-                            now = datetime.now(tz.utc).astimezone(user_tz)
+                            now = dt_util.now(user_tz)
                             times = data["hourly"]["time"]
                             future_indices = []
 
