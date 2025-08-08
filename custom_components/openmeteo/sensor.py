@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from functools import lru_cache
 
 from homeassistant.components.sensor import (
@@ -12,15 +12,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    DEGREE,
-    PERCENTAGE,
-    UV_INDEX,
-    Platform,
-    UnitOfLength,
-    UnitOfPressure,
-    UnitOfSpeed,
-    UnitOfTemperature,
-    UnitOfPrecipitationDepth,
+DEGREE, PERCENTAGE, UV_INDEX, Platform, UnitOfLength, UnitOfPressure, UnitOfSpeed, UnitOfTemperature, UnitOfPrecipitationDepth,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,7 +24,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from . import OpenMeteoDataUpdateCoordinator, OpenMeteoInstance
-from .const import DOMAIN, SIGNAL_UPDATE_ENTITIES
+from .const import DOMAIN, SIGNAL_UPDATE_ENTITIES, CORE_SENSORS
 
 @lru_cache(maxsize=32)
 def _get_hour_index(time_list: tuple[str, ...], now_iso: str) -> int:
@@ -88,7 +80,7 @@ def get_current_hour_index(times: list[str], device_id: str = None) -> int:
         
         # Przygotuj szukane formaty godzin (lokalna i UTC)
         now_local_hour = now.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:00")
-        now_utc_hour = now.astimezone(timezone.utc).replace(
+        now_utc_hour = now.astimezone(datetime.timezone.utc).replace(
             minute=0, second=0, microsecond=0
         ).strftime("%Y-%m-%dT%H:00")
         
@@ -270,7 +262,7 @@ SENSOR_TYPES = {
     },
     "wind_bearing": {
         "name": "Kierunek wiatru",
-        "unit": DEGREE,
+        "unit": "°",
         "icon": "mdi:compass",
         "device_class": None,
         "value_fn": lambda data: data.get("current_weather", {}).get("winddirection"),
@@ -519,13 +511,22 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
                     self._attr_name = f"{device_name} {sensor_name}".strip()
                 
                 # Create a more unique ID with entry_id, device_id, and coordinates hash
-                self._attr_unique_id = f"{config_entry.entry_id}-{device_id}-{sensor_type}"
+                coord_hash = ""
+                if hasattr(coordinator, '_latitude') and hasattr(coordinator, '_longitude'):
+                    coord_hash = f"-{abs(hash((coordinator._latitude, coordinator._longitude))) % 10000:04d}"
+                
+                self._attr_unique_id = f"{config_entry.entry_id}-{device_id}{coord_hash}-{sensor_type}"
                 self._attr_entity_registry_visible_default = True
             else:
                 # This is the main instance
                 base_name = config_entry.data.get('name', 'Open-Meteo') if config_entry.data else 'Open-Meteo'
                 self._attr_name = f"{base_name} {sensor_name}".strip()
                 self._attr_unique_id = f"{config_entry.entry_id}-main-{sensor_type}"
+                
+                # Add coordinates hash to ensure uniqueness for main instance
+                if hasattr(coordinator, '_latitude') and hasattr(coordinator, '_longitude'):
+                    coord_hash = abs(hash((coordinator._latitude, coordinator._longitude))) % 10000
+                    self._attr_unique_id = f"{self._attr_unique_id}-{coord_hash:04d}"
                 
                 # Show main entity only if there are no device instances
                 try:
@@ -545,14 +546,25 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
                                 )
                                 # Przejdź do ustawień urządzenia
                                 self._setup_device_info(config_entry, sensor_config, device_id)
+                                
+                                # Default visibility: only core sensors visible by default
+                                try:
+                                    if self._sensor_type in CORE_SENSORS:
+                                        self._attr_entity_registry_visible_default = True
+                                    else:
+                                        self._attr_entity_registry_visible_default = False
+                                except Exception:
+                                    self._attr_entity_registry_visible_default = False
+                                
+                                # Jeśli dotarliśmy tutaj, wszystko poszło dobrze
                                 return
-                    
-                    # Jeśli dotarliśmy tutaj, coś poszło nie tak z sprawdzaniem
-                    _LOGGER.debug(
-                        "Nie można określić instancji urządzeń dla %s. Domyślnie widoczne.",
-                        sensor_type
-                    )
-                    self._attr_entity_registry_visible_default = True
+                            
+                            # Jeśli dotarliśmy tutaj, coś poszło nie tak z sprawdzaniem
+                            _LOGGER.debug(
+                                "Nie można określić instancji urządzeń dla %s. Domyślnie widoczne.",
+                                sensor_type
+                            )
+                            self._attr_entity_registry_visible_default = True
                     
                 except Exception as e:
                     _LOGGER.warning(
@@ -845,10 +857,7 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
                 hasattr(self.coordinator, 'data') and self.coordinator.data is not None):
                 
                 self.async_write_ha_state()
-                            # Listen for device instance updates
-            self.async_on_remove(
-                async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITIES, _check_device_removed)
-            )
+                
         except Exception as err:
             _LOGGER.error(
                 "Error in _handle_coordinator_update for sensor %s: %s",

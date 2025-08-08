@@ -10,6 +10,7 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.util import dt as dt_util
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers import (
     entity_registry as er,
@@ -114,28 +115,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     Returns:
         bool: True if setup was successful, False otherwise
     """
-    hass.data.setdefault(DOMAIN, {})
+    from homeassistant.helpers import device_registry as dr
+    from .const import QUIET_MODE_DEFAULT
     
-    # Initialize the data structure for this entry
-    hass.data[DOMAIN][entry.entry_id] = {
+    # Initialize data structure with setdefault to preserve existing data on reload
+    hass.data.setdefault(DOMAIN, {})
+    entry_data = hass.data[DOMAIN].setdefault(entry.entry_id, {
         "main_instance": None,
-        "device_instances": {}
-    }
+        "device_instances": {},
+    })
+    
+    # Update quiet mode with type safety
+    opt_q = entry.options.get("quiet_mode")
+    entry_data["quiet_mode"] = opt_q if isinstance(opt_q, bool) else QUIET_MODE_DEFAULT
     
     # Check if we should track devices
     track_devices = entry.data.get("track_devices", False)
     
     if track_devices:
-        # If we're tracking devices, don't create the main instance
-        _LOGGER.debug("Device tracking is enabled, skipping main instance creation")
-        await _setup_device_tracking(hass, entry)
+        try:
+            _LOGGER.debug("Device tracking is enabled, skipping main instance creation")
+            await _setup_device_tracking(hass, entry)
+        except Exception as err:
+            _LOGGER.error("Failed during device tracking setup: %s", err, exc_info=True)
+            return False
     else:
         # Only create and initialize the main instance if not using device tracking
         try:
             _LOGGER.debug("Creating main instance for entry %s", entry.entry_id)
             instance = OpenMeteoInstance(hass, entry)
             await instance.async_init()
-            hass.data[DOMAIN][entry.entry_id]["main_instance"] = instance
+            entry_data["main_instance"] = instance
             _LOGGER.debug("Successfully initialized main instance")
             
             # Create main device if needed
@@ -515,6 +525,22 @@ async def _update_device_instance(
                      device_entity_id, str(err), exc_info=True)
 
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
+    def _log_update_summary(self, result: dict) -> None:
+        try:
+            entry_id = getattr(self.entry, 'entry_id', 'unknown')
+            hourly = (result or {}).get('hourly', {})
+            daily = (result or {}).get('daily', {})
+            hc = len(hourly.get('time', []) or []) if isinstance(hourly, dict) else 0
+            dc = len(daily.get('time', []) or []) if isinstance(daily, dict) else 0
+            if isinstance(getattr(self.hass, 'data', None), dict):
+                quiet = self.hass.data.get(DOMAIN, {}).get(entry_id, {}).get('quiet_mode', True)
+            else:
+                quiet = True
+            if not quiet:
+                _LOGGER.info("Open-Meteo update: hourly=%s, daily=%s, idx=%s time=%s", hc, dc, result.get('_current_hour_index'), result.get('_current_hour_time'))
+        except Exception:
+            pass
+
     """Coordinator for managing OpenMeteo data updates with error handling."""
     
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, device_id: Optional[str] = None) -> None:
@@ -651,7 +677,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
             "daily": daily_vars,
             "hourly": hourly_vars,
             "timeformat": "iso8601",
-            "windspeed_unit": "kmh",
+            "windspeed_unit": "ms",
             "precipitation_unit": "mm",
             "temperature_unit": "celsius",
         }

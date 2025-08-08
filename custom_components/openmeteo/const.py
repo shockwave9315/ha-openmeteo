@@ -68,9 +68,11 @@ DEFAULT_HOURLY_VARIABLES = [
     "pressure_msl",
     "surface_pressure",
     "visibility",
+    "precipitation_probability",
     "cloudcover",
     "is_day",
-    "uv_index",]
+    "uv_index",
+]
 
 # API
 URL = "https://api.open-meteo.com/v1/forecast"
@@ -79,6 +81,14 @@ URL = "https://api.open-meteo.com/v1/forecast"
 PLATFORMS = ["weather", "sensor"]
 
 # Weather condition mapping
+QUIET_MODE_DEFAULT: bool = True  # Only WARNING/ERROR logs by default
+HOURLY_FORECAST_HORIZON: int = 48  # hours to expose in forecast_hourly
+CORE_SENSORS = {
+    "temperature", "humidity", "wind_speed", "wind_gust", "pressure",
+    "precipitation", "precipitation_probability", "visibility", "uv_index",
+    "apparent_temperature"
+}
+
 CONDITION_MAP = {
     0: ATTR_CONDITION_SUNNY,  # Clear sky
     1: ATTR_CONDITION_PARTLYCLOUDY,  # Mainly clear
