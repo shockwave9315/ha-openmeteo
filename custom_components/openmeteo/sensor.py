@@ -19,6 +19,7 @@ _LOGGER = logging.getLogger(__name__)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.core import callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -241,9 +242,9 @@ SENSOR_TYPES = {
         "icon": "mdi:cup-water",
         "device_class": "precipitation",
         "value_fn": lambda data: (
-            data.get("hourly", {}).get("precipitation", [0])[0] or 0
+            (data.get("hourly", {}) or {}).get("precipitation", [0])[0] or 0
         ) + (
-            data.get("hourly", {}).get("snowfall", [0])[0] or 0
+            (data.get("hourly", {}) or {}).get("snowfall", [0])[0] or 0
         ),
     },
     "wind_speed": {
@@ -750,30 +751,20 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
                     return
                 
                 @callback
-                def _check_device_removed(entry_id: str) -> None:
+                def _check_device_removed(cb_entry_id: str) -> None:
                     """Check if this device instance has been removed."""
-                    # body below...
                     try:
-                        if not hasattr(self, 'hass') or not hasattr(self, '_config_entry'):
-                            _LOGGER.debug("Missing required attributes in _check_device_removed")
+                        if cb_entry_id != entry_id:
                             return
-                            
-                        current_entry_id = getattr(self._config_entry, 'entry_id', None)
-                        if not current_entry_id or entry_id != current_entry_id:
-                            _LOGGER.debug("Entry ID mismatch in _check_device_removed")
-                            return
-                            
                         if (not hasattr(self.hass, 'data') or 
                             not isinstance(self.hass.data, dict) or 
                             DOMAIN not in self.hass.data or 
                             entry_id not in self.hass.data[DOMAIN] or 
                             self._device_id not in self.hass.data[DOMAIN][entry_id].get("device_instances", {})):
-                            
                             # Device instance was removed, remove this entity
                             if hasattr(self, 'hass') and hasattr(self, 'entity_id'):
                                 _LOGGER.debug("Removing entity %s as its device was removed", self.entity_id)
                                 self.hass.async_create_task(self.async_remove(force_remove=True))
-                                
                     except Exception as err:
                         _LOGGER.error(
                             "Error in _check_device_removed for sensor %s: %s",
@@ -781,6 +772,16 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
                             str(err),
                             exc_info=True
                         )
+                
+                # Listen for device instance updates for this entity
+                self.async_on_remove(
+                    async_dispatcher_connect(
+                        self.hass,
+                        SIGNAL_UPDATE_ENTITIES,
+                        _check_device_removed,
+                    )
+                )
+    
         except Exception as err:
             _LOGGER.error(
                 "Unexpected error in async_added_to_hass for sensor %s: %s",
