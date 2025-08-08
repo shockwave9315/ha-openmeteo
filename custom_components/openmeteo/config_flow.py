@@ -14,7 +14,7 @@ from homeassistant.components.device_tracker import DOMAIN as DEVICE_TRACKER_DOM
 from homeassistant.helpers import device_registry as dr
 
 from .const import (
-    QUIET_MODE_DEFAULT,
+    
     CONF_DAILY_VARIABLES,
     CONF_DEVICE_TRACKERS,
     CONF_HOURLY_VARIABLES,
@@ -160,15 +160,9 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
         current_device_trackers = self.options.get(CONF_DEVICE_TRACKERS, DEFAULT_DEVICE_TRACKERS)
         use_device_names = self.options.get(CONF_USE_DEVICE_NAMES, True)
         area_overrides = self.options.get(CONF_AREA_OVERRIDES, {})
-        current_quiet = self.options.get('quiet_mode', QUIET_MODE_DEFAULT)
         
         # Schemat formularza opcji
-        options_schema = {
-            vol.Optional(
-                'quiet_mode',
-                default=current_quiet
-            ): bool,
-            vol.Optional(
+        options_schema = {            vol.Optional(
                 CONF_SCAN_INTERVAL,
                 default=scan_interval
             ): cv.positive_int,

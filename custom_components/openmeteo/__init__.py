@@ -116,18 +116,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         bool: True if setup was successful, False otherwise
     """
     from homeassistant.helpers import device_registry as dr
-    from .const import QUIET_MODE_DEFAULT
-    
-    # Initialize data structure with setdefault to preserve existing data on reload
+        # Initialize data structure with setdefault to preserve existing data on reload
     hass.data.setdefault(DOMAIN, {})
     entry_data = hass.data[DOMAIN].setdefault(entry.entry_id, {
         "main_instance": None,
         "device_instances": {},
     })
-    
-    # Update quiet mode with type safety
-    opt_q = entry.options.get("quiet_mode")
-    entry_data["quiet_mode"] = opt_q if isinstance(opt_q, bool) else QUIET_MODE_DEFAULT
     
     # Check if we should track devices
     track_devices = entry.data.get("track_devices", False)
@@ -527,17 +521,14 @@ async def _update_device_instance(
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
     def _log_update_summary(self, result: dict) -> None:
         try:
-            entry_id = getattr(self.entry, 'entry_id', 'unknown')
             hourly = (result or {}).get('hourly', {})
             daily = (result or {}).get('daily', {})
             hc = len(hourly.get('time', []) or []) if isinstance(hourly, dict) else 0
             dc = len(daily.get('time', []) or []) if isinstance(daily, dict) else 0
-            if isinstance(getattr(self.hass, 'data', None), dict):
-                quiet = self.hass.data.get(DOMAIN, {}).get(entry_id, {}).get('quiet_mode', True)
-            else:
-                quiet = True
-            if not quiet:
-                _LOGGER.info("Open-Meteo update: hourly=%s, daily=%s, idx=%s time=%s", hc, dc, result.get('_current_hour_index'), result.get('_current_hour_time'))
+            _LOGGER.debug(
+                "Open-Meteo update: hourly=%s, daily=%s, idx=%s time=%s",
+                hc, dc, result.get('_current_hour_index'), result.get('_current_hour_time')
+            )
         except Exception:
             pass
 

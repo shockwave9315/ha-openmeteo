@@ -81,7 +81,6 @@ URL = "https://api.open-meteo.com/v1/forecast"
 PLATFORMS = ["weather", "sensor"]
 
 # Weather condition mapping
-QUIET_MODE_DEFAULT: bool = True  # Only WARNING/ERROR logs by default
 HOURLY_FORECAST_HORIZON: int = 48  # hours to expose in forecast_hourly
 CORE_SENSORS = {
     "temperature", "humidity", "wind_speed", "wind_gust", "pressure",
