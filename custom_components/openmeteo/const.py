@@ -82,11 +82,6 @@ PLATFORMS = ["weather", "sensor"]
 
 # Weather condition mapping
 HOURLY_FORECAST_HORIZON: int = 48  # hours to expose in forecast_hourly
-CORE_SENSORS = {
-    "temperature", "humidity", "wind_speed", "wind_gust", "pressure",
-    "precipitation", "precipitation_probability", "visibility", "uv_index",
-    "apparent_temperature"
-}
 
 CONDITION_MAP = {
     0: ATTR_CONDITION_SUNNY,  # Clear sky

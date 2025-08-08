@@ -25,7 +25,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from . import OpenMeteoDataUpdateCoordinator, OpenMeteoInstance
-from .const import DOMAIN, SIGNAL_UPDATE_ENTITIES, CORE_SENSORS
+from .const import DOMAIN, SIGNAL_UPDATE_ENTITIES
 
 @lru_cache(maxsize=32)
 def _get_hour_index(time_list: tuple[str, ...], now_iso: str) -> int:
@@ -512,13 +512,15 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
                     self._attr_name = f"{device_name} {sensor_name}".strip()
                 
                 self._attr_unique_id = f"{config_entry.entry_id}-{device_id}-{sensor_type}"
-                self._attr_entity_registry_visible_default = (self._sensor_type in CORE_SENSORS)
+                self._attr_entity_registry_visible_default = True
+                self._attr_entity_registry_visible_default = True
             else:
                 # This is the main instance
                 base_name = config_entry.data.get('name', 'Open-Meteo') if config_entry.data else 'Open-Meteo'
                 self._attr_name = f"{base_name} {sensor_name}".strip()
                 self._attr_unique_id = f"{config_entry.entry_id}-main-{sensor_type}"
-                self._attr_entity_registry_visible_default = (self._sensor_type in CORE_SENSORS)
+                self._attr_entity_registry_visible_default = True
+                self._attr_entity_registry_visible_default = True
             
             # Ustaw podstawowe informacje o urządzeniu
             self._setup_device_info(config_entry, sensor_config, device_id)
