@@ -100,6 +100,22 @@ SENSOR_TYPES = {
         "device_class": None,
         "value_fn": lambda data: data.get("hourly", {}).get("visibility", [None])[0] / 1000,
     },
+    "latitude": {
+        "name": "Latitude",
+        "unit": DEGREE,
+        "icon": "mdi:latitude",
+        "device_class": None,
+        "state_class": "measurement",
+        "value_fn": lambda data: data.get("location", {}).get("latitude"),
+    },
+    "longitude": {
+        "name": "Longitude",
+        "unit": DEGREE,
+        "icon": "mdi:longitude",
+        "device_class": None,
+        "state_class": "measurement",
+        "value_fn": lambda data: data.get("location", {}).get("longitude"),
+    },
 }
 
 
@@ -146,7 +162,10 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data:
             return None
         
-        value = SENSOR_TYPES[self._sensor_type]["value_fn"](self.coordinator.data)
+        if self._sensor_type in ("latitude", "longitude"):
+            value = self.coordinator.data["location"].get(self._sensor_type)
+        else:
+            value = SENSOR_TYPES[self._sensor_type]["value_fn"](self.coordinator.data)
         
         if isinstance(value, (int, float)):
             return round(value, 2)
