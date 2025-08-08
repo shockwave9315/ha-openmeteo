@@ -677,7 +677,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
             "daily": daily_vars,
             "hourly": hourly_vars,
             "timeformat": "iso8601",
-            "windspeed_unit": "ms",
+            "windspeed_unit": "kmh",
             "precipitation_unit": "mm",
             "temperature_unit": "celsius",
         }

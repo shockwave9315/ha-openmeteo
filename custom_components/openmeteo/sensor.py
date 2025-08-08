@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 
 from homeassistant.components.sensor import (
@@ -80,7 +80,7 @@ def get_current_hour_index(times: list[str], device_id: str = None) -> int:
         
         # Przygotuj szukane formaty godzin (lokalna i UTC)
         now_local_hour = now.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:00")
-        now_utc_hour = now.astimezone(datetime.timezone.utc).replace(
+        now_utc_hour = now.astimezone(timezone.utc).replace(
             minute=0, second=0, microsecond=0
         ).strftime("%Y-%m-%dT%H:00")
         
@@ -164,7 +164,7 @@ def get_hourly_value(data: dict, key: str, device_id: str = None):
         )
         
         # Get the current hour index
-        idx = get_current_hour_index(hourly_times, device_id)
+        idx = data.get("_current_hour_index") if isinstance(data.get("_current_hour_index"), int) else get_current_hour_index(hourly_times, device_id)
         
         # Get the value and validate
         values = hourly_data.get(key, [None])
@@ -262,7 +262,7 @@ SENSOR_TYPES = {
     },
     "wind_bearing": {
         "name": "Kierunek wiatru",
-        "unit": "°",
+        "unit": DEGREE,
         "icon": "mdi:compass",
         "device_class": None,
         "value_fn": lambda data: data.get("current_weather", {}).get("winddirection"),
@@ -319,6 +319,15 @@ async def async_setup_entry(
             async_add_entities(entities)
             _LOGGER.debug("Successfully added sensors for device_id %s", device_id)
             
+                # Listen for device instance updates for this entity
+                self.async_on_remove(
+                    async_dispatcher_connect(
+                        self.hass,
+                        SIGNAL_UPDATE_ENTITIES,
+                        _check_device_removed,
+                    )
+                )
+
         except Exception as err:
             _LOGGER.error(
                 "Error setting up sensors for device_id %s: %s",
@@ -510,47 +519,14 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
                     device_name = device_id.split('.')[-1].replace('_', ' ').title()
                     self._attr_name = f"{device_name} {sensor_name}".strip()
                 
-                # Create a more unique ID with entry_id, device_id, and coordinates hash
-                coord_hash = ""
-                if hasattr(coordinator, '_latitude') and hasattr(coordinator, '_longitude'):
-                    coord_hash = f"-{abs(hash((coordinator._latitude, coordinator._longitude))) % 10000:04d}"
-                
-                self._attr_unique_id = f"{config_entry.entry_id}-{device_id}{coord_hash}-{sensor_type}"
-                self._attr_entity_registry_visible_default = True
+                self._attr_unique_id = f"{config_entry.entry_id}-{device_id}-{sensor_type}"
+                self._attr_entity_registry_visible_default = (self._sensor_type in CORE_SENSORS)
             else:
                 # This is the main instance
                 base_name = config_entry.data.get('name', 'Open-Meteo') if config_entry.data else 'Open-Meteo'
                 self._attr_name = f"{base_name} {sensor_name}".strip()
                 self._attr_unique_id = f"{config_entry.entry_id}-main-{sensor_type}"
-                
-                # Add coordinates hash to ensure uniqueness for main instance
-                if hasattr(coordinator, '_latitude') and hasattr(coordinator, '_longitude'):
-                    coord_hash = abs(hash((coordinator._latitude, coordinator._longitude))) % 10000
-                    self._attr_unique_id = f"{self._attr_unique_id}-{coord_hash:04d}"
-                
-                # Show main entity only if there are no device instances
-                try:
-                    # Safely get device_instances with proper None checks
-                    hass = getattr(self, 'hass', None)
-                    if hass and hasattr(hass, 'data') and isinstance(hass.data, dict):
-                        domain_data = hass.data.get(DOMAIN, {})
-                        if isinstance(domain_data, dict):
-                            entry_data = domain_data.get(config_entry.entry_id, {})
-                            if isinstance(entry_data, dict):
-                                device_instances = entry_data.get("device_instances", {})
-                                self._attr_entity_registry_visible_default = not bool(device_instances)
-                                _LOGGER.debug(
-                                    "Sprawdzono instancje urządzeń dla %s. Widoczność: %s",
-                                    sensor_type,
-                                    self._attr_entity_registry_visible_default
-                                )
-                                # Przejdź do ustawień urządzenia
-                                self._setup_device_info(config_entry, sensor_config, device_id)
-                                
-                                # Default visibility: only core sensors visible by default
-                                try:
-                                    if self._sensor_type in CORE_SENSORS:
-                                        self._attr_entity_registry_visible_default = True
+                self._attr_entity_registry_visible_default = (self._sensor_type in CORE_SENSORS)
                                     else:
                                         self._attr_entity_registry_visible_default = False
                                 except Exception:
@@ -663,6 +639,30 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
             
         data = self.coordinator.data
         sensor_type = self._sensor_type
+        
+        # Wind speed prefers current_weather; fallback to hourly windspeed_10m
+        if sensor_type == "wind_speed":
+            try:
+                cw = (data or {}).get("current_weather", {})
+                wind = cw.get("windspeed")
+                if wind is None:
+                    # Fallback to hourly series
+                    idx = data.get("_current_hour_index")
+                    series = (data or {}).get("hourly", {}).get("windspeed_10m", [])
+                    if isinstance(idx, int) and 0 <= idx < len(series):
+                        wind = series[idx]
+                    elif series:
+                        wind = series[0]
+                # Convert m/s -> km/h if units tell us so
+                units = (data or {}).get("current_weather_units", {}).get("windspeed") or (data or {}).get("hourly_units", {}).get("windspeed_10m")
+                if isinstance(wind, (int, float)) and isinstance(units, str) and units.lower() in ("m/s", "ms", "mps"):
+                    wind = round(float(wind) * 3.6, 2)
+                if isinstance(wind, (int, float)):
+                    return round(float(wind), 2)
+                return wind
+            except Exception as e:
+                _LOGGER.warning("Error getting wind_speed: %s", e, exc_info=True)
+                return None
         
         # Handle hourly-based sensors
         if sensor_type in ("uv_index", "precipitation_probability", "wind_gust", "pressure", "visibility"):
@@ -785,6 +785,7 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
                 @callback
                 def _check_device_removed(entry_id: str) -> None:
                     """Check if this device instance has been removed."""
+                    # body below...
                     try:
                         if not hasattr(self, 'hass') or not hasattr(self, '_config_entry'):
                             _LOGGER.debug("Missing required attributes in _check_device_removed")
