@@ -10,26 +10,37 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 import homeassistant.helpers.config_validation as cv
-
-from homeassistant.helpers import selector
+from homeassistant.components.device_tracker import DOMAIN as DEVICE_TRACKER_DOMAIN
+from homeassistant.helpers import device_registry as dr
 
 from .const import (
+    CONF_REQUEST_CONNECT_TIMEOUT,
+    CONF_REQUEST_TOTAL_TIMEOUT,
+    CONF_API_MAX_RETRIES,
+    CONF_API_RETRY_BASE,
+    DEFAULT_REQUEST_CONNECT_TIMEOUT,
+    DEFAULT_REQUEST_TOTAL_TIMEOUT,
+    DEFAULT_API_MAX_RETRIES,
+    DEFAULT_API_RETRY_BASE,
     CONF_DAILY_VARIABLES,
+    CONF_DEVICE_TRACKERS,
     CONF_HOURLY_VARIABLES,
     CONF_LATITUDE,
     CONF_LONGITUDE,
     CONF_NAME,
     CONF_SCAN_INTERVAL,
     CONF_TIME_ZONE,
-    CONF_TRACKED_ENTITY_ID,
-    CONF_TRACKING_MODE,
+    CONF_TRACK_DEVICES,
+    CONF_USE_DEVICE_NAMES,
+    CONF_AREA_OVERRIDES,
     DEFAULT_DAILY_VARIABLES,
+    DEFAULT_DEVICE_TRACKERS,
     DEFAULT_HOURLY_VARIABLES,
+    TRANSLATED_VARIABLES,
     DEFAULT_NAME,
     DEFAULT_SCAN_INTERVAL,
+    DEFAULT_TRACK_DEVICES,
     DOMAIN,
-    TRACKING_MODE_DEVICE,
-    TRACKING_MODE_FIXED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,72 +49,6 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Open-Meteo."""
 
     VERSION = 1
-    data: dict[str, Any] = {}
-
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the initial step."""
-        return await self.async_step_location_mode()
-
-    async def async_step_location_mode(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the location mode selection step."""
-        if user_input is not None:
-            self.data[CONF_TRACKING_MODE] = user_input[CONF_TRACKING_MODE]
-            if user_input[CONF_TRACKING_MODE] == TRACKING_MODE_DEVICE:
-                return await self.async_step_device()
-            return await self.async_step_fixed_location()
-
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_TRACKING_MODE, default=TRACKING_MODE_FIXED): vol.In(
-                    [TRACKING_MODE_FIXED, TRACKING_MODE_DEVICE]
-                )
-            }
-        )
-
-        return self.async_show_form(step_id="location_mode", data_schema=schema)
-
-    async def async_step_device(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the device tracking step."""
-        if user_input is not None:
-            self.data.update(user_input)
-            return self.async_create_entry(title=self.data[CONF_NAME], data=self.data)
-
-        device_entities = {
-            entity.entity_id: entity.name
-            for entity in self.hass.states.async_all(("device_tracker", "person"))
-        }
-
-        if not device_entities:
-            return self.async_abort(reason="no_devices_found")
-
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
-                vol.Required(CONF_TRACKED_ENTITY_ID): vol.In(device_entities),
-                vol.Optional(CONF_TIME_ZONE, default="auto"): str,
-                vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): cv.positive_int,
-            }
-        )
-
-        return self.async_show_form(step_id="device", data_schema=schema)
-
-    async def async_step_fixed_location(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the fixed location step."""
-        if user_input is not None:
-            self.data.update(user_input)
-            return self.async_create_entry(title=self.data[CONF_NAME], data=self.data)
-
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
-                vol.Required(CONF_LATITUDE, default=self.hass.config.latitude): cv.latitude,
-                vol.Required(CONF_LONGITUDE, default=self.hass.config.longitude): cv.longitude,
-                vol.Optional(CONF_TIME_ZONE, default="auto"): str,
-                vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): cv.positive_int,
-            }
-        )
-
-        return self.async_show_form(step_id="fixed_location", data_schema=schema)
 
     @staticmethod
     @callback
@@ -111,66 +56,184 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> OpenMeteoOptionsFlow:
         """Get the options flow for this handler."""
-        return OpenMeteoOptionsFlow()
+        return OpenMeteoOptionsFlow(config_entry)
 
-
-class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
-    """Handle options flow for Open-Meteo."""
-
-    def __init__(self):
-        # HA injects self.config_entry automatically; keep init for future state.
-        pass
-
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Manage the options."""
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle the initial step."""
         errors: dict[str, str] = {}
-        if user_input is not None:
-            # Combine existing options with user input
-            updated_data = {**self.config_entry.options, **user_input}
-            mode = updated_data.get(CONF_TRACKING_MODE, TRACKING_MODE_FIXED)
-            tracked = updated_data.get(CONF_TRACKED_ENTITY_ID)
-            if mode == TRACKING_MODE_DEVICE and not tracked:
-                errors['tracked_entity_id'] = 'required'
-            else:
-                return self.async_create_entry(title="", data=updated_data)
 
-        # Get all device tracker and person entities
-        tracking_entities = self.hass.states.async_all(("device_tracker", "person"))
-        device_selector = selector.SelectSelector(
-            selector.SelectSelectorConfig(
-                options=[
-                    entity.entity_id for entity in tracking_entities
-                ],
-                mode=selector.SelectSelectorMode.DROPDOWN,
+        if user_input is not None:
+            return self.async_create_entry(
+                title=user_input.get(CONF_NAME, DEFAULT_NAME),
+                data=user_input,
             )
+
+        # Pusta lista śledzonych urządzeń - będzie uzupełniona w opcjach po instalacji
+        trackable_devices = {}
+        
+        data_schema = {
+            vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
+            vol.Required(
+                CONF_LATITUDE, default=self.hass.config.latitude
+            ): cv.latitude,
+            vol.Required(
+                CONF_LONGITUDE, default=self.hass.config.longitude
+            ): cv.longitude,
+            vol.Optional(CONF_TIME_ZONE, default="auto"): str,
+            vol.Optional(
+                CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL
+            ): cv.positive_int,
+            vol.Optional(
+                CONF_TRACK_DEVICES, 
+                default=DEFAULT_TRACK_DEVICES
+            ): bool,
+        }
+        
+        # Dodaj wybór urządzeń tylko jeśli opcja śledzenia jest włączona
+        if trackable_devices:
+            data_schema.update({
+                vol.Optional(
+                    CONF_DEVICE_TRACKERS,
+                    default=list(DEFAULT_DEVICE_TRACKERS)
+                ): cv.multi_select(trackable_devices),
+            })
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(data_schema),
+            errors=errors,
         )
 
-        # Build schema
-        schema = {
-            vol.Required(
-                CONF_TRACKING_MODE,
-                default=self.config_entry.options.get(CONF_TRACKING_MODE, TRACKING_MODE_FIXED),
-            ): vol.In([TRACKING_MODE_FIXED, TRACKING_MODE_DEVICE]),
-            vol.Optional(
-                CONF_TRACKED_ENTITY_ID,
-                description={"suggested_value": self.config_entry.options.get(CONF_TRACKED_ENTITY_ID)},
-            ): device_selector,
-            vol.Optional(
-                CONF_DAILY_VARIABLES,
-                default=self.config_entry.options.get(CONF_DAILY_VARIABLES, DEFAULT_DAILY_VARIABLES),
-            ): cv.multi_select({var: var.replace("_", " ").title() for var in DEFAULT_DAILY_VARIABLES}),
-            vol.Optional(
-                CONF_HOURLY_VARIABLES,
-                default=self.config_entry.options.get(CONF_HOURLY_VARIABLES, DEFAULT_HOURLY_VARIABLES),
-            ): cv.multi_select({var: var.replace("_", " ").title() for var in DEFAULT_HOURLY_VARIABLES}),
+
+class OpenMeteoOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
+    """Handle options flow for Open-Meteo."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            # Przetwórz dane wejściowe, aby wyodrębnić area_overrides
+            area_overrides = {}
+            keys_to_remove = []
+            
+            # Najpierw zbierz klucze do usunięcia i zbuduj słownik area_overrides
+            for key, value in user_input.items():
+                if key.startswith(f"{CONF_AREA_OVERRIDES}_"):
+                    device_id = key.replace(f"{CONF_AREA_OVERRIDES}_", "")
+                    if value and value.strip():
+                        area_overrides[device_id] = value.strip()
+                    keys_to_remove.append(key)
+            
+            # Następnie usuń zebrane klucze ze słownika wejściowego
+            for key in keys_to_remove:
+                user_input.pop(key, None)
+            
+            # Dodaj area_overrides do danych konfiguracyjnych
+            if area_overrides:
+                user_input[CONF_AREA_OVERRIDES] = area_overrides
+            
+            return self.async_create_entry(title="", data=user_input)
+
+        # Użycie wartości z opcji lub danych konfiguracyjnych jako domyślnych
+        current_daily = self.options.get(CONF_DAILY_VARIABLES, DEFAULT_DAILY_VARIABLES)
+        current_hourly = self.options.get(CONF_HOURLY_VARIABLES, DEFAULT_HOURLY_VARIABLES)
+        scan_interval = self.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        
+        # Pobierz dostępne urządzenia do śledzenia
+        device_registry = dr.async_get(self.hass)
+        trackable_devices = {}
+        
+        # Sprawdź czy mamy już entry_id (czy to nie jest pierwsze uruchomienie)
+        if hasattr(self, 'config_entry') and self.config_entry:
+            device_entries = dr.async_entries_for_config_entry(
+                device_registry, self.config_entry.entry_id
+            )
+            
+            # Filtruj tylko urządzenia z komponentu device_tracker
+            trackable_devices = {
+                entry.id: entry.name_by_user or entry.name or f"Device {entry.id}"
+                for entry in device_entries
+                if any(
+                    identifier[0] == DEVICE_TRACKER_DOMAIN 
+                    for identifier in entry.identifiers
+                )
+            }      
+        
+        # Pobierz aktualne wartości konfiguracji
+        current_track_devices = self.options.get(CONF_TRACK_DEVICES, DEFAULT_TRACK_DEVICES)
+        current_device_trackers = self.options.get(CONF_DEVICE_TRACKERS, DEFAULT_DEVICE_TRACKERS)
+        use_device_names = self.options.get(CONF_USE_DEVICE_NAMES, True)
+        area_overrides = self.options.get(CONF_AREA_OVERRIDES, {})
+        
+        # Schemat formularza opcji
+        options_schema = {
             vol.Optional(
                 CONF_SCAN_INTERVAL,
-                default=self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+                default=scan_interval
             ): cv.positive_int,
+            vol.Optional(
+                CONF_DAILY_VARIABLES, 
+                default=current_daily
+            ): cv.multi_select(
+                {var: TRANSLATED_VARIABLES.get(var, var.replace("_", " ").title()) 
+                 for var in DEFAULT_DAILY_VARIABLES
+            vol.Optional(
+                CONF_REQUEST_CONNECT_TIMEOUT,
+                default=options.get(CONF_REQUEST_CONNECT_TIMEOUT, DEFAULT_REQUEST_CONNECT_TIMEOUT),
+            ): vol.All(int, vol.Range(min=1, max=60)),
+            vol.Optional(
+                CONF_REQUEST_TOTAL_TIMEOUT,
+                default=options.get(CONF_REQUEST_TOTAL_TIMEOUT, DEFAULT_REQUEST_TOTAL_TIMEOUT),
+            ): vol.All(int, vol.Range(min=5, max=300)),
+            vol.Optional(
+                CONF_API_MAX_RETRIES,
+                default=options.get(CONF_API_MAX_RETRIES, DEFAULT_API_MAX_RETRIES),
+            ): vol.All(int, vol.Range(min=0, max=5)),
+            vol.Optional(
+                CONF_API_RETRY_BASE,
+                default=options.get(CONF_API_RETRY_BASE, DEFAULT_API_RETRY_BASE),
+            ): vol.All(vol.Coerce(float), vol.Range(min=0, max=30.0)),
         }
+            ),
+            vol.Optional(
+                CONF_HOURLY_VARIABLES, 
+                default=current_hourly
+            ): cv.multi_select(
+                {var: TRANSLATED_VARIABLES.get(var, var.replace("_", " ").title())
+                 for var in DEFAULT_HOURLY_VARIABLES}
+            ),
+            vol.Optional(
+                CONF_TRACK_DEVICES,
+                default=current_track_devices
+            ): bool,
+        }
+        
+        # Dodaj opcje związane ze śledzeniem urządzeń tylko jeśli są dostępne
+        if trackable_devices:
+            options_schema.update({
+                vol.Optional(
+                    CONF_DEVICE_TRACKERS,
+                    default=current_device_trackers
+                ): cv.multi_select(trackable_devices),
+                vol.Optional(
+                    CONF_USE_DEVICE_NAMES,
+                    default=use_device_names
+                ): bool,
+            })
+            
+            # Dodaj pola do nadpisywania nazw obszarów dla każdego trackera
+            for device_id, device_name in trackable_devices.items():
+                options_schema[
+                    vol.Optional(
+                        f"{CONF_AREA_OVERRIDES}_{device_id}",
+                        default=area_overrides.get(device_id, device_name),
+                    )
+                ] = str
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(schema),
-            errors=errors,
+            data_schema=vol.Schema(options_schema),
         )

@@ -20,24 +20,43 @@ MANUFACTURER = "Open-Meteo"
 NAME = "Open-Meteo"
 
 # Configuration keys
-CONF_TRACKING_MODE = "tracking_mode"
-CONF_TRACKED_ENTITY_ID = "tracked_entity_id"
 CONF_NAME = "name"
 CONF_DAILY_VARIABLES = "daily_variables"
 CONF_HOURLY_VARIABLES = "hourly_variables"
 CONF_LATITUDE = "latitude"
 CONF_LONGITUDE = "longitude"
 CONF_ALTITUDE = "altitude"
-CONF_TIME_ZONE = "time_zone"
+CONF_TIME_ZONE = "time_zone"  # Uwaga: w pliku __init__.py jest używane CONF_TIME_ZONE
 CONF_SCAN_INTERVAL = "scan_interval"
-
-# Tracking modes
-TRACKING_MODE_FIXED = "fixed"
-TRACKING_MODE_DEVICE = "device"
+CONF_DEVICE_TRACKERS = "device_trackers"
+CONF_TRACK_DEVICES = "track_devices"
+CONF_USE_DEVICE_NAMES = "use_device_names"  # Czy używać nazw urządzeń zamiast nazw trackerów
+CONF_AREA_OVERRIDES = "area_overrides"  # Nadpisywanie obszarów dla konkretnych urządzeń
 
 # Default values
 DEFAULT_NAME = "Open-Meteo"
-DEFAULT_SCAN_INTERVAL = 600  # 10 minutes
+DEFAULT_SCAN_INTERVAL = 1800  # 30 minutes
+DEFAULT_TRACK_DEVICES = False
+DEFAULT_DEVICE_TRACKERS = []
+DEFAULT_USE_DEVICE_NAMES = True
+DEFAULT_AREA_OVERRIDES = {}
+
+# ---- Networking options (configurable via OptionsFlow) ----
+CONF_REQUEST_CONNECT_TIMEOUT: Final = "connect_timeout"
+CONF_REQUEST_TOTAL_TIMEOUT: Final = "total_timeout"
+CONF_API_MAX_RETRIES: Final = "api_max_retries"
+CONF_API_RETRY_BASE: Final = "api_retry_base"
+
+DEFAULT_REQUEST_CONNECT_TIMEOUT: Final[int] = 5
+DEFAULT_REQUEST_TOTAL_TIMEOUT: Final[int] = 15
+DEFAULT_API_MAX_RETRIES: Final[int] = 2
+DEFAULT_API_RETRY_BASE: Final[float] = 1.0
+
+
+
+# Signals
+SIGNAL_UPDATE_ENTITIES = f"{DOMAIN}_update_entities"
+SIGNAL_DEVICE_TRACKER_UPDATE = f"{DOMAIN}_device_tracker_update"
 
 DEFAULT_DAILY_VARIABLES = [
     "temperature_2m_max",
@@ -62,6 +81,7 @@ DEFAULT_HOURLY_VARIABLES = [
     "pressure_msl",
     "surface_pressure",
     "visibility",
+    "precipitation_probability",
     "cloudcover",
     "is_day",
     "uv_index",
@@ -104,3 +124,35 @@ CONDITION_MAP = {
     96: ATTR_CONDITION_LIGHTNING_RAINY,  # Thunderstorm with slight hail
     99: ATTR_CONDITION_LIGHTNING_RAINY,  # Thunderstorm with heavy hail
 }
+
+# w pliku /custom_components/openmeteo/const.py
+TRANSLATED_VARIABLES = {
+    # Daily
+    "temperature_2m_max": "Temperatura maksymalna",
+    "temperature_2m_min": "Temperatura minimalna",
+    "precipitation_sum": "Suma opadów (dzienna)",
+    "windspeed_10m_max": "Maksymalna prędkość wiatru",
+    "winddirection_10m_dominant": "Dominujący kierunek wiatru",
+    # Hourly
+    "temperature_2m": "Temperatura",
+    "relativehumidity_2m": "Wilgotność",
+    "apparent_temperature": "Temperatura odczuwalna",
+    "precipitation": "Suma opadów (godzinowa)",
+    "snowfall": "Opady śniegu",
+    "weathercode": "Kod pogody",
+    "windspeed_10m": "Prędkość wiatru",
+    "winddirection_10m": "Kierunek wiatru",
+    "windgusts_10m": "Porywy wiatru",
+    "pressure_msl": "Ciśnienie (na poziomie morza)",
+    "surface_pressure": "Ciśnienie (na powierzchni)",
+    "visibility": "Widzialność",
+    "precipitation_probability": "Prawdopodobieństwo opadów",
+    "cloudcover": "Zachmurzenie",
+    "is_day": "Czy jest dzień?",
+    "uv_index": "Indeks UV",
+}
+# Networking defaults
+REQUEST_CONNECT_TIMEOUT: int = 5
+REQUEST_TOTAL_TIMEOUT: int = 15
+API_MAX_RETRIES: int = 2  # additional retries on timeout/ClientError
+API_RETRY_BASE: float = 1.0  # seconds, exponential backoff
