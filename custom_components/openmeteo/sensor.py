@@ -518,30 +518,6 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
                 self._attr_name = f"{base_name} {sensor_name}".strip()
                 self._attr_unique_id = f"{config_entry.entry_id}-main-{sensor_type}"
                 self._attr_entity_registry_visible_default = (self._sensor_type in CORE_SENSORS)
-                                    else:
-                                        self._attr_entity_registry_visible_default = False
-                                except Exception:
-                                    self._attr_entity_registry_visible_default = False
-                                
-                                # Jeśli dotarliśmy tutaj, wszystko poszło dobrze
-                                return
-                            
-                            # Jeśli dotarliśmy tutaj, coś poszło nie tak z sprawdzaniem
-                            _LOGGER.debug(
-                                "Nie można określić instancji urządzeń dla %s. Domyślnie widoczne.",
-                                sensor_type
-                            )
-                            self._attr_entity_registry_visible_default = True
-                    
-                except Exception as e:
-                    _LOGGER.warning(
-                        "Błąd podczas sprawdzania instancji urządzeń dla %s: %s",
-                        sensor_type,
-                        str(e),
-                        exc_info=True
-                    )
-                    # Domyślnie ustaw na True, aby upewnić się, że encja jest widoczna w przypadku błędu
-                    self._attr_entity_registry_visible_default = True
             
             # Ustaw podstawowe informacje o urządzeniu
             self._setup_device_info(config_entry, sensor_config, device_id)
