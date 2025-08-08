@@ -199,7 +199,7 @@ class OpenMeteoWeather(WeatherEntity):
             weather_code = hourly.get("weathercode", [None] * len(time_entries))[i]
             
             forecast = {
-                ATTR_FORECAST_TIME: dt_util.parse_datetime(time_entry),
+                ATTR_FORECAST_TIME: dt_util.utc_from_timestamp(time_entry).isoformat(),
                 ATTR_FORECAST_CONDITION: self._get_condition(weather_code, is_day),
                 ATTR_FORECAST_TEMP: hourly.get("temperature_2m", [None] * len(time_entries))[i],
                 ATTR_FORECAST_PRECIPITATION: hourly.get("precipitation", [0] * len(time_entries))[i],
