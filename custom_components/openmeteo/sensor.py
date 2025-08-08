@@ -46,7 +46,7 @@ SENSOR_TYPES = {
         "unit": "UV Index",
         "icon": "mdi:sun-wireless-outline",
         "device_class": None,
-        "value_fn": lambda data: data.get("hourly", {}).get("uv_index", [None])[0],
+        "value_fn": lambda data: data.get("daily", {}).get("uv_index_max", [None])[0],
     },
     "precipitation_probability": {
         "name": "Prawdopodobieństwo opadów",
@@ -100,21 +100,12 @@ SENSOR_TYPES = {
         "device_class": None,
         "value_fn": lambda data: data.get("hourly", {}).get("visibility", [None])[0] / 1000,
     },
-    "latitude": {
-        "name": "Latitude",
-        "unit": DEGREE,
-        "icon": "mdi:latitude",
+    "location": {
+        "name": "Location",
+        "unit": None,
+        "icon": "mdi:map-marker",
         "device_class": None,
-        "state_class": "measurement",
-        "value_fn": lambda data: data.get("location", {}).get("latitude"),
-    },
-    "longitude": {
-        "name": "Longitude",
-        "unit": DEGREE,
-        "icon": "mdi:longitude",
-        "device_class": None,
-        "state_class": "measurement",
-        "value_fn": lambda data: data.get("location", {}).get("longitude"),
+        "value_fn": lambda data: f"{data.get('location', {}).get('latitude')}, {data.get('location', {}).get('longitude')}",
     },
 }
 
