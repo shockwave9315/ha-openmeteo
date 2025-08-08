@@ -84,6 +84,7 @@ class OpenMeteoWeather(WeatherEntity):
         device_id: str | None = None,
         friendly_name: str | None = None
     ) -> None:
+        self.config_entry = config_entry
         """Initialize the Open-Meteo weather.
         
         Args:
