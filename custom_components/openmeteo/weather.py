@@ -116,6 +116,7 @@ class OpenMeteoWeather(WeatherEntity):
             self._attr_unique_id = None
             self._attr_entity_registry_visible_default = True
             self._attr_device_info = None
+            self._friendly_name = friendly_name
             
             # Set up unique ID and name based on whether this is a device instance or not
             if device_id:
@@ -158,6 +159,14 @@ class OpenMeteoWeather(WeatherEntity):
             # Safely get device-specific data
             try:
                 self._device_entity_id = config_entry.data.get("device_entity_id")
+                if device_id:
+                    # Device-specific entity
+                    self._attr_name = friendly_name or f"OpenMeteoWeather {device_id[-4:]}"
+                    self._attr_unique_id = f"{self.config_entry.entry_id}-{device_id}"
+                else:
+                    # Main weather entity
+                    self._attr_name = self.config_entry.data.get("name", "Open-Meteo Weather")
+                    self._attr_unique_id = self.config_entry.entry_id
                 self._device_name = config_entry.data.get("device_name")
                 self._area_overrides = config_entry.data.get("area_overrides", {})
                 self._device_id = device_id
@@ -1149,90 +1158,14 @@ class OpenMeteoWeather(WeatherEntity):
             
             return forecast_hourly
 
-            
+
         except Exception as e:
-            _LOGGER.error("Krytyczny błąd w metodzie forecast_hourly dla encji %s: %s\nSzczegóły: %s\nTraceback: %s", 
+            _LOGGER.error("Krytyczny błąd w metodzie forecast_hourly dla encji %s: %s\nTraceback: %s", 
                          entity_id, 
-                         str(e), 
-                         f"coordinator_present={hasattr(self, 'coordinator')}",
+                         str(e),
                          exc_info=True)
-            return None
-            wind_speeds = hourly.get("windspeed_10m", [])
-            wind_directions = hourly.get("winddirection_10m", [])
-            precip_probs = hourly.get("precipitation_probability", [])
-            
-            for i in range(max_hours):
-                try:
-                    time_entry = time_entries[i]
-                    if not isinstance(time_entry, str):
-                        _LOGGER.debug("Weather entity %s: Nieprawidłowy format czasu w prognozie godzinowej, godzina %d", 
-                                    getattr(self, 'entity_id', 'nieznana'), i)
-                        continue
-                    
-                    # Przygotuj dane prognozy z domyślnymi wartościami
-                    forecast = {
-                        ATTR_FORECAST_TIME: None,
-                        ATTR_FORECAST_CONDITION: None,
-                        ATTR_FORECAST_TEMP: None,
-                        ATTR_FORECAST_PRECIPITATION: 0.0
-                    }
-                    
-                    # Ustaw czas prognozy
-                    try:
-                        forecast[ATTR_FORECAST_TIME] = dt_util.parse_datetime(time_entry)
-                    except (TypeError, ValueError) as e:
-                        _LOGGER.debug("Weather entity %s: Nieprawidłowy format czasu: %s", 
-                                    getattr(self, 'entity_id', 'nieznana'), str(time_entry))
-                        continue
-                    
-                    # Ustaw warunki pogodowe (czy jest dzień i kod pogodowy)
-                    is_day = is_day_list[i] == 1 if i < len(is_day_list) else True
-                    weather_code = weather_codes[i] if i < len(weather_codes) else None
-                    forecast[ATTR_FORECAST_CONDITION] = self._get_condition(weather_code, is_day)
-                    
-                    # Ustaw temperaturę
-                    if i < len(temperatures) and temperatures[i] is not None:
-                        try:
-                            forecast[ATTR_FORECAST_TEMP] = float(temperatures[i])
-                        except (TypeError, ValueError):
-                            pass
-                    
-                    # Ustaw opady
-                    if i < len(precipitations) and precipitations[i] is not None:
-                        try:
-                            forecast[ATTR_FORECAST_PRECIPITATION] = float(precipitations[i])
-                        except (TypeError, ValueError):
-                            pass
-                    
-                    # Ustaw prędkość i kierunek wiatru, jeśli dostępne
-                    if (i < len(wind_speeds) and wind_speeds[i] is not None and 
-                        i < len(wind_directions) and wind_directions[i] is not None):
-                        try:
-                            forecast[ATTR_FORECAST_WIND_SPEED] = float(wind_speeds[i])
-                            forecast[ATTR_FORECAST_WIND_BEARING] = float(wind_directions[i])
-                        except (TypeError, ValueError):
-                            pass  # Opcjonalne: zaloguj błąd konwersji
-                    
-                    # Ustaw prawdopodobieństwo opadów, jeśli dostępne
-                    if i < len(precip_probs) and precip_probs[i] is not None:
-                        try:
-                            forecast[ATTR_FORECAST_PRECIPITATION_PROBABILITY] = float(precip_probs[i])
-                        except (TypeError, ValueError):
-                            pass  # Opcjonalne: zaloguj błąd konwersji
-                    
-                    forecast_data.append(forecast)
-                    
-                except Exception as e:
-                    _LOGGER.warning("Weather entity %s: Błąd podczas przetwarzania prognozy na godzinę %d: %s", 
-                                 getattr(self, 'entity_id', 'nieznana'), i, str(e), exc_info=True)
-                    continue
-            
-            return forecast_data
-            
-        except Exception as e:
-            _LOGGER.error("Błąd w metodzie forecast_hourly dla encji %s: %s", 
-                         getattr(self, 'entity_id', 'nieznana'), str(e), exc_info=True)
             return []
+
 
     # These async forecast methods are for newer HA versions and call the properties
     async def async_forecast_daily(self) -> list[dict[str, Any]]:
@@ -1367,22 +1300,28 @@ class OpenMeteoWeather(WeatherEntity):
                                 area_registry = await self.hass.helpers.area_registry.async_get_registry()
                                 area_entry = area_registry.async_get_area(device_entry.area_id)
                                 if area_entry and area_entry.name:
-                                    self._attr_device_info["suggested_area"] = area_entry.name
-                                    self._force_update = True  # Wymuś aktualizację interfejsu
-                                    self.async_write_ha_state()
+                                    if isinstance(self._attr_device_info, dict):
+                                        self._attr_device_info["suggested_area"] = area_entry.name
+                                        self._force_update = True  # Wymuś aktualizację interfejsu
+                                        if getattr(self, 'entity_id', None):
+                                            self.async_write_ha_state()
                                     return
                     
                     # Jeśli nie udało się pobrać obszaru z rejestru obszarów, użyj innych dostępnych danych
                     if self._device_entity_id in self._area_overrides:
-                        self._attr_device_info["suggested_area"] = self._area_overrides[self._device_entity_id]
+                        if isinstance(self._attr_device_info, dict):
+                            self._attr_device_info["suggested_area"] = self._area_overrides[self._device_entity_id]
                     elif self._device_name:
-                        self._attr_device_info["suggested_area"] = self._device_name
+                        if isinstance(self._attr_device_info, dict):
+                            self._attr_device_info["suggested_area"] = self._device_name
                     elif " - " in self._attr_name:
-                        self._attr_device_info["suggested_area"] = self._attr_name.split(" - ")[-1].strip()
+                        if isinstance(self._attr_device_info, dict):
+                            self._attr_device_info["suggested_area"] = self._attr_name.split(" - ")[-1].strip()
                     
                     # Wymuś aktualizację interfejsu
                     self._force_update = True
-                    self.async_write_ha_state()
+                    if getattr(self, 'entity_id', None):
+                                    self.async_write_ha_state()
                     
                 except Exception as e:
                     _LOGGER.warning("Nie udało się zaktualizować nazwy obszaru: %s", e)
@@ -1480,7 +1419,8 @@ class OpenMeteoWeather(WeatherEntity):
                          
             # Wymuś aktualizację interfejsu użytkownika (jeśli mamy już entity_id)
             if getattr(self, 'entity_id', None):
-                self.async_write_ha_state()
+                if getattr(self, 'entity_id', None):
+                                    self.async_write_ha_state()
             
         except Exception as e:
             _LOGGER.error("Błąd podczas aktualizacji danych dla encji %s: %s", 
