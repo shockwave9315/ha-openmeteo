@@ -16,6 +16,8 @@ from homeassistant.helpers import entity_registry as er
 from .const import (
     CONF_DAILY_VARIABLES,
     CONF_HOURLY_VARIABLES,
+    CONF_LATITUDE,
+    CONF_LONGITUDE,
     CONF_SCAN_INTERVAL,
     CONF_TIME_ZONE,
     CONF_TRACKED_ENTITY_ID,
@@ -39,7 +41,7 @@ def create_location_schema(hass: HomeAssistant) -> vol.Schema:
     ha_lon = hass.config.longitude
     return vol.Schema(
         {
-            vol.Optional(CONF_TRACKING_MODE, default=TRACKING_MODE_FIXED): selector.SelectSelector(
+            vol.Required(CONF_TRACKING_MODE, default=TRACKING_MODE_FIXED): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=[
                         selector.SelectOptionDict(value=TRACKING_MODE_FIXED, label="Fixed Location"),
@@ -64,7 +66,8 @@ def get_tracked_entities_options(hass: HomeAssistant, current_entity: str | None
             label = ent.original_name or ent.name or ent.entity_id
             options.append(selector.SelectOptionDict(value=ent.entity_id, label=label))
             
-    options.sort(key=lambda o: o["label"].lower())
+    # Sortowanie z użyciem casefold() dla lepszej obsługi znaków lokalnych
+    options.sort(key=lambda o: o["label"].casefold())
 
     if current_entity and all(o["value"] != current_entity for o in options):
         options.insert(0, selector.SelectOptionDict(value=current_entity, label=current_entity))
@@ -77,10 +80,19 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        """Initialize Open-Meteo config flow."""
+        self._init_data: dict[str, Any] = {}
+
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the initial step."""
         if user_input is not None:
-            return self.async_create_entry(title="Open-Meteo", data=user_input)
+            self._init_data = user_input
+            
+            if user_input.get(CONF_TRACKING_MODE) == TRACKING_MODE_DEVICE:
+                return await self.async_step_device()
+            
+            return self.async_create_entry(title="Open-Meteo", data=self._init_data)
 
         return self.async_show_form(
             step_id="user",
@@ -88,35 +100,13 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors={},
         )
 
-    async def async_step_location_mode(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the location mode step."""
-        if user_input is not None:
-            if user_input[CONF_TRACKING_MODE] == TRACKING_MODE_DEVICE:
-                return self.async_show_form(
-                    step_id="device",
-                    data_schema=vol.Schema({
-                        vol.Required(CONF_TRACKED_ENTITY_ID): selector.SelectSelector(
-                            selector.SelectSelectorConfig(
-                                options=get_tracked_entities_options(self.hass),
-                                mode=selector.SelectSelectorMode.DROPDOWN,
-                            )
-                        )
-                    }),
-                    errors={},
-                )
-            return self.async_create_entry(title="Open-Meteo", data=user_input)
-        
-        return self.async_show_form(
-            step_id="location_mode",
-            data_schema=create_location_schema(self.hass),
-            errors={},
-        )
-
     async def async_step_device(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the device selection step."""
         if user_input is not None:
-            return self.async_create_entry(title="Open-Meteo", data=user_input)
-        
+            data = {k: v for k, v in self._init_data.items() if k not in (CONF_LATITUDE, CONF_LONGITUDE)}
+            data.update(user_input)
+            return self.async_create_entry(title="Open-Meteo", data=data)
+
         return self.async_show_form(
             step_id="device",
             data_schema=vol.Schema({
