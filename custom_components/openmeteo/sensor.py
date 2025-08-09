@@ -17,19 +17,18 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import OpenMeteoDataUpdateCoordinator
-from .const import DOMAIN, MANUFACTURER
+from .const import DOMAIN
 
 
 def _first_hourly(data: dict, key: str):
-    """Get the first item from a hourly data list."""
     arr = data.get("hourly", {}).get(key)
     if isinstance(arr, list) and arr:
         return arr[0]
     return None
 
 
+# >>> fix: helper do widzialności w km (bez walrusa)
 def _visibility_km(data: dict):
-    """Get visibility in kilometers."""
     v = _first_hourly(data, "visibility")
     return v / 1000 if isinstance(v, (int, float)) else None
 
@@ -56,54 +55,76 @@ SENSOR_TYPES: dict[str, dict] = {
         "device_class": "temperature",
         "value_fn": lambda d: _first_hourly(d, "apparent_temperature"),
     },
-    "surface_pressure": {
-        "name": "Ciśnienie",
-        "unit": UnitOfPressure.HPA,
-        "icon": "mdi:gauge",
-        "device_class": "pressure",
-        "value_fn": lambda d: _first_hourly(d, "surface_pressure"),
-    },
-    "precipitation": {
-        "name": "Opady godzinowe",
-        "unit": UnitOfPrecipitationDepth.MILLIMETERS,
-        "icon": "mdi:weather-rainy",
-        "device_class": "precipitation",
-        "value_fn": lambda d: _first_hourly(d, "precipitation"),
+    "uv_index": {
+        "name": "Indeks UV",
+        "unit": "UV Index",
+        "icon": "mdi:sun-wireless-outline",
+        "device_class": None,
+        "value_fn": lambda d: _first_hourly(d, "uv_index"),
     },
     "precipitation_probability": {
         "name": "Prawdopodobieństwo opadów",
         "unit": PERCENTAGE,
-        "icon": "mdi:weather-cloudy-alert",
+        "icon": "mdi:weather-pouring",
         "device_class": None,
         "value_fn": lambda d: _first_hourly(d, "precipitation_probability"),
     },
-    "windspeed": {
+    "precipitation_total": {
+        "name": "Suma opadów (deszcz+śnieg)",
+        "unit": UnitOfPrecipitationDepth.MILLIMETERS,
+        "icon": "mdi:cup-water",
+        "device_class": "precipitation",
+        "value_fn": lambda d: (
+            (d.get("hourly", {}).get("precipitation", [0])[0] or 0)
+            + (d.get("hourly", {}).get("snowfall", [0])[0] or 0)
+        ),
+    },
+    "wind_speed": {
         "name": "Prędkość wiatru",
         "unit": UnitOfSpeed.KILOMETERS_PER_HOUR,
         "icon": "mdi:weather-windy",
         "device_class": None,
         "value_fn": lambda d: d.get("current_weather", {}).get("windspeed"),
     },
-    "winddirection": {
+    "wind_gust": {
+        "name": "Porywy wiatru",
+        "unit": UnitOfSpeed.KILOMETERS_PER_HOUR,
+        "icon": "mdi:weather-windy-variant",
+        "device_class": None,
+        "value_fn": lambda d: _first_hourly(d, "windgusts_10m"),
+    },
+    "wind_bearing": {
         "name": "Kierunek wiatru",
         "unit": DEGREE,
-        "icon": "mdi:compass-outline",
+        "icon": "mdi:compass",
         "device_class": None,
         "value_fn": lambda d: d.get("current_weather", {}).get("winddirection"),
     },
-    "cloudcover": {
-        "name": "Zachmurzenie",
-        "unit": PERCENTAGE,
-        "icon": "mdi:weather-cloudy",
-        "device_class": None,
-        "value_fn": lambda d: _first_hourly(d, "cloudcover"),
+    "pressure": {
+        "name": "Ciśnienie",
+        "unit": UnitOfPressure.HPA,
+        "icon": "mdi:gauge",
+        "device_class": "pressure",
+        "value_fn": lambda d: _first_hourly(d, "surface_pressure"),
     },
     "visibility": {
-        "name": "Widoczność",
+        "name": "Widzialność",
         "unit": UnitOfLength.KILOMETERS,
         "icon": "mdi:eye",
         "device_class": None,
-        "value_fn": _visibility_km,
+        "value_fn": _visibility_km,  # <<< tylko ta zmiana względem poprzedniej wersji
+    },
+    "location": {
+        "name": "Lokalizacja",
+        "unit": None,
+        "icon": "mdi:map-marker",
+        "device_class": None,
+        "value_fn": lambda d: (
+            f"{d.get('location', {}).get('latitude')}, {d.get('location', {}).get('longitude')}"
+            if d.get("location", {}).get("latitude") is not None
+            and d.get("location", {}).get("longitude") is not None
+            else None
+        ),
     },
 }
 
@@ -113,7 +134,6 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the sensor platform."""
     coordinator = hass.data[DOMAIN][config_entry.entry_id]
     entities = [OpenMeteoSensor(coordinator, config_entry, k) for k in SENSOR_TYPES]
     async_add_entities(entities)
@@ -128,7 +148,6 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         config_entry: ConfigEntry,
         sensor_type: str,
     ) -> None:
-        """Initialize the sensor."""
         super().__init__(coordinator)
         self._sensor_type = sensor_type
         self._attr_name = f"{config_entry.data.get('name', 'Open-Meteo')} {SENSOR_TYPES[sensor_type]['name']}"
@@ -136,12 +155,11 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
             "name": "Open-Meteo",
-            "manufacturer": MANUFACTURER,
+            "manufacturer": "Open-Meteo",
         }
 
     @property
     def native_value(self):
-        """Return the state of the sensor."""
         if not self.coordinator.data:
             return None
         value = SENSOR_TYPES[self._sensor_type]["value_fn"](self.coordinator.data)
@@ -149,20 +167,16 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_unit_of_measurement(self):
-        """Return the unit of measurement."""
         return SENSOR_TYPES[self._sensor_type]["unit"]
 
     @property
     def icon(self):
-        """Return the icon to use in the frontend."""
         return SENSOR_TYPES[self._sensor_type]["icon"]
 
     @property
     def device_class(self):
-        """Return the device class of the sensor."""
         return SENSOR_TYPES[self._sensor_type]["device_class"]
 
     @property
-    def state_class(self):
-        """Return the state class of the sensor."""
-        return SENSOR_TYPES[self._sensor_type].get("state_class")
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
