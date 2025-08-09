@@ -29,6 +29,7 @@ CONF_LONGITUDE = "longitude"
 CONF_ALTITUDE = "altitude"
 CONF_TIME_ZONE = "time_zone"
 CONF_SCAN_INTERVAL = "scan_interval"
+CONF_TRACKED_ENTITY_ID = "tracked_entity_id"  # <— brakująca stała
 
 # Defaults
 DEFAULT_NAME = "Open-Meteo"
