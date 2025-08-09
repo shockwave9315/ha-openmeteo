@@ -5,7 +5,7 @@ import asyncio
 import logging
 from datetime import timedelta
 from typing import Any
-from datetime import datetime, timezone
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -36,34 +36,26 @@ PLATFORMS = ["weather", "sensor"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Open-Meteo from a config entry."""
-    # Inicjalizacja koordynatora
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
     
-    # Pobierz dane po raz pierwszy
     await coordinator.async_config_entry_first_refresh()
     
-    # Zapisz koordynator w danych HASS
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    # Załaduj platformy (weather i sensor)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     
-    # Dodaj opcję aktualizacji konfiguracji
     entry.async_on_unload(entry.add_update_listener(async_update_options))
     
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    # Odładujemy wszystkie platformy
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     
     if unload_ok:
-        # Usuń dane związane z tą konfiguracją
         hass.data[DOMAIN].pop(entry.entry_id, None)
         
-        # Jeśli to była ostatnia konfiguracja, usuń domenę
         if not hass.data[DOMAIN]:
             hass.data.pop(DOMAIN)
     
@@ -82,27 +74,23 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
         self.entry = entry
         self._data: dict[str, Any] = {}
         
-        # Pobierz interwał z konfiguracji lub użyj domyślnego
         scan_interval_seconds = entry.options.get(
             CONF_SCAN_INTERVAL,
             entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         )
         
-        # Upewnij się, że to int
         if not isinstance(scan_interval_seconds, int):
             scan_interval_seconds = int(scan_interval_seconds)
         
-        # Konwertuj na timedelta tylko dla update_interval
         update_interval = timedelta(seconds=scan_interval_seconds)
         
         super().__init__(
             hass,
             _LOGGER,
-            name="OpenMeteo",
+            name="Open-Meteo",
             update_interval=update_interval,
         )
         
-        # Zapisz oryginalną wartość (sekundy) jako atrybut
         self.scan_interval_seconds = scan_interval_seconds
 
     async def _async_update_data(self) -> dict[str, Any]:
@@ -164,15 +152,13 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
 
                     if "hourly" in data and "time" in data["hourly"]:
                         try:
-                            # Poprawiona logika strefy czasowej
-                            user_tz = ZoneInfo(timezone_conf) if timezone_conf != "auto" else dt_util.get_default_timezone()
+                            user_tz = ZoneInfo(timezone_conf) if timezone_conf != "auto" else dt_util.get_default_time_zone()
                             now = dt_util.now(user_tz)
                             times = data["hourly"]["time"]
                             future_indices = []
 
                             for i, time_str in enumerate(times):
                                 try:
-                                    # Poprawiona metoda do parsowania czasu
                                     dt = self._om_parse_time_local_safe(time_str, user_tz)
                                     if dt >= now:
                                         future_indices.append(i)
@@ -203,18 +189,15 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
 
     def _om_parse_time_local_safe(self, time_str, user_tz):
         """Parse Open-Meteo time that may be UTC (with Z) or local w/o offset; return aware datetime in user tz."""
-        # Normalize common Z format
         ts = time_str
         try:
             dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
         except Exception:
-            # Try stripping milliseconds if malformed
             if '.' in ts:
                 ts2 = ts.split('.', 1)[0]
                 dt = datetime.fromisoformat(ts2.replace('Z', '+00:00'))
             else:
                 raise
         if dt.tzinfo is None:
-            # Open-Meteo sometimes returns local time without offset when timezone parameter is used.
             dt = dt.replace(tzinfo=user_tz)
         return dt.astimezone(user_tz)
