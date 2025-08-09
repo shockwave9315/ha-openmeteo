@@ -210,7 +210,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     selector.SelectSelectorConfig(
                         options=[{"value": var, "label": var} for var in DEFAULT_DAILY_VARIABLES],
                         multiple=True,
-                        mode=selector.SelectSelectorMode.LIST,  # kompatybilnie z HA
+                        mode=selector.SelectSelectorMode.LIST,  # kompatybilnie z HA a tak ylo 
                     )
                 ),
                 vol.Required(CONF_TRACKING_MODE, default=tracking_mode): selector.SelectSelector(
