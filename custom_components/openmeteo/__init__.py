@@ -3,9 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import Any
-from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -30,120 +29,101 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     URL,
+    TRACKING_MODE_DEVICE,
+    TRACKING_MODE_FIXED,
 )
 
 _LOGGER = logging.getLogger(__name__)
-
 PLATFORMS = ["weather", "sensor"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Open-Meteo from a config entry."""
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
-    
     await coordinator.async_config_entry_first_refresh()
-    
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
-
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    
     entry.async_on_unload(entry.add_update_listener(async_update_options))
-    
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
-        
         if not hass.data[DOMAIN]:
             hass.data.pop(DOMAIN)
-    
     return unload_ok
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Update options."""
     await hass.config_entries.async_reload(entry.entry_id)
 
-class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching data from the Open-Meteo API."""
+class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+    """Manage fetching data from Open-Meteo."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        """Initialize."""
         self.hass = hass
         self.entry = entry
-        self._data: dict[str, Any] = {}
-        
-        scan_interval_seconds = entry.options.get(
-            CONF_SCAN_INTERVAL,
-            entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+
+        scan_interval = entry.options.get(
+            CONF_SCAN_INTERVAL, entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         )
-        
-        if not isinstance(scan_interval_seconds, int):
-            scan_interval_seconds = int(scan_interval_seconds)
-        
-        update_interval = timedelta(seconds=scan_interval_seconds)
-        
-        super().__init__(
-            hass,
-            _LOGGER,
-            name="Open-Meteo",
-            update_interval=update_interval,
-        )
-        
-        self.scan_interval_seconds = scan_interval_seconds
+        try:
+            scan_interval = int(scan_interval)
+        except (TypeError, ValueError):
+            scan_interval = DEFAULT_SCAN_INTERVAL
+
+        super().__init__(hass, _LOGGER, name="Open-Meteo", update_interval=timedelta(seconds=scan_interval))
+
+    # helper — defensywne parsowanie czasu i lokalizacja do strefy usera
+    def _parse_time_local(self, ts: str, user_tz: ZoneInfo) -> datetime:
+        s = ts.replace("Z", "+00:00")
+        try:
+            dt = datetime.fromisoformat(s)
+        except Exception:
+            if "." in s:
+                s = s.split(".", 1)[0]
+                dt = datetime.fromisoformat(s)
+            else:
+                raise
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=user_tz)
+        return dt.astimezone(user_tz)
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch data from Open-Meteo API."""
-        
-        # POPRAWIONA LOGIKA: czytaj opcje, a potem dane
+        # 1) Ustal lokalizację i strefę
         opts = self.entry.options
-        tracking_mode = opts.get(CONF_TRACKING_MODE, self.entry.data.get(CONF_TRACKING_MODE))
-        timezone_conf = opts.get(CONF_TIME_ZONE, self.entry.data.get(CONF_TIME_ZONE, "auto"))
+        data = self.entry.data
 
-        if tracking_mode == "device":
-            device_tracker_id = opts.get(CONF_TRACKED_ENTITY_ID, self.entry.data.get(CONF_TRACKED_ENTITY_ID))
-            device_tracker_state = self.hass.states.get(device_tracker_id)
-            if device_tracker_state and 'latitude' in device_tracker_state.attributes:
-                latitude = device_tracker_state.attributes['latitude']
-                longitude = device_tracker_state.attributes['longitude']
+        mode = opts.get(CONF_TRACKING_MODE, data.get(CONF_TRACKING_MODE, TRACKING_MODE_FIXED))
+        tracked = opts.get(CONF_TRACKED_ENTITY_ID, data.get(CONF_TRACKED_ENTITY_ID))
+        timezone_opt = opts.get(CONF_TIME_ZONE, data.get(CONF_TIME_ZONE, "auto"))
+
+        if mode == TRACKING_MODE_DEVICE and tracked:
+            st = self.hass.states.get(tracked)
+            if st and ("latitude" in st.attributes) and ("longitude" in st.attributes):
+                latitude = st.attributes["latitude"]
+                longitude = st.attributes["longitude"]
             else:
-                _LOGGER.warning(f"Nie udało się pobrać lokalizacji z encji '{device_tracker_id}'. Używam domyślnych koordynatów Home Assistant.")
+                _LOGGER.warning("Brak współrzędnych w %s – używam koordynatów HA.", tracked)
                 latitude = self.hass.config.latitude
                 longitude = self.hass.config.longitude
         else:
-            latitude = opts.get(CONF_LATITUDE, self.entry.data.get(CONF_LATITUDE))
-            longitude = opts.get(CONF_LONGITUDE, self.entry.data.get(CONF_LONGITUDE))
-            
-            # Jeśli koordynaty są puste po przejściu z opcji, użyj domyślnych
-            if latitude is None or longitude is None:
-                latitude = self.hass.config.latitude
-                longitude = self.hass.config.longitude
+            latitude = opts.get(CONF_LATITUDE, data.get(CONF_LATITUDE, self.hass.config.latitude))
+            longitude = opts.get(CONF_LONGITUDE, data.get(CONF_LONGITUDE, self.hass.config.longitude))
 
-
+        # 2) Zbierz zmienne z configu
         default_hourly = list(DEFAULT_HOURLY_VARIABLES)
+        for add in ("pressure_msl", "surface_pressure", "visibility"):
+            if add not in default_hourly:
+                default_hourly.append(add)
         default_daily = list(DEFAULT_DAILY_VARIABLES)
 
-        if "pressure_msl" not in default_hourly:
-            default_hourly.append("pressure_msl")
-        if "surface_pressure" not in default_hourly:
-            default_hourly.append("surface_pressure")
-        if "visibility" not in default_hourly:
-            default_hourly.append("visibility")
-
-        daily_vars = self.entry.options.get(
-            CONF_DAILY_VARIABLES, self.entry.data.get(CONF_DAILY_VARIABLES, default_daily)
-        )
-        hourly_vars = self.entry.options.get(
-            CONF_HOURLY_VARIABLES, self.entry.data.get(CONF_HOURLY_VARIABLES, default_hourly)
-        )
+        daily_vars = opts.get(CONF_DAILY_VARIABLES, data.get(CONF_DAILY_VARIABLES, default_daily))
+        hourly_vars = opts.get(CONF_HOURLY_VARIABLES, data.get(CONF_HOURLY_VARIABLES, default_hourly))
 
         params = {
             "latitude": latitude,
             "longitude": longitude,
-            "timezone": timezone_conf,
+            "timezone": timezone_opt,
             "current_weather": "true",
             "hourly": ",".join(sorted(set(hourly_vars))),
             "daily": ",".join(sorted(set(daily_vars))),
@@ -155,73 +135,41 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
         session = async_get_clientsession(self.hass)
 
         try:
-            async with async_timeout.timeout(10):
-                async with session.get(URL, params=params) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        _LOGGER.error(
-                            "Error %s from Open-Meteo API: %s",
-                            response.status,
-                            error_text[:200],
-                        )
-                        raise UpdateFailed(f"Error {response.status} from Open-Meteo API")
+            async with async_timeout.timeout(30):
+                async with session.get(URL, params=params) as resp:
+                    if resp.status != 200:
+                        text = await resp.text()
+                        _LOGGER.error("Open-Meteo HTTP %s: %s", resp.status, text[:200])
+                        raise UpdateFailed(f"API returned {resp.status}")
+                    data: dict[str, Any] = await resp.json()
 
-                    data = await response.json()
+            data["location"] = {
+                "latitude": latitude,
+                "longitude": longitude,
+                "timezone": timezone_opt,
+            }
 
-                    data["location"] = {
-                        "latitude": latitude,
-                        "longitude": longitude,
-                        "timezone": timezone_conf,
-                    }
+            # 3) Przytnij hourly do przyszłości w strefie usera (auto = strefa HA)
+            hourly = data.get("hourly", {})
+            times = hourly.get("time", [])
+            if times:
+                ha_tz = self.hass.config.time_zone or "UTC"
+                user_tz = ZoneInfo(timezone_opt) if timezone_opt != "auto" else ZoneInfo(ha_tz)
+                parsed = [self._parse_time_local(t, user_tz) for t in times]
+                now = dt_util.now(user_tz)
+                first_future = next((i for i, t in enumerate(parsed) if t >= now), 0)
 
-                    if "hourly" in data and "time" in data["hourly"]:
-                        try:
-                            user_tz = ZoneInfo(timezone_conf) if timezone_conf != "auto" else dt_util.get_default_time_zone()
-                            now = dt_util.now(user_tz)
-                            times = data["hourly"]["time"]
-                            future_indices = []
+                for key, arr in list(hourly.items()):
+                    if key == "time":
+                        continue
+                    if isinstance(arr, list) and len(arr) == len(times):
+                        hourly[key] = arr[first_future:]
+                hourly["time"] = [t.isoformat() for t in parsed[first_future:]]
 
-                            for i, time_str in enumerate(times):
-                                try:
-                                    dt = self._om_parse_time_local_safe(time_str, user_tz)
-                                    if dt >= now:
-                                        future_indices.append(i)
-                                except (ValueError, TypeError) as e:
-                                    _LOGGER.debug("Error parsing time %s: %s", time_str, e)
-                                    continue
+            return data
 
-                            if future_indices:
-                                first_future = future_indices[0]
-                                for key in list(data["hourly"].keys()):
-                                    if isinstance(data["hourly"][key], list) and len(data["hourly"][key]) == len(times):
-                                        data["hourly"][key] = data["hourly"][key][first_future:]
-
-                        except Exception as e:
-                            _LOGGER.error("Error processing hourly data: %s", str(e), exc_info=True)
-
-                    return data
-
-        except asyncio.TimeoutError as err:
-            _LOGGER.error("Timeout while connecting to Open-Meteo API")
-            raise UpdateFailed("Timeout while connecting to Open-Meteo API") from err
-        except aiohttp.ClientError as err:
-            _LOGGER.error("Error connecting to Open-Meteo API: %s", err)
-            raise UpdateFailed(f"Error connecting to Open-Meteo API: {err}") from err
-        except Exception as err:
-            _LOGGER.error("Unexpected error from Open-Meteo API: %s", err, exc_info=True)
-            raise UpdateFailed(f"Unexpected error from Open-Meteo API: {err}") from err
-
-    def _om_parse_time_local_safe(self, time_str, user_tz):
-        """Parse Open-Meteo time that may be UTC (with Z) or local w/o offset; return aware datetime in user tz."""
-        ts = time_str
-        try:
-            dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
-        except Exception:
-            if '.' in ts:
-                ts2 = ts.split('.', 1)[0]
-                dt = datetime.fromisoformat(ts2.replace('Z', '+00:00'))
-            else:
-                raise
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=user_tz)
-        return dt.astimezone(user_tz)
+        except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+            raise UpdateFailed(f"Open-Meteo network error: {e}") from e
+        except Exception as e:
+            _LOGGER.exception("Unexpected error")
+            raise UpdateFailed(f"Unexpected error: {e}") from e
