@@ -52,11 +52,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        coordinator = hass.data[DOMAIN].get(entry.entry_id)
+        coordinator: OpenMeteoDataUpdateCoordinator | None = hass.data[DOMAIN].get(entry.entry_id)
         if coordinator:
             if coordinator._unsub_device_listener:
                 coordinator._unsub_device_listener()
-            # Anuluj oczekujące debounce przy unload
+                coordinator._unsub_device_listener = None
+            # Anuluj ewentualny pending debounce
             if coordinator._debounce_refresh:
                 coordinator._debounce_refresh()
                 coordinator._debounce_refresh = None
@@ -73,13 +74,13 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Manage fetching data from Open-Meteo."""
     
-    # Epsilon for location change detection, 1e-4 is approximately 11 meters.
+    # Epsilon for location change detection, 1e-4 is approximately ~11 m at mid-latitudes.
     EPS = 1e-4
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
         self.entry = entry
-        self._debounce_refresh: Callable | None = None
+        self._debounce_refresh: Callable[[], None] | None = None
 
         scan_interval = entry.options.get(
             CONF_SCAN_INTERVAL, entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
@@ -88,7 +89,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             scan_interval = int(scan_interval)
         except (TypeError, ValueError):
             scan_interval = DEFAULT_SCAN_INTERVAL
-        
         scan_interval = max(30, min(scan_interval, 6 * 3600))
         
         super().__init__(hass, _LOGGER, name="Open-Meteo", update_interval=timedelta(seconds=scan_interval))
@@ -97,11 +97,16 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._listening_entity_id: str | None = None
         self._unsub_device_listener: Callable[[], None] | None = None
 
+    async def _debounced_refresh_cb(self, _now: datetime | None = None) -> None:
+        """Timer callback executed in event loop; safe to await refresh."""
+        await self.async_request_refresh()
+
     def _ensure_device_listener(self, ent_id: str) -> None:
         if not ent_id:
             return
         
         if self._listening_entity_id and self._listening_entity_id != ent_id:
+            # Zmiana źródła urządzenia -> wyczyść cache współrzędnych
             self._last_device_coords = None
         
         if self._listening_entity_id == ent_id and self._unsub_device_listener:
@@ -117,25 +122,24 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 try:
                     lat = float(new_state.attributes["latitude"])
                     lon = float(new_state.attributes["longitude"])
+                    # Histereza: odśwież tylko przy istotnej zmianie
                     if self._last_device_coords is None or (
                         abs(lat - self._last_device_coords[0]) > self.EPS
                         or abs(lon - self._last_device_coords[1]) > self.EPS
                     ):
                         self._last_device_coords = (lat, lon)
+                        # Debounce: anuluj poprzedni timer i ustaw nowy
                         if self._debounce_refresh:
                             self._debounce_refresh()
-                        self._debounce_refresh = async_call_later(
-                            self.hass, 1.0, lambda _: self.hass.async_create_task(self.async_request_refresh())
-                        )
+                        self._debounce_refresh = async_call_later(self.hass, 1.0, self._debounced_refresh_cb)
                 except (TypeError, ValueError):
                     pass
             else:
+                # Atrybuty zniknęły – jeśli mamy ostatnie znane, wyzwól odświeżenie z debounce
                 if self._last_device_coords:
                     if self._debounce_refresh:
                         self._debounce_refresh()
-                    self._debounce_refresh = async_call_later(
-                        self.hass, 1.0, lambda _: self.hass.async_create_task(self.async_request_refresh())
-                    )
+                    self._debounce_refresh = async_call_later(self.hass, 1.0, self._debounced_refresh_cb)
 
         self._unsub_device_listener = async_track_state_change_event(self.hass, ent_id, _state_changed_event)
         self._listening_entity_id = ent_id
@@ -162,12 +166,12 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         tracked = opts.get(CONF_TRACKED_ENTITY_ID, conf_data.get(CONF_TRACKED_ENTITY_ID))
         timezone_opt = opts.get(CONF_TIME_ZONE, conf_data.get(CONF_TIME_ZONE, "auto"))
 
+        # Gdy wychodzimy z trybu device – posprzątaj listener i ewentualny debounce
         if mode != TRACKING_MODE_DEVICE and self._unsub_device_listener:
             _LOGGER.debug("Unsubscribing from device tracker as tracking mode is not 'device'.")
             self._unsub_device_listener()
             self._unsub_device_listener = None
             self._listening_entity_id = None
-            # Anuluj debounce przy zmianie trybu, żeby nie odświeżał po przełączeniu
             if self._debounce_refresh:
                 self._debounce_refresh()
                 self._debounce_refresh = None
