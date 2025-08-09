@@ -28,7 +28,7 @@ from .const import (
     TRACKING_MODE_FIXED,
 )
 
-# --- Schemas ------------------------------------------------------------------------------------------------
+# --- Schemas ------------------------------------------------------------------------------------------------ test
 
 def _mode_schema() -> vol.Schema:
     """First step: choose tracking mode only."""
