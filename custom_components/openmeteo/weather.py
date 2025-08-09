@@ -69,7 +69,7 @@ class OpenMeteoWeather(WeatherEntity):
             return None
         is_day = cw.get("is_day", 1) == 1
         if code in (0, 1) and not is_day:
-            return "clear-night"
+            return "clear-night"  # zwracamy string zamiast importować stałą
         return CONDITION_MAP.get(code)
 
     @property
@@ -114,58 +114,83 @@ class OpenMeteoWeather(WeatherEntity):
     # ---------- Forecast builders (mapujemy do kluczy oczekiwanych przez HA) ----------
 
     def _map_daily_forecast(self) -> list[dict[str, Any]]:
-        daily = self.coordinator.data.get("daily", {}) or {}
-        times = daily.get("time", [])
-        wcode = daily.get("weathercode", [])
-        tmax = daily.get("temperature_2m_max", [])
-        tmin = daily.get("temperature_2m_min", [])
-        wspeed_max = daily.get("windspeed_10m_max", [])
-        precip_sum = daily.get("precipitation_sum", [])
+        d = self.coordinator.data.get("daily", {}) or {}
+        t = d.get("time", [])
+        wcode = d.get("weathercode", [])
+        tmax = d.get("temperature_2m_max", [])
+        tmin = d.get("temperature_2m_min", [])
+        ws_max = d.get("windspeed_10m_max", [])
+        wd_dom = d.get("winddirection_10m_dominant", [])
+        precip_sum = d.get("precipitation_sum", [])
+        precip_prob_max = d.get("precipitation_probability_max", [])
+        cloudcover = d.get("cloudcover", []) or d.get("cloudcover_mean", [])
+        uv_max = d.get("uv_index_max", [])
 
-        result: list[dict[str, Any]] = []
-        for i, dt in enumerate(times):
+        out: list[dict[str, Any]] = []
+        for i, dt in enumerate(t):
             item: dict[str, Any] = {"datetime": dt}
-            # condition z mapy (dla dziennego nie rozróżniamy nocy)
             if i < len(wcode):
                 item["condition"] = CONDITION_MAP.get(wcode[i])
             if i < len(tmax):
                 item["temperature"] = tmax[i]
             if i < len(tmin):
                 item["temperature_low"] = tmin[i]
-            if i < len(wspeed_max):
-                item["wind_speed"] = wspeed_max[i]
+            if i < len(ws_max):
+                item["wind_speed"] = ws_max[i]
+            if i < len(wd_dom):
+                item["wind_bearing"] = wd_dom[i]
             if i < len(precip_sum):
                 item["precipitation"] = precip_sum[i]
-            # precipitation_probability dziennie często brak – pomijamy jeśli nie ma
-            result.append(item)
-        return result
+            if i < len(precip_prob_max):
+                item["precipitation_probability"] = precip_prob_max[i]
+            if i < len(cloudcover):
+                item["cloud_coverage"] = cloudcover[i]
+            if i < len(uv_max):
+                item["uv_index"] = uv_max[i]
+            out.append(item)
+        return out
 
     def _map_hourly_forecast(self) -> list[dict[str, Any]]:
-        hourly = self.coordinator.data.get("hourly", {}) or {}
-        times = hourly.get("time", [])
-        temp = hourly.get("temperature_2m", [])
-        wcode = hourly.get("weathercode", [])
-        wspeed = hourly.get("windspeed_10m", [])
-        precip = hourly.get("precipitation", [])
-        precip_prob = hourly.get("precipitation_probability", [])
+        h = self.coordinator.data.get("hourly", {}) or {}
+        t = h.get("time", [])
+        temp = h.get("temperature_2m", [])
+        wcode = h.get("weathercode", [])
+        ws = h.get("windspeed_10m", [])
+        wd = h.get("winddirection_10m", [])
+        precip = h.get("precipitation", [])
+        precip_prob = h.get("precipitation_probability", [])
+        press = h.get("surface_pressure", [])
+        hum = h.get("relativehumidity_2m", [])
+        cloud = h.get("cloudcover", [])
+        uvi = h.get("uv_index", [])
 
-        result: list[dict[str, Any]] = []
-        for i, dt in enumerate(times):
+        out: list[dict[str, Any]] = []
+        for i, dt in enumerate(t):
             item: dict[str, Any] = {"datetime": dt}
             if i < len(temp):
                 item["temperature"] = temp[i]
             if i < len(wcode):
                 item["condition"] = CONDITION_MAP.get(wcode[i])
-            if i < len(wspeed):
-                item["wind_speed"] = wspeed[i]
+            if i < len(ws):
+                item["wind_speed"] = ws[i]
+            if i < len(wd):
+                item["wind_bearing"] = wd[i]
             if i < len(precip):
                 item["precipitation"] = precip[i]
             if i < len(precip_prob):
                 item["precipitation_probability"] = precip_prob[i]
-            result.append(item)
-        return result
+            if i < len(press):
+                item["pressure"] = press[i]
+            if i < len(hum):
+                item["humidity"] = hum[i]
+            if i < len(cloud):
+                item["cloud_coverage"] = cloud[i]
+            if i < len(uvi):
+                item["uv_index"] = uvi[i]
+            out.append(item)
+        return out
 
-    # Właściwości nadal zwracają listy (używane gdzie indziej)
+    # Właściwości (mogą być używane przez UI/stare miejsca)
     @property
     def forecast_daily(self) -> list[dict[str, Any]]:
         return self._map_daily_forecast()
@@ -174,7 +199,7 @@ class OpenMeteoWeather(WeatherEntity):
     def forecast_hourly(self) -> list[dict[str, Any]]:
         return self._map_hourly_forecast()
 
-    # Nowe API HA oczekuje tych metod asynchronicznych
+    # Metody wymagane przez nowe API pogody
     async def async_forecast_daily(self) -> list[dict[str, Any]] | None:
         return self._map_daily_forecast()
 
