@@ -136,3 +136,10 @@ class OpenMeteoWeather(WeatherEntity):
                     item[key] = arr[i]
             result.append(item)
         return result
+
+    # >>> nowo dodane: metody wymagane przez nowe API pogody w HA
+    async def async_forecast_daily(self) -> list[dict[str, Any]] | None:
+        return self.forecast_daily
+
+    async def async_forecast_hourly(self) -> list[dict[str, Any]] | None:
+        return self.forecast_hourly
