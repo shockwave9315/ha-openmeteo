@@ -191,13 +191,17 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         hum = hourly.get("relativehumidity_2m", [])
         cloud = hourly.get("cloudcover", [])
         uvi = hourly.get("uv_index", [])
+        is_day_arr = hourly.get("is_day", [])
 
         out: list[dict[str, Any]] = []
         for i, dt in enumerate(time_entries):
             item: dict[str, Any] = {
                 ATTR_FORECAST_TIME: dt,
                 ATTR_FORECAST_TEMP: temp[i] if i < len(temp) else None,
-                ATTR_FORECAST_CONDITION: _map_condition(wcode[i]) if i < len(wcode) else None,
+                ATTR_FORECAST_CONDITION: _map_condition(
+                    wcode[i],
+                    is_day_arr[i] if i < len(is_day_arr) else 1
+                ) if i < len(wcode) else None,
                 ATTR_FORECAST_WIND_SPEED: ws[i] if i < len(ws) else None,
                 ATTR_FORECAST_WIND_BEARING: wd[i] if i < len(wd) else None,
                 ATTR_FORECAST_PRECIPITATION: precip[i] if i < len(precip) else None,

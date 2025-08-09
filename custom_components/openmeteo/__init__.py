@@ -13,7 +13,7 @@ import async_timeout
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback, Event
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_track_state_change_event, async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -68,11 +68,13 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Manage fetching data from Open-Meteo."""
     
+    # Epsilon for location change detection, 1e-4 is approximately 11 meters.
     EPS = 1e-4
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
         self.entry = entry
+        self._debounce_refresh: Callable | None = None
 
         scan_interval = entry.options.get(
             CONF_SCAN_INTERVAL, entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
@@ -115,12 +117,20 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         or abs(lon - self._last_device_coords[1]) > self.EPS
                     ):
                         self._last_device_coords = (lat, lon)
-                        self.hass.async_create_task(self.async_request_refresh())
+                        if self._debounce_refresh:
+                            self._debounce_refresh()
+                        self._debounce_refresh = async_call_later(
+                            self.hass, 1.0, lambda _: self.hass.async_create_task(self.async_request_refresh())
+                        )
                 except (TypeError, ValueError):
                     pass
             else:
                 if self._last_device_coords:
-                    self.hass.async_create_task(self.async_request_refresh())
+                    if self._debounce_refresh:
+                        self._debounce_refresh()
+                    self._debounce_refresh = async_call_later(
+                        self.hass, 1.0, lambda _: self.hass.async_create_task(self.async_request_refresh())
+                    )
 
         self._unsub_device_listener = async_track_state_change_event(self.hass, ent_id, _state_changed_event)
         self._listening_entity_id = ent_id
@@ -185,7 +195,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed("Could not get a valid location to fetch weather data.")
 
         default_hourly = list(DEFAULT_HOURLY_VARIABLES)
-        for add in ("pressure_msl", "surface_pressure", "visibility", "dewpoint_2m"):
+        for add in ("pressure_msl", "surface_pressure", "visibility", "dewpoint_2m", "is_day"):
             if add not in default_hourly:
                 default_hourly.append(add)
         default_daily = list(DEFAULT_DAILY_VARIABLES)
@@ -226,7 +236,12 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             times = hourly.get("time", [])
             if times:
                 ha_tz = self.hass.config.time_zone or "UTC"
-                user_tz = ZoneInfo(timezone_opt) if timezone_opt != "auto" else ZoneInfo(ha_tz)
+                try:
+                    user_tz = ZoneInfo(timezone_opt) if timezone_opt != "auto" else ZoneInfo(ha_tz)
+                except Exception:
+                    _LOGGER.warning("Invalid timezone '%s', falling back to HA timezone.", timezone_opt)
+                    user_tz = ZoneInfo(ha_tz)
+
                 parsed = [self._parse_time_local(t, user_tz) for t in times]
                 now = dt_util.now(user_tz)
                 first_future = next((i for i, t in enumerate(parsed) if t >= now), 0)
