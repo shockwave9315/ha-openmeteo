@@ -32,37 +32,37 @@ SENSOR_TYPES = {
         "unit": PERCENTAGE,
         "icon": "mdi:water-percent",
         "device_class": "humidity",
-        "value_fn": lambda data: data.get("hourly", {}).get("relativehumidity_2m", [None])[0],
+        "value_fn": lambda d: (d.get("hourly", {}).get("relativehumidity_2m") or [None])[0],
     },
     "apparent_temperature": {
         "name": "Temperatura odczuwalna",
         "unit": UnitOfTemperature.CELSIUS,
         "icon": "mdi:thermometer-alert",
         "device_class": "temperature",
-        "value_fn": lambda data: data.get("hourly", {}).get("apparent_temperature", [None])[0],
+        "value_fn": lambda d: (d.get("hourly", {}).get("apparent_temperature") or [None])[0],
     },
     "uv_index": {
         "name": "Indeks UV",
         "unit": "UV Index",
         "icon": "mdi:sun-wireless-outline",
         "device_class": None,
-        "value_fn": lambda data: data.get("hourly", {}).get("uv_index", [None])[0],
+        "value_fn": lambda d: (d.get("hourly", {}).get("uv_index") or [None])[0],
     },
     "precipitation_probability": {
         "name": "Prawdopodobieństwo opadów",
         "unit": PERCENTAGE,
         "icon": "mdi:weather-pouring",
         "device_class": None,
-        "value_fn": lambda data: data.get("hourly", {}).get("precipitation_probability", [None])[0],
+        "value_fn": lambda d: (d.get("hourly", {}).get("precipitation_probability") or [None])[0],
     },
     "precipitation_total": {
         "name": "Suma opadów (deszcz+śnieg)",
         "unit": UnitOfPrecipitationDepth.MILLIMETERS,
         "icon": "mdi:cup-water",
         "device_class": "precipitation",
-        "value_fn": lambda data: (
-            (data.get("hourly", {}).get("precipitation", [0])[0] or 0) +
-            (data.get("hourly", {}).get("snowfall", [0])[0] or 0)
+        "value_fn": lambda d: (
+            ((d.get("hourly", {}).get("precipitation") or [0])[0] or 0) +
+            ((d.get("hourly", {}).get("snowfall") or [0])[0] or 0)
         ),
     },
     "wind_speed": {
@@ -77,7 +77,7 @@ SENSOR_TYPES = {
         "unit": UnitOfSpeed.KILOMETERS_PER_HOUR,
         "icon": "mdi:weather-windy-variant",
         "device_class": None,
-        "value_fn": lambda data: data.get("hourly", {}).get("windgusts_10m", [None])[0],
+        "value_fn": lambda d: (d.get("hourly", {}).get("windgusts_10m") or [None])[0],
     },
     "wind_bearing": {
         "name": "Kierunek wiatru",
@@ -91,17 +91,16 @@ SENSOR_TYPES = {
         "unit": UnitOfPressure.HPA,
         "icon": "mdi:gauge",
         "device_class": "pressure",
-        "value_fn": lambda data: data.get("hourly", {}).get("surface_pressure", [None])[0],
+        "value_fn": lambda d: (d.get("hourly", {}).get("surface_pressure") or [None])[0],
     },
     "visibility": {
         "name": "Widzialność",
         "unit": UnitOfLength.KILOMETERS,
         "icon": "mdi:eye",
         "device_class": None,
-        "value_fn": lambda data: (
-            (val := data.get("hourly", {}).get("visibility", [None])[0])
-            and val / 1000
-            or None
+        "value_fn": lambda d: (
+            (v := (d.get("hourly", {}).get("visibility") or [None])[0]) / 1000
+            if isinstance(v, (int, float)) else None
         ),
     },
     "location": {

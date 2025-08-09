@@ -98,10 +98,13 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Open-Meteo API."""
         
-        tracking_mode = self.entry.data.get(CONF_TRACKING_MODE)
+        # POPRAWIONA LOGIKA: czytaj opcje, a potem dane
+        opts = self.entry.options
+        tracking_mode = opts.get(CONF_TRACKING_MODE, self.entry.data.get(CONF_TRACKING_MODE))
+        timezone_conf = opts.get(CONF_TIME_ZONE, self.entry.data.get(CONF_TIME_ZONE, "auto"))
 
         if tracking_mode == "device":
-            device_tracker_id = self.entry.data.get(CONF_TRACKED_ENTITY_ID)
+            device_tracker_id = opts.get(CONF_TRACKED_ENTITY_ID, self.entry.data.get(CONF_TRACKED_ENTITY_ID))
             device_tracker_state = self.hass.states.get(device_tracker_id)
             if device_tracker_state and 'latitude' in device_tracker_state.attributes:
                 latitude = device_tracker_state.attributes['latitude']
@@ -111,11 +114,14 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
                 latitude = self.hass.config.latitude
                 longitude = self.hass.config.longitude
         else:
-            # Domyślnie lub w trybie 'fixed' używamy stałych koordynatów
-            latitude = self.entry.data[CONF_LATITUDE]
-            longitude = self.entry.data[CONF_LONGITUDE]
+            latitude = opts.get(CONF_LATITUDE, self.entry.data.get(CONF_LATITUDE))
+            longitude = opts.get(CONF_LONGITUDE, self.entry.data.get(CONF_LONGITUDE))
+            
+            # Jeśli koordynaty są puste po przejściu z opcji, użyj domyślnych
+            if latitude is None or longitude is None:
+                latitude = self.hass.config.latitude
+                longitude = self.hass.config.longitude
 
-        timezone_conf = self.entry.data.get(CONF_TIME_ZONE, "auto")
 
         default_hourly = list(DEFAULT_HOURLY_VARIABLES)
         default_daily = list(DEFAULT_DAILY_VARIABLES)
