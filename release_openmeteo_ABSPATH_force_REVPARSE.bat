@@ -1,13 +1,13 @@
 @echo on
 setlocal enabledelayedexpansion
 
-:: Open-Meteo Release Helper (ABS PATHS + fixed PowerShell pipe)
+:: Open-Meteo Release Helper (ABS PATHS + rev-parse tag check)
 set "REPO=C:\Users\huber\OneDrive\Pulpit\ha-openmeteo"
 set "MANIFEST=C:\Users\huber\OneDrive\Pulpit\ha-openmeteo\custom_components\openmeteo\manifest.json"
 set "GIT=C:\Program Files\Git\bin\git.exe"
 set "GH=C:\Program Files\GitHub CLI\gh.exe"
 
-title Open-Meteo Release Helper [FIXED PS]
+title Open-Meteo Release Helper [REVPARSE CHECK]
 
 echo Repo: %REPO%
 echo Manifest: %MANIFEST%
@@ -39,17 +39,23 @@ echo [STEP] "%GIT%" commit
 "%GIT%" commit -m "Release %VERSION%: %NOTES%"
 if errorlevel 1 ( echo [WARN] no changes to commit - continue )
 
-set "FORCE_TAG=0"
-echo [STEP] Create tag %VERSION%
-"%GIT%" tag -a %VERSION% -m "Release %VERSION%" 2>nul
-if errorlevel 1 (
-  echo [WARN] Tag exists.
+echo [STEP] Sprawdzam czy tag istnieje: %VERSION%
+"%GIT%" rev-parse -q --verify "refs/tags/%VERSION%" >nul 2>&1
+if not errorlevel 1 (
+  echo [WARN] Tag %VERSION% juz istnieje.
   set "CHOICE=N"
-  set /p CHOICE=Czy nadpisac tag? (T/N): 
-  if /I "!CHOICE!"=="T" (
+  set /p CHOICE=Czy NADPISAC tag? (T/N): 
+  if /I "%CHOICE%"=="T" (
+    echo [STEP] Nadpisuje lokalny tag
     "%GIT%" tag -f -a %VERSION% -m "Release %VERSION%" || (echo [ERROR] git tag -f fail & popd & pause & exit /b 1)
     set "FORCE_TAG=1"
+  ) else (
+    set "FORCE_TAG=0"
   )
+) else (
+  echo [STEP] Tworze nowy tag
+  "%GIT%" tag -a %VERSION% -m "Release %VERSION%" || (echo [ERROR] git tag create fail & popd & pause & exit /b 1)
+  set "FORCE_TAG=0"
 )
 
 echo [STEP] "%GIT%" push (code)
