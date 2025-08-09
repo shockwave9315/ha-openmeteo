@@ -118,7 +118,6 @@ SENSOR_TYPES = {
     },
 }
 
-# Reszta pliku bez zmian
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,

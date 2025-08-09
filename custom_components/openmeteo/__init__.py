@@ -23,6 +23,8 @@ from .const import (
     CONF_LONGITUDE,
     CONF_SCAN_INTERVAL,
     CONF_TIME_ZONE,
+    CONF_TRACKED_ENTITY_ID,
+    CONF_TRACKING_MODE,
     DEFAULT_DAILY_VARIABLES,
     DEFAULT_HOURLY_VARIABLES,
     DEFAULT_SCAN_INTERVAL,
@@ -96,33 +98,22 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Open-Meteo API."""
         
-        latitude = None
-        longitude = None
-        
-        latitude_from_config = self.entry.data.get(CONF_LATITUDE)
-        longitude_from_config = self.entry.data.get(CONF_LONGITUDE)
-        
-        # Nowa, POPRAWIONA logika do pobierania lokalizacji
-        if isinstance(latitude_from_config, str) and latitude_from_config.startswith('device_tracker.'):
-            device_tracker_state = self.hass.states.get(latitude_from_config)
+        tracking_mode = self.entry.data.get(CONF_TRACKING_MODE)
+
+        if tracking_mode == "device":
+            device_tracker_id = self.entry.data.get(CONF_TRACKED_ENTITY_ID)
+            device_tracker_state = self.hass.states.get(device_tracker_id)
             if device_tracker_state and 'latitude' in device_tracker_state.attributes:
                 latitude = device_tracker_state.attributes['latitude']
                 longitude = device_tracker_state.attributes['longitude']
             else:
-                _LOGGER.warning(f"Nie udało się pobrać lokalizacji z encji '{latitude_from_config}'. Używam domyślnych koordynatów Home Assistant.")
+                _LOGGER.warning(f"Nie udało się pobrać lokalizacji z encji '{device_tracker_id}'. Używam domyślnych koordynatów Home Assistant.")
                 latitude = self.hass.config.latitude
                 longitude = self.hass.config.longitude
         else:
-            # Użyj stałych koordynatów z konfiguracji, jeśli nie ma device_tracker
-            if latitude_from_config is not None:
-                latitude = latitude_from_config
-            else:
-                latitude = self.hass.config.latitude
-            
-            if longitude_from_config is not None:
-                longitude = longitude_from_config
-            else:
-                longitude = self.hass.config.longitude
+            # Domyślnie lub w trybie 'fixed' używamy stałych koordynatów
+            latitude = self.entry.data[CONF_LATITUDE]
+            longitude = self.entry.data[CONF_LONGITUDE]
 
         timezone_conf = self.entry.data.get(CONF_TIME_ZONE, "auto")
 
