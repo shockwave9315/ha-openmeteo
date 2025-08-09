@@ -19,11 +19,19 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import OpenMeteoDataUpdateCoordinator
 from .const import DOMAIN
 
+
 def _first_hourly(data: dict, key: str):
     arr = data.get("hourly", {}).get(key)
     if isinstance(arr, list) and arr:
         return arr[0]
     return None
+
+
+# >>> fix: helper do widzialności w km (bez walrusa)
+def _visibility_km(data: dict):
+    v = _first_hourly(data, "visibility")
+    return v / 1000 if isinstance(v, (int, float)) else None
+
 
 SENSOR_TYPES: dict[str, dict] = {
     "temperature": {
@@ -104,9 +112,7 @@ SENSOR_TYPES: dict[str, dict] = {
         "unit": UnitOfLength.KILOMETERS,
         "icon": "mdi:eye",
         "device_class": None,
-        "value_fn": lambda d: (
-            (v := _first_hourly(d, "visibility")) / 1000 if isinstance(v, (int, float)) else None
-        ),
+        "value_fn": _visibility_km,  # <<< tylko ta zmiana względem poprzedniej wersji
     },
     "location": {
         "name": "Lokalizacja",
@@ -115,12 +121,13 @@ SENSOR_TYPES: dict[str, dict] = {
         "device_class": None,
         "value_fn": lambda d: (
             f"{d.get('location', {}).get('latitude')}, {d.get('location', {}).get('longitude')}"
-            if d.get('location', {}).get('latitude') is not None
-            and d.get('location', {}).get('longitude') is not None
+            if d.get("location", {}).get("latitude") is not None
+            and d.get("location", {}).get("longitude") is not None
             else None
         ),
     },
 }
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -131,10 +138,16 @@ async def async_setup_entry(
     entities = [OpenMeteoSensor(coordinator, config_entry, k) for k in SENSOR_TYPES]
     async_add_entities(entities)
 
+
 class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     """Representation of an Open-Meteo sensor."""
 
-    def __init__(self, coordinator: OpenMeteoDataUpdateCoordinator, config_entry: ConfigEntry, sensor_type: str) -> None:
+    def __init__(
+        self,
+        coordinator: OpenMeteoDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        sensor_type: str,
+    ) -> None:
         super().__init__(coordinator)
         self._sensor_type = sensor_type
         self._attr_name = f"{config_entry.data.get('name', 'Open-Meteo')} {SENSOR_TYPES[sensor_type]['name']}"
