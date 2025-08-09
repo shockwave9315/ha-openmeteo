@@ -68,7 +68,7 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Manage fetching data from Open-Meteo."""
     
-    EPS = 1e-4  # ~11 m w szer. geogr.
+    EPS = 1e-4
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
@@ -93,6 +93,11 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _ensure_device_listener(self, ent_id: str) -> None:
         if not ent_id:
             return
+        
+        # Jeśli przełączono na inną encję, wyczyść cache, by użyć świeżych danych
+        if self._listening_entity_id and self._listening_entity_id != ent_id:
+            self._last_device_coords = None
+        
         if self._listening_entity_id == ent_id and self._unsub_device_listener:
             return
         if self._unsub_device_listener:
@@ -114,7 +119,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         self.hass.async_create_task(self.async_request_refresh())
                 except (TypeError, ValueError):
                     pass
-            # Dodano: wywołanie odświeżania, gdy współrzędne znikają, ale mamy ostatnie znane
             else:
                 if self._last_device_coords:
                     self.hass.async_create_task(self.async_request_refresh())
@@ -122,7 +126,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsub_device_listener = async_track_state_change_event(self.hass, ent_id, _state_changed_event)
         self._listening_entity_id = ent_id
 
-    # helper — defensywne parsowanie czasu i lokalizacja do strefy usera
     def _parse_time_local(self, ts: str, user_tz: ZoneInfo) -> datetime:
         s = ts.replace("Z", "+00:00")
         try:
