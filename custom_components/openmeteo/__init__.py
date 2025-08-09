@@ -12,6 +12,7 @@ import async_timeout
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -36,6 +37,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["weather", "sensor"]
 
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
@@ -45,6 +47,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(async_update_options))
     return True
 
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
@@ -53,8 +56,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.data.pop(DOMAIN)
     return unload_ok
 
+
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
+
 
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Manage fetching data from Open-Meteo."""
@@ -72,6 +77,36 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             scan_interval = DEFAULT_SCAN_INTERVAL
 
         super().__init__(hass, _LOGGER, name="Open-Meteo", update_interval=timedelta(seconds=scan_interval))
+
+        # cache ostatnich dobrych współrzędnych dla trybu DEVICE
+        self._last_device_coords: tuple[float, float] | None = None
+        self._listening_entity_id: str | None = None
+        self._unsub_device_listener = None
+
+    # nasłuch na zmianę stanu trackowanej encji; przy pojawieniu się współrzędnych robimy refresh
+    def _ensure_device_listener(self, ent_id: str) -> None:
+        if not ent_id:
+            return
+        if self._listening_entity_id == ent_id and self._unsub_device_listener:
+            return
+        if self._unsub_device_listener:
+            self._unsub_device_listener()
+            self._unsub_device_listener = None
+
+        def _cb(event):
+            st = self.hass.states.get(ent_id)
+            if st and ("latitude" in st.attributes) and ("longitude" in st.attributes):
+                try:
+                    lat = float(st.attributes["latitude"])
+                    lon = float(st.attributes["longitude"])
+                    self._last_device_coords = (lat, lon)
+                except (TypeError, ValueError):
+                    pass
+                # odśwież od razu, gdy tylko pojawią się współrzędne
+                self.hass.async_create_task(self.async_request_refresh())
+
+        self._unsub_device_listener = async_track_state_change_event(self.hass, [ent_id], _cb)
+        self._listening_entity_id = ent_id
 
     # helper — defensywne parsowanie czasu i lokalizacja do strefy usera
     def _parse_time_local(self, ts: str, user_tz: ZoneInfo) -> datetime:
@@ -98,19 +133,36 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         timezone_opt = opts.get(CONF_TIME_ZONE, data.get(CONF_TIME_ZONE, "auto"))
 
         if mode == TRACKING_MODE_DEVICE and tracked:
+            self._ensure_device_listener(tracked)
             st = self.hass.states.get(tracked)
             if st and ("latitude" in st.attributes) and ("longitude" in st.attributes):
-                latitude = st.attributes["latitude"]
-                longitude = st.attributes["longitude"]
+                try:
+                    latitude = float(st.attributes["latitude"])
+                    longitude = float(st.attributes["longitude"])
+                    self._last_device_coords = (latitude, longitude)
+                except (TypeError, ValueError):
+                    # atrybuty są, ale niepoprawne – spróbuj użyć cache; w ostateczności HA coords
+                    if self._last_device_coords:
+                        latitude, longitude = self._last_device_coords
+                        _LOGGER.debug("Niepoprawne współrzędne w %s – używam ostatnich znanych.", tracked)
+                    else:
+                        latitude = self.hass.config.latitude
+                        longitude = self.hass.config.longitude
+                        _LOGGER.debug("Niepoprawne współrzędne w %s – używam koordynatów HA tymczasowo.", tracked)
             else:
-                _LOGGER.warning("Brak współrzędnych w %s – używam koordynatów HA.", tracked)
-                latitude = self.hass.config.latitude
-                longitude = self.hass.config.longitude
+                # jeszcze brak współrzędnych – nie ostrzegamy; używamy cache, a jeśli brak, koordynaty HA
+                if self._last_device_coords:
+                    latitude, longitude = self._last_device_coords
+                    _LOGGER.debug("Brak współrzędnych w %s – używam ostatnich znanych z urządzenia.", tracked)
+                else:
+                    latitude = self.hass.config.latitude
+                    longitude = self.hass.config.longitude
+                    _LOGGER.debug("Brak współrzędnych w %s – używam koordynatów HA tymczasowo.", tracked)
         else:
             latitude = opts.get(CONF_LATITUDE, data.get(CONF_LATITUDE, self.hass.config.latitude))
             longitude = opts.get(CONF_LONGITUDE, data.get(CONF_LONGITUDE, self.hass.config.longitude))
 
-        # 2) Zbierz zmienne z configu
+        # 2) Zmienne z konfiguracji
         default_hourly = list(DEFAULT_HOURLY_VARIABLES)
         for add in ("pressure_msl", "surface_pressure", "visibility"):
             if add not in default_hourly:
