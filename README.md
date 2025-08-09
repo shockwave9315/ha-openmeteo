@@ -28,7 +28,7 @@
 2. W HACS → **Integrations** → menu ⋮ → **Custom repositories**.
 3. URL repozytorium:  
    ```
-   https://github.com/shockwave9315/ha-openmeteoo0
+   https://github.com/shockwave9315/ha-openmeteoo00
    ```
 4. Kategoria: **Integration** → **Add**.
 5. Zainstaluj „Open-Meteo” i zrestartuj Home Assistant.
