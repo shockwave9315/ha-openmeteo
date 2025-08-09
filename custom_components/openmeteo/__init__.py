@@ -10,9 +10,9 @@ from zoneinfo import ZoneInfo
 import aiohttp
 import async_timeout
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -83,8 +83,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._listening_entity_id: str | None = None
         self._unsub_device_listener = None
 
-    # nasłuch na zmianę stanu trackowanej encji; przy pojawieniu się współrzędnych robimy refresh
     def _ensure_device_listener(self, ent_id: str) -> None:
+        """Listen for state changes of the tracked entity in the event loop thread."""
         if not ent_id:
             return
         if self._listening_entity_id == ent_id and self._unsub_device_listener:
@@ -93,19 +93,19 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._unsub_device_listener()
             self._unsub_device_listener = None
 
-        def _cb(event):
-            st = self.hass.states.get(ent_id)
-            if st and ("latitude" in st.attributes) and ("longitude" in st.attributes):
+        @callback
+        def _state_changed(entity_id, old_state, new_state):
+            if new_state and ("latitude" in new_state.attributes) and ("longitude" in new_state.attributes):
                 try:
-                    lat = float(st.attributes["latitude"])
-                    lon = float(st.attributes["longitude"])
+                    lat = float(new_state.attributes["latitude"])
+                    lon = float(new_state.attributes["longitude"])
                     self._last_device_coords = (lat, lon)
                 except (TypeError, ValueError):
                     pass
-                # odśwież od razu, gdy tylko pojawią się współrzędne
-                self.hass.async_create_task(self.async_request_refresh())
+            # jesteśmy w wątku pętli — bezpiecznie planujemy refresh
+            self.hass.async_create_task(self.async_request_refresh())
 
-        self._unsub_device_listener = async_track_state_change_event(self.hass, [ent_id], _cb)
+        self._unsub_device_listener = async_track_state_change(self.hass, ent_id, _state_changed)
         self._listening_entity_id = ent_id
 
     # helper — defensywne parsowanie czasu i lokalizacja do strefy usera
@@ -141,7 +141,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     longitude = float(st.attributes["longitude"])
                     self._last_device_coords = (latitude, longitude)
                 except (TypeError, ValueError):
-                    # atrybuty są, ale niepoprawne – spróbuj użyć cache; w ostateczności HA coords
                     if self._last_device_coords:
                         latitude, longitude = self._last_device_coords
                         _LOGGER.debug("Niepoprawne współrzędne w %s – używam ostatnich znanych.", tracked)
@@ -150,7 +149,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         longitude = self.hass.config.longitude
                         _LOGGER.debug("Niepoprawne współrzędne w %s – używam koordynatów HA tymczasowo.", tracked)
             else:
-                # jeszcze brak współrzędnych – nie ostrzegamy; używamy cache, a jeśli brak, koordynaty HA
                 if self._last_device_coords:
                     latitude, longitude = self._last_device_coords
                     _LOGGER.debug("Brak współrzędnych w %s – używam ostatnich znanych z urządzenia.", tracked)
