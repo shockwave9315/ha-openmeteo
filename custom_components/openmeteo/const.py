@@ -14,13 +14,14 @@ from homeassistant.components.weather import (
     ATTR_CONDITION_SUNNY,
 )
 
-# Basic metadata
 DOMAIN = "openmeteo"
 ATTRIBUTION = "Weather data provided by Open-Meteo"
 MANUFACTURER = "Open-Meteo"
 NAME = "Open-Meteo"
 
-# Config keys
+# Configuration keys
+CONF_TRACKING_MODE = "tracking_mode"
+CONF_TRACKED_ENTITY_ID = "tracked_entity_id"
 CONF_NAME = "name"
 CONF_DAILY_VARIABLES = "daily_variables"
 CONF_HOURLY_VARIABLES = "hourly_variables"
@@ -29,16 +30,14 @@ CONF_LONGITUDE = "longitude"
 CONF_ALTITUDE = "altitude"
 CONF_TIME_ZONE = "time_zone"
 CONF_SCAN_INTERVAL = "scan_interval"
-CONF_TRACKED_ENTITY_ID = "tracked_entity_id"
-CONF_TRACKING_MODE = "tracking_mode"        # <— nowa stała
 
-# Tracking mode values (używane przez config_flow)
+# Tracking modes
 TRACKING_MODE_FIXED = "fixed"
 TRACKING_MODE_DEVICE = "device"
 
-# Defaults
+# Default values
 DEFAULT_NAME = "Open-Meteo"
-DEFAULT_SCAN_INTERVAL = 600  # seconds
+DEFAULT_SCAN_INTERVAL = 600  # 10 minutes
 
 DEFAULT_DAILY_VARIABLES = [
     "temperature_2m_max",
@@ -54,9 +53,8 @@ DEFAULT_HOURLY_VARIABLES = [
     "relativehumidity_2m",
     "apparent_temperature",
     "precipitation",
-    "precipitation_probability",
-    "rain",
     "snowfall",
+    "precipitation_probability",
     "weathercode",
     "windspeed_10m",
     "winddirection_10m",
@@ -71,12 +69,11 @@ DEFAULT_HOURLY_VARIABLES = [
 
 # API
 URL = "https://api.open-meteo.com/v1/forecast"
-API_URL = URL  # alias for backward compatibility with imports
 
 # Platforms
 PLATFORMS = ["weather", "sensor"]
 
-# Weather code → HA condition mapping
+# Weather condition mapping
 CONDITION_MAP = {
     0: ATTR_CONDITION_SUNNY,  # Clear sky
     1: ATTR_CONDITION_PARTLYCLOUDY,  # Mainly clear
