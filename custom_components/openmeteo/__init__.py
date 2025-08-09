@@ -96,10 +96,14 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Open-Meteo API."""
         
+        latitude = None
+        longitude = None
+        
         latitude_from_config = self.entry.data.get(CONF_LATITUDE)
+        longitude_from_config = self.entry.data.get(CONF_LONGITUDE)
         
         # Nowa, POPRAWIONA logika do pobierania lokalizacji
-        if latitude_from_config and latitude_from_config.startswith('device_tracker.'):
+        if isinstance(latitude_from_config, str) and latitude_from_config.startswith('device_tracker.'):
             device_tracker_state = self.hass.states.get(latitude_from_config)
             if device_tracker_state and 'latitude' in device_tracker_state.attributes:
                 latitude = device_tracker_state.attributes['latitude']
@@ -110,15 +114,15 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
                 longitude = self.hass.config.longitude
         else:
             # Użyj stałych koordynatów z konfiguracji, jeśli nie ma device_tracker
-            latitude = self.hass.config.latitude
-            longitude = self.hass.config.longitude
+            if latitude_from_config is not None:
+                latitude = latitude_from_config
+            else:
+                latitude = self.hass.config.latitude
             
-            # W tym miejscu musimy obsłużyć przypadek, gdy w self.entry.data nie ma kluczy 'latitude' i 'longitude',
-            # co powodowało błąd 'KeyError'.
-            if CONF_LATITUDE in self.entry.data:
-                latitude = self.entry.data[CONF_LATITUDE]
-            if CONF_LONGITUDE in self.entry.data:
-                longitude = self.entry.data[CONF_LONGITUDE]
+            if longitude_from_config is not None:
+                longitude = longitude_from_config
+            else:
+                longitude = self.hass.config.longitude
 
         timezone_conf = self.entry.data.get(CONF_TIME_ZONE, "auto")
 
