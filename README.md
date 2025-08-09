@@ -1,78 +1,67 @@
-# Integracja Open-Meteo dla Home Assistant
+# 🌤 Open-Meteo – Integracja dla Home Assistant
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://hacs.xyz/)  
+📡 **Źródło danych:** [Open-Meteo](https://open-meteo.com/) – darmowa, szybka i bez klucza API.
 
-Ta niestandardowa integracja dla Home Assistant pobiera dane pogodowe z darmowego i otwartego serwisu [Open-Meteo](https://open-meteo.com/).
+---
 
-## Główne funkcje
+## ✨ Główne funkcje
 
-* **Encja pogody**: Kompletna encja `weather` z obecnymi warunkami oraz prognozą godzinową i dzienną.
-* **Śledzenie wielu lokalizacji**: Automatyczne tworzenie osobnych encji pogodowych dla śledzonych urządzeń (np. telefonów).
-* **Konfigurowalne nazwy obszarów**: Możliwość nadpisywania nazw obszarów dla lepszej identyfikacji lokalizacji.
-* **Dodatkowe sensory**: Integracja tworzy szereg użytecznych sensorów, gotowych do użycia w automatyzacjach i na panelach, w tym:
-    * Temperatura
-    * Temperatura odczuwalna
-    * Wilgotność
-    * Ciśnienie
-    * Prędkość i porywy wiatru
-    * Kierunek wiatru
-    * Widzialność
-    * Indeks UV
-    * Prawdopodobieństwo opadów
-    * Suma opadów (deszcz + śnieg)
+- **Encja `weather`** z bieżącymi warunkami i prognozą *godzinową + dzienną*.
+- **Śledzenie wielu lokalizacji** – automatyczne tworzenie encji pogodowych dla trackerów (np. telefonów).
+- **Przyjazne nazwy obszarów** – nadpisywanie nazw lokalizacji w interfejsie.
+- **Dodatkowe sensory** gotowe do automatyzacji:
+  - 🌡 Temperatura + odczuwalna
+  - 💧 Wilgotność
+  - 📉 Ciśnienie
+  - 🌬 Prędkość i porywy wiatru + kierunek
+  - 👁 Widzialność
+  - ☀️ Indeks UV
+  - 🌧 Prawdopodobieństwo opadów
+  - 🌦 Suma opadów (deszcz + śnieg)
 
-## Instalacja (Rekomendowana: HACS)
+---
 
-1.  Upewnij się, że masz zainstalowany [HACS](https://hacs.xyz/).
-2.  Przejdź do **HACS > Integrations**.
-3.  Kliknij menu z trzema kropkami w prawym górnym rogu i wybierz **"Custom repositories"**.
-4.  Wklej ten adres URL repozytorium: `https://github.com/shockwave9315/ha-openmeteo`
-5.  Wybierz kategorię **"Integration"**.
-6.  Kliknij **"Add"**.
-7.  Znajdź "Open-Meteo" na liście i kliknij **"Install"**.
-8.  Zrestartuj Home Assistant.
+## 📥 Instalacja (HACS)
 
-## Konfiguracja
+1. Upewnij się, że masz [HACS](https://hacs.xyz/).
+2. W HACS → **Integrations** → menu ⋮ → **Custom repositories**.
+3. URL repozytorium:  
+   ```
+   https://github.com/shockwave9315/ha-openmeteo
+   ```
+4. Kategoria: **Integration** → **Add**.
+5. Zainstaluj „Open-Meteo” i zrestartuj Home Assistant.
 
-### Podstawowa konfiguracja
+---
 
-1. Przejdź do **Ustawienia > Urządzenia i usługi**.
-2. Kliknij **"+ Dodaj integrację"**.
-3. Wyszukaj **"Open-Meteo"** i kliknij wynik.
-4. W formularzu, który się pojawi, lokalizacja (szerokość i długość geograficzna) zostanie uzupełniona automatycznie na podstawie ustawień Twojego Home Assistant. Możesz nadać integracji własną nazwę.
-5. Po zapisaniu, encje zostaną automatycznie dodane.
+## ⚙️ Konfiguracja
 
-### Konfiguracja śledzenia urządzeń
+### 🔹 Podstawowa
+1. **Ustawienia → Urządzenia i usługi → + Dodaj integrację**.
+2. Wyszukaj „Open-Meteo” → wybierz.
+3. Lokalizacja uzupełni się automatycznie (na podstawie HA) – możesz zmienić.
+4. Nadaj własną nazwę i zapisz.
 
-Integracja obsługuje automatyczne śledzenie wielu lokalizacji na podstawie urządzeń w Twoim systemie:
+### 🔹 Śledzenie urządzeń
+1. **Ustawienia → Urządzenia i usługi → Open-Meteo → Opcje**.
+2. Włącz „Śledź urządzenia” i wybierz trackery.
+3. Opcjonalnie: nadpisz nazwę obszaru, używaj nazw urządzeń.
 
-1. Przejdź do **Ustawienia > Urządzenia i usługi**.
-2. Znajdź i kliknij integrację **Open-Meteo**.
-3. Kliknij przycisk **Opcje**.
-4. Włącz opcję **Śledź urządzenia**.
-5. Wybierz urządzenia, które chcesz śledzić z listy dostępnych trackerów.
-6. Dla każdego urządzenia możesz dostosować nazwę obszaru, który będzie używany w interfejsie.
-7. Opcjonalnie możesz włączyć/wyłączyć używanie nazw urządzeń zamiast nazw trackerów.
+### 🔹 Opcje zaawansowane
+- **Interwał aktualizacji** – domyślnie 30 min.
+- **Zmienne godzinowe/dzienne** – wybierz, które dane pobierać.
+- **Nadpisywanie nazw obszarów**.
 
-### Zaawansowane opcje konfiguracji
+---
 
-W ustawieniach integracji dostępne są następujące zaawansowane opcje:
-
-- **Interwał aktualizacji** - Jak często mają być pobierane nowe dane pogodowe (domyślnie 30 minut).
-- **Używaj nazw urządzeń** - Jeśli włączone, integracja będzie używać przyjaznych nazw urządzeń zamiast identyfikatorów trackerów.
-- **Nadpisywanie nazw obszarów** - Pozwala na ręczne ustawienie przyjaznych nazw dla każdej lokalizacji.
-- **Zmienne dzienne/godzinowe** - Wybór, które dane pogodowe mają być pobierane.
-
-## Przykłady konfiguracji
-
-### Przykładowa konfiguracja YAML
+## 📝 Przykład konfiguracji YAML
 
 ```yaml
-# configuration.yaml
 openmeteo:
   name: "Pogoda dom"
-  latitude: "{{ states('zone.home').attributes.latitude }}"
-  longitude: "{{ states('zone.home').attributes.longitude }}"
+  latitude: "{{ state_attr('zone.home','latitude') }}"
+  longitude: "{{ state_attr('zone.home','longitude') }}"
   elevation: 120
   time_zone: "Europe/Warsaw"
   scan_interval: 1800
@@ -101,23 +90,81 @@ openmeteo:
     - windspeed_10m_max
 ```
 
-### Przykładowa karta Lovelace
+---
 
-Możesz łatwo stworzyć rozbudowaną kartę pogodową, łącząc kilka standardowych kart za pomocą `vertical-stack-in-card` (dostępnej w HACS).
+## 🎨 Przykładowe karty Lovelace (ładne i kolorowe)
 
-![Przykład karty](https://user-images.githubusercontent.com/12345/67890.png)  ```yaml
-type: custom:vertical-stack-in-card
-title: Open-Meteo
+> Wymaga: [Mushroom Cards](https://github.com/piitaya/lovelace-mushroom), [ApexCharts Card](https://github.com/RomRider/apexcharts-card), [Bar Card](https://github.com/custom-cards/bar-card)
+
+```yaml
+type: custom:stack-in-card
+mode: vertical
 cards:
-  - type: entities
-    show_header_toggle: false
+  - type: custom:mushroom-title-card
+    title: Open-Meteo – Dom
+    subtitle: "{{ states('weather.open_meteo_home') | title }}  •  {{ state_attr('weather.open_meteo_home','temperature') }}°C"
+
+  - type: custom:mushroom-chips-card
+    chips:
+      - type: weather
+        entity: weather.open_meteo_home
+      - type: entity
+        entity: sensor.open_meteo_indeks_uv
+        name: UV
+      - type: entity
+        entity: sensor.open_meteo_prawdopodobienstwo_opadow
+        name: Opady %
+      - type: entity
+        entity: sensor.open_meteo_wiatr_predkosc
+        name: Wiatr
+      - type: entity
+        entity: sensor.open_meteo_cisnienie
+        name: Ciśnienie
+
+  - type: custom:apexcharts-card
+    header:
+      show: true
+      title: Temperatura (24h)
+    graph_span: 24h
+    series:
+      - entity: sensor.open_meteo_temperatura
+        type: line
+        stroke_width: 3
+        color_threshold:
+          - value: -10
+            color: "#7aa2f7"
+          - value: 0
+            color: "#89b4fa"
+          - value: 10
+            color: "#a6e3a1"
+          - value: 20
+            color: "#f9e2af"
+          - value: 26
+            color: "#fab387"
+          - value: 30
+            color: "#f38ba8"
+
+  - type: custom:bar-card
     entities:
-      - entity: weather.open_meteo # Upewnij się, że nazwa encji jest poprawna
-        name: Pogoda teraz
-      - entity: sensor.open_meteo_temperatura_odczuwalna
-      - entity: sensor.open_meteo_indeks_uv
-      - entity: sensor.open_meteo_prawdopodobienstwo_opadow
-      - entity: sensor.open_meteo_suma_opadow_deszcz_snieg
-  - type: custom:weather-chart-card # Wymaga zainstalowania "weather-chart-card" z HACS
-    entity: weather.open_meteo
-    chart_type: temperature-bar
+      - entity: sensor.open_meteo_wiatr_predkosc
+        name: Wiatr [km/h]
+        min: 0
+        max: 80
+        severity:
+          - from: 0
+            to: 20
+            color: "#a6e3a1"
+          - from: 20
+            to: 40
+            color: "#f9e2af"
+          - from: 40
+            to: 80
+            color: "#f38ba8"
+```
+
+---
+
+## 📌 Uwagi
+- Dane dostarcza **Open-Meteo.com** – brak limitu zapytań.
+- Wszystkie kolory, progi i układ możesz dowolnie modyfikować.
+- Możesz tworzyć osobne karty dla różnych lokalizacji (np. dom, praca, wakacje).
