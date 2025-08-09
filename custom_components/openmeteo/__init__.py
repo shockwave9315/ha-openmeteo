@@ -96,13 +96,22 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Open-Meteo API."""
         
-        # Nowa logika do pobierania lokalizacji
-        if self.entry.data.get(CONF_LATITUDE) == "device":
-            latitude = self.hass.config.latitude
-            longitude = self.hass.config.longitude
-        else:
-            latitude = self.entry.data[CONF_LATITUDE]
-            longitude = self.entry.data[CONF_LONGITUDE]
+        # Nowa, POPRAWNA logika do pobierania lokalizacji
+        latitude = self.entry.data[CONF_LATITUDE]
+        longitude = self.entry.data[CONF_LONGITUDE]
+
+        # Sprawdź, czy konfiguracja wskazuje na użycie lokalizacji urządzenia (np. 'device_tracker.telefon_jasiu')
+        if latitude.startswith('device_tracker.'):
+            device_tracker_id = latitude.split('.')[1]
+            device_tracker_state = self.hass.states.get(latitude)
+            if device_tracker_state and 'latitude' in device_tracker_state.attributes:
+                latitude = device_tracker_state.attributes['latitude']
+                longitude = device_tracker_state.attributes['longitude']
+            else:
+                _LOGGER.warning(f"Nie udało się pobrać lokalizacji z encji '{latitude}'. Używam stałych koordynatów.")
+                # W tym przypadku, wracamy do domyślnych, stałych koordynatów z konfiguracji
+                latitude = self.hass.config.latitude
+                longitude = self.hass.config.longitude
 
         timezone_conf = self.entry.data.get(CONF_TIME_ZONE, "auto")
 
