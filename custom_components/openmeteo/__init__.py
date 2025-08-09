@@ -95,8 +95,15 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Open-Meteo API."""
-        latitude = self.entry.data[CONF_LATITUDE]
-        longitude = self.entry.data[CONF_LONGITUDE]
+        
+        # Nowa logika do pobierania lokalizacji
+        if self.entry.data.get(CONF_LATITUDE) == "device":
+            latitude = self.hass.config.latitude
+            longitude = self.hass.config.longitude
+        else:
+            latitude = self.entry.data[CONF_LATITUDE]
+            longitude = self.entry.data[CONF_LONGITUDE]
+
         timezone_conf = self.entry.data.get(CONF_TIME_ZONE, "auto")
 
         default_hourly = list(DEFAULT_HOURLY_VARIABLES)
