@@ -196,7 +196,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     selector.SelectSelectorConfig(
                         options=[{"value": var, "label": var} for var in DEFAULT_HOURLY_VARIABLES],
                         multiple=True,
-                        mode=selector.SelectSelectorMode.LISTBOX,
+                        mode=selector.SelectSelectorMode.LIST,  # <-- FIX
                     )
                 ),
                 vol.Required(
@@ -205,7 +205,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     selector.SelectSelectorConfig(
                         options=[{"value": var, "label": var} for var in DEFAULT_DAILY_VARIABLES],
                         multiple=True,
-                        mode=selector.SelectSelectorMode.LISTBOX,
+                        mode=selector.SelectSelectorMode.LIST,  # <-- FIX
                     )
                 ),
                 vol.Required(CONF_TRACKING_MODE, default=tracking_mode): selector.SelectSelector(
