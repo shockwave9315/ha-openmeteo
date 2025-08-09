@@ -14,18 +14,19 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import OpenMeteoDataUpdateCoordinator
 from .const import DOMAIN
 
-# --- Helper: safely get first hourly value ---
+# >>> MINIMALNY DODATEK: helper do bezpiecznego pobierania pierwszej godziny
 def _first_hourly(data: dict, key: str):
     arr = data.get("hourly", {}).get(key)
     if isinstance(arr, list) and arr:
         return arr[0]
     return None
 
-SENSOR_TYPES: dict[str, dict] = {
+SENSOR_TYPES = {
     "temperature": {
         "name": "Temperatura",
         "unit": UnitOfTemperature.CELSIUS,
@@ -104,6 +105,7 @@ SENSOR_TYPES: dict[str, dict] = {
         "unit": UnitOfLength.KILOMETERS,
         "icon": "mdi:eye",
         "device_class": None,
+        # >>> MINIMALNA POPRAWKA: dzielenie /1000 i ochrona przed None
         "value_fn": lambda data: (
             (v := _first_hourly(data, "visibility")) / 1000 if isinstance(v, (int, float)) else None
         ),
@@ -124,10 +126,10 @@ async def async_setup_entry(
         OpenMeteoSensor(coordinator, config_entry, sensor_type)
         for sensor_type in SENSOR_TYPES
     ]
+    
     async_add_entities(entities)
 
-
-class OpenMeteoSensor(SensorEntity):
+class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     """Representation of an Open-Meteo sensor."""
 
     def __init__(
