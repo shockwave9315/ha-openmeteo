@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from datetime import timedelta, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -66,6 +67,8 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Manage fetching data from Open-Meteo."""
+    
+    EPS = 1e-4  # ~11 m w szer. geogr.
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
@@ -78,12 +81,14 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             scan_interval = int(scan_interval)
         except (TypeError, ValueError):
             scan_interval = DEFAULT_SCAN_INTERVAL
-
+        
+        scan_interval = max(30, min(scan_interval, 6 * 3600))
+        
         super().__init__(hass, _LOGGER, name="Open-Meteo", update_interval=timedelta(seconds=scan_interval))
 
         self._last_device_coords: tuple[float, float] | None = None
         self._listening_entity_id: str | None = None
-        self._unsub_device_listener = None
+        self._unsub_device_listener: Callable[[], None] | None = None
 
     def _ensure_device_listener(self, ent_id: str) -> None:
         if not ent_id:
@@ -101,10 +106,18 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 try:
                     lat = float(new_state.attributes["latitude"])
                     lon = float(new_state.attributes["longitude"])
-                    self._last_device_coords = (lat, lon)
+                    if self._last_device_coords is None or (
+                        abs(lat - self._last_device_coords[0]) > self.EPS
+                        or abs(lon - self._last_device_coords[1]) > self.EPS
+                    ):
+                        self._last_device_coords = (lat, lon)
+                        self.hass.async_create_task(self.async_request_refresh())
                 except (TypeError, ValueError):
                     pass
-            self.hass.async_create_task(self.async_request_refresh())
+            # Dodano: wywołanie odświeżania, gdy współrzędne znikają, ale mamy ostatnie znane
+            else:
+                if self._last_device_coords:
+                    self.hass.async_create_task(self.async_request_refresh())
 
         self._unsub_device_listener = async_track_state_change_event(self.hass, ent_id, _state_changed_event)
         self._listening_entity_id = ent_id
@@ -126,15 +139,25 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         opts = self.entry.options
-        data = self.entry.data
+        conf_data = self.entry.data
 
-        mode = opts.get(CONF_TRACKING_MODE, data.get(CONF_TRACKING_MODE, TRACKING_MODE_FIXED))
-        tracked = opts.get(CONF_TRACKED_ENTITY_ID, data.get(CONF_TRACKED_ENTITY_ID))
-        timezone_opt = opts.get(CONF_TIME_ZONE, data.get(CONF_TIME_ZONE, "auto"))
+        mode = opts.get(CONF_TRACKING_MODE, conf_data.get(CONF_TRACKING_MODE, TRACKING_MODE_FIXED))
+        tracked = opts.get(CONF_TRACKED_ENTITY_ID, conf_data.get(CONF_TRACKED_ENTITY_ID))
+        timezone_opt = opts.get(CONF_TIME_ZONE, conf_data.get(CONF_TIME_ZONE, "auto"))
+
+        if mode != TRACKING_MODE_DEVICE and self._unsub_device_listener:
+            _LOGGER.debug("Unsubscribing from device tracker as tracking mode is not 'device'.")
+            self._unsub_device_listener()
+            self._unsub_device_listener = None
+            self._listening_entity_id = None
+        
+        latitude = self.hass.config.latitude
+        longitude = self.hass.config.longitude
 
         if mode == TRACKING_MODE_DEVICE and tracked:
             self._ensure_device_listener(tracked)
             st = self.hass.states.get(tracked)
+            
             if st and ("latitude" in st.attributes) and ("longitude" in st.attributes):
                 try:
                     latitude = float(st.attributes["latitude"])
@@ -143,22 +166,21 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 except (TypeError, ValueError):
                     if self._last_device_coords:
                         latitude, longitude = self._last_device_coords
-                        _LOGGER.debug("Niepoprawne współrzędne w %s – używam ostatnich znanych.", tracked)
+                        _LOGGER.debug("Invalid coordinates in %s - using last known.", tracked)
                     else:
-                        latitude = self.hass.config.latitude
-                        longitude = self.hass.config.longitude
-                        _LOGGER.debug("Niepoprawne współrzędne w %s – używam koordynatów HA tymczasowo.", tracked)
+                        _LOGGER.debug("Invalid coordinates in %s and no last known. Using Home Assistant's coordinates temporarily.", tracked)
             else:
                 if self._last_device_coords:
                     latitude, longitude = self._last_device_coords
-                    _LOGGER.debug("Brak współrzędnych w %s – używam ostatnich znanych z urządzenia.", tracked)
+                    _LOGGER.debug("Missing coordinates in %s - using last known.", tracked)
                 else:
-                    latitude = self.hass.config.latitude
-                    longitude = self.hass.config.longitude
-                    _LOGGER.debug("Brak współrzędnych w %s – używam koordynatów HA tymczasowo.", tracked)
-        else:
-            latitude = opts.get(CONF_LATITUDE, data.get(CONF_LATITUDE, self.hass.config.latitude))
-            longitude = opts.get(CONF_LONGITUDE, data.get(CONF_LONGITUDE, self.hass.config.longitude))
+                    _LOGGER.debug("Missing coordinates in %s and no last known. Using Home Assistant's coordinates temporarily.", tracked)
+        elif mode == TRACKING_MODE_FIXED:
+            latitude = opts.get(CONF_LATITUDE, conf_data.get(CONF_LATITUDE, self.hass.config.latitude))
+            longitude = opts.get(CONF_LONGITUDE, conf_data.get(CONF_LONGITUDE, self.hass.config.longitude))
+        
+        if latitude is None or longitude is None:
+            raise UpdateFailed("Could not get a valid location to fetch weather data.")
 
         default_hourly = list(DEFAULT_HOURLY_VARIABLES)
         for add in ("pressure_msl", "surface_pressure", "visibility"):
@@ -166,8 +188,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 default_hourly.append(add)
         default_daily = list(DEFAULT_DAILY_VARIABLES)
 
-        daily_vars = opts.get(CONF_DAILY_VARIABLES, data.get(CONF_DAILY_VARIABLES, default_daily))
-        hourly_vars = opts.get(CONF_HOURLY_VARIABLES, data.get(CONF_HOURLY_VARIABLES, default_hourly))
+        daily_vars = opts.get(CONF_DAILY_VARIABLES, conf_data.get(CONF_DAILY_VARIABLES, default_daily))
+        hourly_vars = opts.get(CONF_HOURLY_VARIABLES, conf_data.get(CONF_HOURLY_VARIABLES, default_hourly))
 
         params = {
             "latitude": latitude,
@@ -190,15 +212,15 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         text = await resp.text()
                         _LOGGER.error("Open-Meteo HTTP %s: %s", resp.status, text[:200])
                         raise UpdateFailed(f"API returned {resp.status}")
-                    data: dict[str, Any] = await resp.json()
+                    api_data: dict[str, Any] = await resp.json()
 
-            data["location"] = {
+            api_data["location"] = {
                 "latitude": latitude,
                 "longitude": longitude,
                 "timezone": timezone_opt,
             }
 
-            hourly = data.get("hourly", {})
+            hourly = api_data.get("hourly", {})
             times = hourly.get("time", [])
             if times:
                 ha_tz = self.hass.config.time_zone or "UTC"
@@ -214,7 +236,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         hourly[key] = arr[first_future:]
                 hourly["time"] = [t.isoformat() for t in parsed[first_future:]]
 
-            return data
+            return api_data
 
         except (asyncio.TimeoutError, aiohttp.ClientError) as e:
             raise UpdateFailed(f"Open-Meteo network error: {e}") from e
