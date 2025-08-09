@@ -29,7 +29,12 @@ CONF_LONGITUDE = "longitude"
 CONF_ALTITUDE = "altitude"
 CONF_TIME_ZONE = "time_zone"
 CONF_SCAN_INTERVAL = "scan_interval"
-CONF_TRACKED_ENTITY_ID = "tracked_entity_id"  # <— brakująca stała
+CONF_TRACKED_ENTITY_ID = "tracked_entity_id"
+CONF_TRACKING_MODE = "tracking_mode"        # <— nowa stała
+
+# Tracking mode values (używane przez config_flow)
+TRACKING_MODE_FIXED = "fixed"
+TRACKING_MODE_DEVICE = "device"
 
 # Defaults
 DEFAULT_NAME = "Open-Meteo"
