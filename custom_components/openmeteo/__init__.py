@@ -13,7 +13,7 @@ import async_timeout
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback, Event
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.event import async_track_state_change_event, async_call_later
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -40,232 +40,174 @@ PLATFORMS = ["weather", "sensor"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Open-Meteo from a config entry."""
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(async_update_options))
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        coordinator = hass.data[DOMAIN].get(entry.entry_id)
-        if coordinator:
-            if coordinator._unsub_device_listener:
-                coordinator._unsub_device_listener()
-            # Anuluj oczekujące debounce przy unload
-            if coordinator._debounce_refresh:
-                coordinator._debounce_refresh()
-                coordinator._debounce_refresh = None
-        hass.data[DOMAIN].pop(entry.entry_id, None)
-        if not hass.data[DOMAIN]:
-            hass.data.pop(DOMAIN)
+    """Unload a config entry."""
+    if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        hass.data[DOMAIN].pop(entry.entry_id)
     return unload_ok
 
 
-async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload config entry."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Manage fetching data from Open-Meteo."""
-    
-    # Epsilon for location change detection, 1e-4 is approximately 11 meters.
-    EPS = 1e-4
+class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator):
+    """Class to manage fetching Open-Meteo data."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        self.hass = hass
+        """Initialize."""
         self.entry = entry
-        self._debounce_refresh: Callable | None = None
-
-        scan_interval = entry.options.get(
-            CONF_SCAN_INTERVAL, entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        self._unsub_listener: Callable | None = None
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=DOMAIN,
+            update_interval=timedelta(seconds=entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)),
         )
-        try:
-            scan_interval = int(scan_interval)
-        except (TypeError, ValueError):
-            scan_interval = DEFAULT_SCAN_INTERVAL
-        
-        scan_interval = max(30, min(scan_interval, 6 * 3600))
-        
-        super().__init__(hass, _LOGGER, name="Open-Meteo", update_interval=timedelta(seconds=scan_interval))
 
-        self._last_device_coords: tuple[float, float] | None = None
-        self._listening_entity_id: str | None = None
-        self._unsub_device_listener: Callable[[], None] | None = None
+        if self.tracking_mode == TRACKING_MODE_DEVICE:
+            self._unsub_listener = async_track_state_change_event(
+                self.hass,
+                self.tracked_entity_id,
+                self._async_tracked_entity_state_change,
+            )
 
-    def _ensure_device_listener(self, ent_id: str) -> None:
-        if not ent_id:
+    @property
+    def tracking_mode(self) -> str:
+        """Return the configured tracking mode."""
+        return self.entry.options.get(CONF_TRACKING_MODE, self.entry.data.get(CONF_TRACKING_MODE, TRACKING_MODE_FIXED))
+
+    @property
+    def tracked_entity_id(self) -> str | None:
+        """Return the configured tracked entity ID."""
+        return self.entry.options.get(CONF_TRACKED_ENTITY_ID, self.entry.data.get(CONF_TRACKED_ENTITY_ID))
+    
+    @callback
+    def _async_tracked_entity_state_change(self, event: Event) -> None:
+        """Handle state changes of the tracked entity."""
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        if not new_state or not old_state:
             return
         
-        if self._listening_entity_id and self._listening_entity_id != ent_id:
-            self._last_device_coords = None
+        old_coords = (old_state.attributes.get(CONF_LATITUDE), old_state.attributes.get(CONF_LONGITUDE))
+        new_coords = (new_state.attributes.get(CONF_LATITUDE), new_state.attributes.get(CONF_LONGITUDE))
         
-        if self._listening_entity_id == ent_id and self._unsub_device_listener:
-            return
-        if self._unsub_device_listener:
-            self._unsub_device_listener()
-            self._unsub_device_listener = None
-
-        @callback
-        def _state_changed_event(event: Event):
-            new_state = event.data.get("new_state")
-            if new_state and ("latitude" in new_state.attributes) and ("longitude" in new_state.attributes):
-                try:
-                    lat = float(new_state.attributes["latitude"])
-                    lon = float(new_state.attributes["longitude"])
-                    if self._last_device_coords is None or (
-                        abs(lat - self._last_device_coords[0]) > self.EPS
-                        or abs(lon - self._last_device_coords[1]) > self.EPS
-                    ):
-                        self._last_device_coords = (lat, lon)
-                        if self._debounce_refresh:
-                            self._debounce_refresh()
-                        self._debounce_refresh = async_call_later(
-                            self.hass, 1.0, lambda _: self.hass.async_create_task(self.async_request_refresh())
-                        )
-                except (TypeError, ValueError):
-                    pass
-            else:
-                if self._last_device_coords:
-                    if self._debounce_refresh:
-                        self._debounce_refresh()
-                    self._debounce_refresh = async_call_later(
-                        self.hass, 1.0, lambda _: self.hass.async_create_task(self.async_request_refresh())
-                    )
-
-        self._unsub_device_listener = async_track_state_change_event(self.hass, ent_id, _state_changed_event)
-        self._listening_entity_id = ent_id
-
-    def _parse_time_local(self, ts: str, user_tz: ZoneInfo) -> datetime:
-        s = ts.replace("Z", "+00:00")
-        try:
-            dt = datetime.fromisoformat(s)
-        except Exception:
-            if "." in s:
-                s = s.split(".", 1)[0]
-                dt = datetime.fromisoformat(s)
-            else:
-                raise
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=user_tz)
-        return dt.astimezone(user_tz)
+        if old_coords != new_coords:
+            _LOGGER.debug("Tracked entity %s moved, refreshing data", new_state.entity_id)
+            self.async_refresh()
 
     async def _async_update_data(self) -> dict[str, Any]:
-        opts = self.entry.options
-        conf_data = self.entry.data
-
-        mode = opts.get(CONF_TRACKING_MODE, conf_data.get(CONF_TRACKING_MODE, TRACKING_MODE_FIXED))
-        tracked = opts.get(CONF_TRACKED_ENTITY_ID, conf_data.get(CONF_TRACKED_ENTITY_ID))
-        timezone_opt = opts.get(CONF_TIME_ZONE, conf_data.get(CONF_TIME_ZONE, "auto"))
-
-        if mode != TRACKING_MODE_DEVICE and self._unsub_device_listener:
-            _LOGGER.debug("Unsubscribing from device tracker as tracking mode is not 'device'.")
-            self._unsub_device_listener()
-            self._unsub_device_listener = None
-            self._listening_entity_id = None
-            # Anuluj debounce przy zmianie trybu, żeby nie odświeżał po przełączeniu
-            if self._debounce_refresh:
-                self._debounce_refresh()
-                self._debounce_refresh = None
+        """Fetch data from Open-Meteo API."""
+        config_data = self.entry.data
+        options = self.entry.options
         
-        latitude = self.hass.config.latitude
-        longitude = self.hass.config.longitude
-
-        if mode == TRACKING_MODE_DEVICE and tracked:
-            self._ensure_device_listener(tracked)
-            st = self.hass.states.get(tracked)
-            
-            if st and ("latitude" in st.attributes) and ("longitude" in st.attributes):
-                try:
-                    latitude = float(st.attributes["latitude"])
-                    longitude = float(st.attributes["longitude"])
-                    self._last_device_coords = (latitude, longitude)
-                except (TypeError, ValueError):
-                    if self._last_device_coords:
-                        latitude, longitude = self._last_device_coords
-                        _LOGGER.debug("Invalid coordinates in %s - using last known.", tracked)
-                    else:
-                        _LOGGER.debug("Invalid coordinates in %s and no last known. Using Home Assistant's coordinates temporarily.", tracked)
-            else:
-                if self._last_device_coords:
-                    latitude, longitude = self._last_device_coords
-                    _LOGGER.debug("Missing coordinates in %s - using last known.", tracked)
-                else:
-                    _LOGGER.debug("Missing coordinates in %s and no last known. Using Home Assistant's coordinates temporarily.", tracked)
-        elif mode == TRACKING_MODE_FIXED:
-            latitude = opts.get(CONF_LATITUDE, conf_data.get(CONF_LATITUDE, self.hass.config.latitude))
-            longitude = opts.get(CONF_LONGITUDE, conf_data.get(CONF_LONGITUDE, self.hass.config.longitude))
+        timezone_opt = options.get(CONF_TIME_ZONE, "auto")
         
+        if self.tracking_mode == TRACKING_MODE_DEVICE:
+            entity_state = self.hass.states.get(self.tracked_entity_id)
+            if not entity_state:
+                raise UpdateFailed(f"Tracked entity '{self.tracked_entity_id}' not found")
+            latitude = entity_state.attributes.get(CONF_LATITUDE)
+            longitude = entity_state.attributes.get(CONF_LONGITUDE)
+            if latitude is None or longitude is None:
+                raise UpdateFailed(f"Tracked entity '{self.tracked_entity_id}' has no location data")
+        else:
+            latitude = options.get(CONF_LATITUDE, config_data.get(CONF_LATITUDE))
+            longitude = options.get(CONF_LONGITUDE, config_data.get(CONF_LONGITUDE))
+
         if latitude is None or longitude is None:
-            raise UpdateFailed("Could not get a valid location to fetch weather data.")
+             raise UpdateFailed("Location data is missing.")
 
-        default_hourly = list(DEFAULT_HOURLY_VARIABLES)
-        for add in ("pressure_msl", "surface_pressure", "visibility", "dewpoint_2m", "is_day"):
-            if add not in default_hourly:
-                default_hourly.append(add)
-        default_daily = list(DEFAULT_DAILY_VARIABLES)
-
-        daily_vars = opts.get(CONF_DAILY_VARIABLES, conf_data.get(CONF_DAILY_VARIABLES, default_daily))
-        hourly_vars = opts.get(CONF_HOURLY_VARIABLES, conf_data.get(CONF_HOURLY_VARIABLES, default_hourly))
-
-        params = {
+        url_params = {
             "latitude": latitude,
             "longitude": longitude,
+            "current_weather": True,
+            "daily": ",".join(options.get(CONF_DAILY_VARIABLES, DEFAULT_DAILY_VARIABLES)),
+            "hourly": ",".join(options.get(CONF_HOURLY_VARIABLES, DEFAULT_HOURLY_VARIABLES)),
+            "forecast_days": 16,
+            "forecast_hours": 168,
             "timezone": timezone_opt,
-            "current_weather": "true",
-            "hourly": ",".join(sorted(set(hourly_vars))),
-            "daily": ",".join(sorted(set(daily_vars))),
-            "temperature_unit": "celsius",
-            "windspeed_unit": "kmh",
-            "precipitation_unit": "mm",
         }
 
         session = async_get_clientsession(self.hass)
-
         try:
-            async with async_timeout.timeout(30):
-                async with session.get(URL, params=params) as resp:
-                    if resp.status != 200:
-                        text = await resp.text()
-                        _LOGGER.error("Open-Meteo HTTP %s: %s", resp.status, text[:200])
-                        raise UpdateFailed(f"API returned {resp.status}")
-                    api_data: dict[str, Any] = await resp.json()
-
-            api_data["location"] = {
-                "latitude": latitude,
-                "longitude": longitude,
-                "timezone": timezone_opt,
-            }
-
-            hourly = api_data.get("hourly", {})
-            times = hourly.get("time", [])
-            if times:
-                ha_tz = self.hass.config.time_zone or "UTC"
-                try:
-                    user_tz = ZoneInfo(timezone_opt) if timezone_opt != "auto" else ZoneInfo(ha_tz)
-                except Exception:
-                    _LOGGER.warning("Invalid timezone '%s', falling back to HA timezone.", timezone_opt)
-                    user_tz = ZoneInfo(ha_tz)
-
-                parsed = [self._parse_time_local(t, user_tz) for t in times]
-                now = dt_util.now(user_tz)
-                first_future = next((i for i, t in enumerate(parsed) if t >= now), 0)
-
-                for key, arr in list(hourly.items()):
-                    if key == "time":
-                        continue
-                    if isinstance(arr, list) and len(arr) == len(times):
-                        hourly[key] = arr[first_future:]
-                hourly["time"] = [t.isoformat() for t in parsed[first_future:]]
-
-            return api_data
+            async with async_timeout.timeout(10):
+                resp = await session.get(URL, params=url_params)
+                if resp.status != 200:
+                    text = await resp.text()
+                    _LOGGER.error("Open-Meteo HTTP %s: %s", resp.status, text[:200])
+                    raise UpdateFailed(f"API returned {resp.status}")
+                api_data: dict[str, Any] = await resp.json()
 
         except (asyncio.TimeoutError, aiohttp.ClientError) as e:
             raise UpdateFailed(f"Open-Meteo network error: {e}") from e
         except Exception as e:
             _LOGGER.exception("Unexpected error")
             raise UpdateFailed(f"Unexpected error: {e}") from e
+
+        # Dopasuj hourly data do strefy czasowej użytkownika
+        hourly = api_data.get("hourly", {})
+        times = hourly.get("time", [])
+        if times:
+            ha_tz = self.hass.config.time_zone or "UTC"
+            user_tz = ZoneInfo(timezone_opt) if timezone_opt != "auto" else ZoneInfo(ha_tz)
+            
+            # Weryfikacja i parsowanie czasu
+            try:
+                parsed = [dt_util.parse_datetime(t) for t in times]
+                if None in parsed:
+                    _LOGGER.warning("Could not parse all time values from API: %s", times)
+                    # Użyj tylko parsowalnych dat
+                    valid_times = [t for t in parsed if t is not None]
+                    if not valid_times:
+                        _LOGGER.warning("No valid time values from API. Cannot process hourly data.")
+                        hourly.clear()
+                        api_data["hourly"] = hourly
+                    else:
+                        first_future = next((i for i, t in enumerate(valid_times) if t >= dt_util.now(user_tz)), 0)
+                        # Aktualizacja hourly
+                        for key, arr in list(hourly.items()):
+                            if key == "time":
+                                continue
+                            if isinstance(arr, list) and len(arr) == len(times):
+                                hourly[key] = [arr[j] for j, t in enumerate(parsed) if t is not None][first_future:]
+                        hourly["time"] = [t.isoformat() for t in valid_times[first_future:]]
+
+                else:
+                    # Normalny przepływ
+                    parsed_aware = [dt.astimezone(user_tz) for dt in parsed]
+                    now = dt_util.now(user_tz)
+                    first_future = next((i for i, t in enumerate(parsed_aware) if t >= now), 0)
+                    
+                    for key, arr in list(hourly.items()):
+                        if key == "time":
+                            continue
+                        if isinstance(arr, list) and len(arr) == len(times):
+                            hourly[key] = arr[first_future:]
+                    hourly["time"] = [t.isoformat() for t in parsed_aware[first_future:]]
+            
+            except Exception as e:
+                _LOGGER.error("Error processing hourly data: %s", str(e), exc_info=True)
+                # Oczyść dane hourly, aby nie powodować dalszych błędów
+                hourly.clear()
+                api_data["hourly"] = hourly
+
+        api_data["location"] = {
+            "latitude": latitude,
+            "longitude": longitude,
+            "timezone": timezone_opt,
+        }
+
+        return api_data
