@@ -134,7 +134,7 @@ class OpenMeteoWeather(WeatherEntity):
             if i < len(tmax):
                 item["temperature"] = tmax[i]
             if i < len(tmin):
-                item["temperature_low"] = tmin[i]
+                item["templow"] = tmin[i]          # << klucz wymagany przez HA
             if i < len(ws_max):
                 item["wind_speed"] = ws_max[i]
             if i < len(wd_dom):
