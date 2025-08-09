@@ -1,0 +1,51 @@
+{
+  "title": "Open-Meteo",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Open-Meteo",
+        "description": "Choose how to provide location.",
+        "data": {
+          "tracking_mode": "Location source"
+        }
+      },
+      "manual": {
+        "title": "Manual coordinates",
+        "data": {
+          "latitude": "Latitude",
+          "longitude": "Longitude"
+        }
+      },
+      "tracked": {
+        "title": "Tracked device",
+        "data": {
+          "tracker_entity": "Tracker entity (device_tracker/person)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Open-Meteo options",
+        "description": "Change location source.",
+        "data": {
+          "tracking_mode": "Location source"
+        }
+      },
+      "manual": {
+        "title": "Manual coordinates",
+        "data": {
+          "latitude": "Latitude",
+          "longitude": "Longitude"
+        }
+      },
+      "tracked": {
+        "title": "Tracked device",
+        "data": {
+          "tracker_entity": "Tracker entity"
+        }
+      }
+    }
+  }
+}
