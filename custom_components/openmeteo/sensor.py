@@ -104,6 +104,18 @@ SENSOR_TYPES = {
             or None
         ),
     },
+    "location": {
+        "name": "Lokalizacja",
+        "unit": None,
+        "icon": "mdi:map-marker",
+        "device_class": None,
+        "value_fn": lambda data: (
+            f"{data.get('location', {}).get('latitude')}, {data.get('location', {}).get('longitude')}"
+            if data.get('location', {}).get('latitude') is not None
+            and data.get('location', {}).get('longitude') is not None
+            else None
+        ),
+    },
 }
 
 # Reszta pliku bez zmian
