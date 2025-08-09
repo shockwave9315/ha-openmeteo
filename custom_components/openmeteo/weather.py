@@ -57,19 +57,57 @@ class OpenMeteoWeather(WeatherEntity):
             "manufacturer": "Open-Meteo",
         }
 
+    # --- aktualizacja atrybutów bieżącej pogody do _attr_* ---
+
+    def _update_current_attrs(self) -> None:
+        data = self.coordinator.data or {}
+        cw = data.get("current_weather") or {}
+        hourly = data.get("hourly", {}) or {}
+
+        code = cw.get("weathercode")
+        is_day = cw.get("is_day", 1) == 1
+        self._attr_condition = (
+            "clear-night" if (code in (0, 1) and not is_day) else CONDITION_MAP.get(code)
+        )
+
+        self._attr_native_temperature = cw.get("temperature")
+        self._attr_native_wind_speed = cw.get("windspeed")
+        self._attr_wind_bearing = cw.get("winddirection")
+
+        hum = hourly.get("relativehumidity_2m", [])
+        self._attr_humidity = hum[0] if isinstance(hum, list) and hum else None
+
+        pres = hourly.get("surface_pressure", [])
+        self._attr_native_pressure = pres[0] if isinstance(pres, list) and pres else None
+
+        vis = hourly.get("visibility", [])
+        v = vis[0] if isinstance(vis, list) and vis else None
+        self._attr_native_visibility = (v / 1000) if isinstance(v, (int, float)) else None
+
+    async def async_added_to_hass(self) -> None:
+        self._update_current_attrs()
+        self.async_on_remove(self.coordinator.async_add_listener(self._handle_coordinator_update))
+
+    def _handle_coordinator_update(self) -> None:
+        self._update_current_attrs()
+        self.async_write_ha_state()
+
+    # --- standardowe pola (mogą być też czytane przez UI/stare miejsca) ---
+
     @property
     def available(self) -> bool:
         return self.coordinator.last_update_success and bool(self.coordinator.data)
 
     @property
     def condition(self) -> str | None:
+        # pozostawiamy dla kompatybilności; realnie _attr_condition jest ustawiane wyżej
         cw = self.coordinator.data.get("current_weather") or {}
         code = cw.get("weathercode")
         if code is None:
             return None
         is_day = cw.get("is_day", 1) == 1
         if code in (0, 1) and not is_day:
-            return "clear-night"  # zwracamy string zamiast importować stałą
+            return "clear-night"
         return CONDITION_MAP.get(code)
 
     @property
@@ -111,7 +149,7 @@ class OpenMeteoWeather(WeatherEntity):
         v = (hourly.get("visibility", [None]) or [None])[0]
         return v / 1000 if isinstance(v, (int, float)) else None
 
-    # ---------- Forecast builders (mapujemy do kluczy oczekiwanych przez HA) ----------
+    # ---------- Forecast builders (mapowanie do kluczy oczekiwanych przez HA) ----------
 
     def _map_daily_forecast(self) -> list[dict[str, Any]]:
         d = self.coordinator.data.get("daily", {}) or {}
@@ -134,7 +172,7 @@ class OpenMeteoWeather(WeatherEntity):
             if i < len(tmax):
                 item["temperature"] = tmax[i]
             if i < len(tmin):
-                item["templow"] = tmin[i]          # << klucz wymagany przez HA
+                item["templow"] = tmin[i]  # klucz używany przez kartę pogody
             if i < len(ws_max):
                 item["wind_speed"] = ws_max[i]
             if i < len(wd_dom):
@@ -190,7 +228,7 @@ class OpenMeteoWeather(WeatherEntity):
             out.append(item)
         return out
 
-    # Właściwości (mogą być używane przez UI/stare miejsca)
+    # Właściwości (zachowane dla kompatybilności)
     @property
     def forecast_daily(self) -> list[dict[str, Any]]:
         return self._map_daily_forecast()

@@ -27,7 +27,7 @@ def _first_hourly(data: dict, key: str):
     return None
 
 
-# >>> fix: helper do widzialności w km (bez walrusa)
+# helper do widzialności w km (bez walrusa)
 def _visibility_km(data: dict):
     v = _first_hourly(data, "visibility")
     return v / 1000 if isinstance(v, (int, float)) else None
@@ -74,10 +74,9 @@ SENSOR_TYPES: dict[str, dict] = {
         "unit": UnitOfPrecipitationDepth.MILLIMETERS,
         "icon": "mdi:cup-water",
         "device_class": "precipitation",
-        "value_fn": lambda d: (
-            (d.get("hourly", {}).get("precipitation", [0])[0] or 0)
-            + (d.get("hourly", {}).get("snowfall", [0])[0] or 0)
-        ),
+        # spójnie z _first_hourly
+        "value_fn": lambda d: (_first_hourly(d, "precipitation") or 0)
+                              + (_first_hourly(d, "snowfall") or 0),
     },
     "wind_speed": {
         "name": "Prędkość wiatru",
@@ -112,7 +111,7 @@ SENSOR_TYPES: dict[str, dict] = {
         "unit": UnitOfLength.KILOMETERS,
         "icon": "mdi:eye",
         "device_class": None,
-        "value_fn": _visibility_km,  # <<< tylko ta zmiana względem poprzedniej wersji
+        "value_fn": _visibility_km,
     },
     "location": {
         "name": "Lokalizacja",
