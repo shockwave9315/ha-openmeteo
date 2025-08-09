@@ -113,6 +113,13 @@ SENSOR_TYPES: dict[str, dict] = {
         "device_class": None,
         "value_fn": _visibility_km,
     },
+    "dew_point": {
+        "name": "Punkt rosy",
+        "unit": UnitOfTemperature.CELSIUS,
+        "icon": "mdi:water",
+        "device_class": "temperature",
+        "value_fn": lambda d: _first_hourly(d, "dewpoint_2m"),
+    },
     "location": {
         "name": "Lokalizacja",
         "unit": None,
