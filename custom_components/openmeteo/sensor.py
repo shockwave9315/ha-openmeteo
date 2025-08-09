@@ -14,12 +14,18 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import OpenMeteoDataUpdateCoordinator
 from .const import DOMAIN
 
-SENSOR_TYPES = {
+# --- Helper: safely get first hourly value ---
+def _first_hourly(data: dict, key: str):
+    arr = data.get("hourly", {}).get(key)
+    if isinstance(arr, list) and arr:
+        return arr[0]
+    return None
+
+SENSOR_TYPES: dict[str, dict] = {
     "temperature": {
         "name": "Temperatura",
         "unit": UnitOfTemperature.CELSIUS,
@@ -32,28 +38,28 @@ SENSOR_TYPES = {
         "unit": PERCENTAGE,
         "icon": "mdi:water-percent",
         "device_class": "humidity",
-        "value_fn": lambda data: data.get("hourly", {}).get("relativehumidity_2m", [None])[0],
+        "value_fn": lambda data: _first_hourly(data, "relativehumidity_2m"),
     },
     "apparent_temperature": {
         "name": "Temperatura odczuwalna",
         "unit": UnitOfTemperature.CELSIUS,
         "icon": "mdi:thermometer-alert",
         "device_class": "temperature",
-        "value_fn": lambda data: data.get("hourly", {}).get("apparent_temperature", [None])[0],
+        "value_fn": lambda data: _first_hourly(data, "apparent_temperature"),
     },
     "uv_index": {
         "name": "Indeks UV",
         "unit": "UV Index",
         "icon": "mdi:sun-wireless-outline",
         "device_class": None,
-        "value_fn": lambda data: data.get("hourly", {}).get("uv_index", [None])[0],
+        "value_fn": lambda data: _first_hourly(data, "uv_index"),
     },
     "precipitation_probability": {
         "name": "Prawdopodobieństwo opadów",
         "unit": PERCENTAGE,
         "icon": "mdi:weather-pouring",
         "device_class": None,
-        "value_fn": lambda data: data.get("hourly", {}).get("precipitation_probability", [None])[0],
+        "value_fn": lambda data: _first_hourly(data, "precipitation_probability"),
     },
     "precipitation_total": {
         "name": "Suma opadów (deszcz+śnieg)",
@@ -77,7 +83,7 @@ SENSOR_TYPES = {
         "unit": UnitOfSpeed.KILOMETERS_PER_HOUR,
         "icon": "mdi:weather-windy-variant",
         "device_class": None,
-        "value_fn": lambda data: data.get("hourly", {}).get("windgusts_10m", [None])[0],
+        "value_fn": lambda data: _first_hourly(data, "windgusts_10m"),
     },
     "wind_bearing": {
         "name": "Kierunek wiatru",
@@ -91,21 +97,16 @@ SENSOR_TYPES = {
         "unit": UnitOfPressure.HPA,
         "icon": "mdi:gauge",
         "device_class": "pressure",
-        "value_fn": lambda data: data.get("hourly", {}).get("surface_pressure", [None])[0],
+        "value_fn": lambda data: _first_hourly(data, "surface_pressure"),
     },
     "visibility": {
         "name": "Widzialność",
         "unit": UnitOfLength.KILOMETERS,
         "icon": "mdi:eye",
         "device_class": None,
-        "value_fn": lambda data: data.get("hourly", {}).get("visibility", [None])[0] / 1000,
-    },
-    "location": {
-        "name": "Location",
-        "unit": None,
-        "icon": "mdi:map-marker",
-        "device_class": None,
-        "value_fn": lambda data: f"{data.get('location', {}).get('latitude')}, {data.get('location', {}).get('longitude')}",
+        "value_fn": lambda data: (
+            (v := _first_hourly(data, "visibility")) / 1000 if isinstance(v, (int, float)) else None
+        ),
     },
 }
 
@@ -123,10 +124,10 @@ async def async_setup_entry(
         OpenMeteoSensor(coordinator, config_entry, sensor_type)
         for sensor_type in SENSOR_TYPES
     ]
-    
     async_add_entities(entities)
 
-class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
+
+class OpenMeteoSensor(SensorEntity):
     """Representation of an Open-Meteo sensor."""
 
     def __init__(
@@ -161,7 +162,7 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_unit_of_measurement(self):
-        """Return the unit of measurement."""
+        """Return unit of measurement."""
         return SENSOR_TYPES[self._sensor_type]["unit"]
 
     @property
