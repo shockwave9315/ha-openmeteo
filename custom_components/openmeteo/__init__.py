@@ -53,8 +53,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         coordinator = hass.data[DOMAIN].get(entry.entry_id)
-        if coordinator and coordinator._unsub_device_listener:
-            coordinator._unsub_device_listener()
+        if coordinator:
+            if coordinator._unsub_device_listener:
+                coordinator._unsub_device_listener()
+            # Anuluj oczekujące debounce przy unload
+            if coordinator._debounce_refresh:
+                coordinator._debounce_refresh()
+                coordinator._debounce_refresh = None
         hass.data[DOMAIN].pop(entry.entry_id, None)
         if not hass.data[DOMAIN]:
             hass.data.pop(DOMAIN)
@@ -162,6 +167,10 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._unsub_device_listener()
             self._unsub_device_listener = None
             self._listening_entity_id = None
+            # Anuluj debounce przy zmianie trybu, żeby nie odświeżał po przełączeniu
+            if self._debounce_refresh:
+                self._debounce_refresh()
+                self._debounce_refresh = None
         
         latitude = self.hass.config.latitude
         longitude = self.hass.config.longitude
