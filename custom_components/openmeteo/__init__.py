@@ -94,7 +94,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not ent_id:
             return
         
-        # Jeśli przełączono na inną encję, wyczyść cache, by użyć świeżych danych
         if self._listening_entity_id and self._listening_entity_id != ent_id:
             self._last_device_coords = None
         
@@ -186,7 +185,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed("Could not get a valid location to fetch weather data.")
 
         default_hourly = list(DEFAULT_HOURLY_VARIABLES)
-        for add in ("pressure_msl", "surface_pressure", "visibility"):
+        for add in ("pressure_msl", "surface_pressure", "visibility", "dewpoint_2m"):
             if add not in default_hourly:
                 default_hourly.append(add)
         default_daily = list(DEFAULT_DAILY_VARIABLES)

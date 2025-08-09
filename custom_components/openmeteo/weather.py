@@ -5,6 +5,14 @@ import logging
 from typing import Any
 
 from homeassistant.components.weather import (
+    ATTR_FORECAST_CONDITION,
+    ATTR_FORECAST_PRECIPITATION,
+    ATTR_FORECAST_PRECIPITATION_PROBABILITY,
+    ATTR_FORECAST_TEMP,
+    ATTR_FORECAST_TEMP_LOW,
+    ATTR_FORECAST_TIME,
+    ATTR_FORECAST_WIND_BEARING,
+    ATTR_FORECAST_WIND_SPEED,
     WeatherEntity,
     WeatherEntityFeature,
 )
@@ -16,8 +24,9 @@ from homeassistant.const import (
     UnitOfSpeed,
     UnitOfTemperature,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import OpenMeteoDataUpdateCoordinator
 from .const import CONDITION_MAP, DOMAIN
@@ -34,7 +43,16 @@ async def async_setup_entry(
     async_add_entities([OpenMeteoWeather(coordinator, config_entry)])
 
 
-class OpenMeteoWeather(WeatherEntity):
+def _map_condition(weather_code: int | None, is_day: int | None = 1) -> str | None:
+    """Map Open-Meteo weather code to Home Assistant condition."""
+    if weather_code is None:
+        return None
+    if weather_code in (0, 1) and is_day == 0:
+        return "clear-night"
+    return CONDITION_MAP.get(weather_code)
+
+
+class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     """Implementation of an Open-Meteo weather entity."""
 
     _attr_attribution = "Weather data provided by Open-Meteo"
@@ -43,12 +61,23 @@ class OpenMeteoWeather(WeatherEntity):
     _attr_native_wind_speed_unit = UnitOfSpeed.KILOMETERS_PER_HOUR
     _attr_native_visibility_unit = UnitOfLength.KILOMETERS
     _attr_native_pressure_unit = UnitOfPressure.HPA
+    
     _attr_supported_features = (
-        WeatherEntityFeature.FORECAST_DAILY | WeatherEntityFeature.FORECAST_HOURLY
+        WeatherEntityFeature.FORECAST_DAILY
+        | WeatherEntityFeature.FORECAST_HOURLY
     )
+    try:
+        _attr_supported_features |= WeatherEntityFeature.HOURLY_PRECIPITATION
+    except AttributeError:
+        pass
 
-    def __init__(self, coordinator: OpenMeteoDataUpdateCoordinator, config_entry: ConfigEntry) -> None:
-        self.coordinator = coordinator
+
+    def __init__(
+        self, coordinator: OpenMeteoDataUpdateCoordinator, config_entry: ConfigEntry
+    ) -> None:
+        """Initialize the weather entity."""
+        super().__init__(coordinator)
+        self._config_entry = config_entry
         self._attr_name = config_entry.data.get("name", "Open-Meteo")
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
         self._attr_device_info = {
@@ -57,178 +86,131 @@ class OpenMeteoWeather(WeatherEntity):
             "manufacturer": "Open-Meteo",
         }
 
-    # --- aktualizacja atrybutów bieżącej pogody do _attr_* ---
-
-    def _update_current_attrs(self) -> None:
-        data = self.coordinator.data or {}
-        cw = data.get("current_weather") or {}
-        hourly = data.get("hourly", {}) or {}
-
-        code = cw.get("weathercode")
-        is_day = cw.get("is_day", 1) == 1
-        self._attr_condition = (
-            "clear-night" if (code in (0, 1) and not is_day) else CONDITION_MAP.get(code)
-        )
-
-        self._attr_native_temperature = cw.get("temperature")
-        self._attr_native_wind_speed = cw.get("windspeed")
-        self._attr_wind_bearing = cw.get("winddirection")
-
-        hum = hourly.get("relativehumidity_2m", [])
-        self._attr_humidity = hum[0] if isinstance(hum, list) and hum else None
-
-        pres = hourly.get("surface_pressure", [])
-        self._attr_native_pressure = pres[0] if isinstance(pres, list) and pres else None
-
-        vis = hourly.get("visibility", [])
-        v = vis[0] if isinstance(vis, list) and vis else None
-        self._attr_native_visibility = (v / 1000) if isinstance(v, (int, float)) else None
-
-    async def async_added_to_hass(self) -> None:
-        self._update_current_attrs()
-        self.async_on_remove(self.coordinator.async_add_listener(self._handle_coordinator_update))
-
-    def _handle_coordinator_update(self) -> None:
-        self._update_current_attrs()
-        self.async_write_ha_state()
-
-    # --- standardowe pola (mogą być też czytane przez UI/stare miejsca) ---
-
     @property
     def available(self) -> bool:
-        return self.coordinator.last_update_success and bool(self.coordinator.data)
-
-    @property
-    def condition(self) -> str | None:
-        # pozostawiamy dla kompatybilności; realnie _attr_condition jest ustawiane wyżej
-        cw = self.coordinator.data.get("current_weather") or {}
-        code = cw.get("weathercode")
-        if code is None:
-            return None
-        is_day = cw.get("is_day", 1) == 1
-        if code in (0, 1) and not is_day:
-            return "clear-night"
-        return CONDITION_MAP.get(code)
+        return bool(self.coordinator.data) and getattr(self.coordinator, "last_update_success", True)
 
     @property
     def native_temperature(self) -> float | None:
-        cw = self.coordinator.data.get("current_weather") or {}
-        return cw.get("temperature")
+        """Return the current temperature."""
+        cw = self.coordinator.data.get("current_weather", {})
+        temp = cw.get("temperature")
+        return round(temp, 1) if isinstance(temp, (int, float)) else None
 
     @property
     def native_pressure(self) -> float | None:
-        hourly = self.coordinator.data.get("hourly", {})
-        arr = hourly.get("surface_pressure", [])
-        return arr[0] if isinstance(arr, list) and arr else None
+        """Return the current pressure."""
+        return self._first_hourly_value("surface_pressure")
 
     @property
     def native_wind_speed(self) -> float | None:
-        cw = self.coordinator.data.get("current_weather") or {}
-        return cw.get("windspeed")
+        """Return the current wind speed."""
+        cw = self.coordinator.data.get("current_weather", {})
+        ws = cw.get("windspeed")
+        return round(ws, 1) if isinstance(ws, (int, float)) else None
 
     @property
     def wind_bearing(self) -> float | None:
-        cw = self.coordinator.data.get("current_weather") or {}
-        return cw.get("winddirection")
-
-    @property
-    def humidity(self) -> float | None:
-        hourly = self.coordinator.data.get("hourly", {})
-        arr = hourly.get("relativehumidity_2m", [])
-        return arr[0] if isinstance(arr, list) and arr else None
-
-    @property
-    def native_apparent_temperature(self) -> float | None:
-        hourly = self.coordinator.data.get("hourly", {})
-        arr = hourly.get("apparent_temperature", [])
-        return arr[0] if isinstance(arr, list) and arr else None
+        """Return the current wind bearing."""
+        cw = self.coordinator.data.get("current_weather", {})
+        wb = cw.get("winddirection")
+        return round(wb, 1) if isinstance(wb, (int, float)) else None
 
     @property
     def native_visibility(self) -> float | None:
-        hourly = self.coordinator.data.get("hourly", {})
-        v = (hourly.get("visibility", [None]) or [None])[0]
-        return v / 1000 if isinstance(v, (int, float)) else None
+        """Return the current visibility."""
+        vis = self._first_hourly_value("visibility")
+        return round(vis / 1000, 2) if isinstance(vis, (int, float)) else None
 
-    # ---------- Forecast builders (mapowanie do kluczy oczekiwanych przez HA) ----------
+    @property
+    def humidity(self) -> int | None:
+        """Return the current humidity."""
+        hum = self._first_hourly_value("relativehumidity_2m")
+        return round(hum) if isinstance(hum, (int, float)) else None
+
+    @property
+    def native_dew_point(self) -> float | None:
+        """Return the current dew point."""
+        dew = self._first_hourly_value("dewpoint_2m")
+        return round(dew, 1) if isinstance(dew, (int, float)) else None
+
+    @property
+    def condition(self) -> str | None:
+        """Return the current weather condition."""
+        cw = self.coordinator.data.get("current_weather", {})
+        weather_code = cw.get("weathercode")
+        is_day = cw.get("is_day")
+        return _map_condition(weather_code, is_day) if weather_code is not None else None
+    
+    def _first_hourly_value(self, key: str) -> float | None:
+        arr = self.coordinator.data.get("hourly", {}).get(key)
+        if isinstance(arr, list) and arr:
+            return arr[0]
+        return None
 
     def _map_daily_forecast(self) -> list[dict[str, Any]]:
-        d = self.coordinator.data.get("daily", {}) or {}
-        t = d.get("time", [])
-        wcode = d.get("weathercode", [])
-        tmax = d.get("temperature_2m_max", [])
-        tmin = d.get("temperature_2m_min", [])
-        ws_max = d.get("windspeed_10m_max", [])
-        wd_dom = d.get("winddirection_10m_dominant", [])
-        precip_sum = d.get("precipitation_sum", [])
-        precip_prob_max = d.get("precipitation_probability_max", [])
-        cloudcover = d.get("cloudcover", []) or d.get("cloudcover_mean", [])
-        uv_max = d.get("uv_index_max", [])
-
-        out: list[dict[str, Any]] = []
-        for i, dt in enumerate(t):
-            item: dict[str, Any] = {"datetime": dt}
-            if i < len(wcode):
-                item["condition"] = CONDITION_MAP.get(wcode[i])
-            if i < len(tmax):
-                item["temperature"] = tmax[i]
-            if i < len(tmin):
-                item["templow"] = tmin[i]  # klucz używany przez kartę pogody
-            if i < len(ws_max):
-                item["wind_speed"] = ws_max[i]
-            if i < len(wd_dom):
-                item["wind_bearing"] = wd_dom[i]
-            if i < len(precip_sum):
-                item["precipitation"] = precip_sum[i]
-            if i < len(precip_prob_max):
-                item["precipitation_probability"] = precip_prob_max[i]
-            if i < len(cloudcover):
-                item["cloud_coverage"] = cloudcover[i]
-            if i < len(uv_max):
-                item["uv_index"] = uv_max[i]
-            out.append(item)
+        if not (daily := self.coordinator.data.get("daily")):
+            return []
+        
+        times = daily.get("time", [])
+        temp_max = daily.get("temperature_2m_max", [])
+        temp_min = daily.get("temperature_2m_min", [])
+        wcodes = daily.get("weathercode", [])
+        precip_sum = daily.get("precipitation_sum", [])
+        ws_max = daily.get("windspeed_10m_max", [])
+        wd_dom = daily.get("winddirection_10m_dominant", [])
+        pop = daily.get("precipitation_probability_max", [])
+        
+        out = []
+        for i, dt in enumerate(times):
+            forecast = {
+                ATTR_FORECAST_TIME: dt,
+                ATTR_FORECAST_TEMP: temp_max[i] if i < len(temp_max) else None,
+                ATTR_FORECAST_TEMP_LOW: temp_min[i] if i < len(temp_min) else None,
+                ATTR_FORECAST_CONDITION: _map_condition(wcodes[i]) if i < len(wcodes) else None,
+                ATTR_FORECAST_PRECIPITATION: precip_sum[i] if i < len(precip_sum) else None,
+                ATTR_FORECAST_WIND_SPEED: ws_max[i] if i < len(ws_max) else None,
+                ATTR_FORECAST_WIND_BEARING: wd_dom[i] if i < len(wd_dom) else None,
+                ATTR_FORECAST_PRECIPITATION_PROBABILITY: pop[i] if i < len(pop) else None,
+            }
+            out.append(forecast)
         return out
 
     def _map_hourly_forecast(self) -> list[dict[str, Any]]:
-        h = self.coordinator.data.get("hourly", {}) or {}
-        t = h.get("time", [])
-        temp = h.get("temperature_2m", [])
-        wcode = h.get("weathercode", [])
-        ws = h.get("windspeed_10m", [])
-        wd = h.get("winddirection_10m", [])
-        precip = h.get("precipitation", [])
-        precip_prob = h.get("precipitation_probability", [])
-        press = h.get("surface_pressure", [])
-        hum = h.get("relativehumidity_2m", [])
-        cloud = h.get("cloudcover", [])
-        uvi = h.get("uv_index", [])
+        if not (hourly := self.coordinator.data.get("hourly")):
+            return []
+
+        time_entries = hourly.get("time", [])
+        temp = hourly.get("temperature_2m", [])
+        wcode = hourly.get("weathercode", [])
+        ws = hourly.get("windspeed_10m", [])
+        wd = hourly.get("winddirection_10m", [])
+        precip = hourly.get("precipitation", [])
+        precip_prob = hourly.get("precipitation_probability", [])
+        press = hourly.get("surface_pressure", [])
+        hum = hourly.get("relativehumidity_2m", [])
+        cloud = hourly.get("cloudcover", [])
+        uvi = hourly.get("uv_index", [])
 
         out: list[dict[str, Any]] = []
-        for i, dt in enumerate(t):
-            item: dict[str, Any] = {"datetime": dt}
-            if i < len(temp):
-                item["temperature"] = temp[i]
-            if i < len(wcode):
-                item["condition"] = CONDITION_MAP.get(wcode[i])
-            if i < len(ws):
-                item["wind_speed"] = ws[i]
-            if i < len(wd):
-                item["wind_bearing"] = wd[i]
-            if i < len(precip):
-                item["precipitation"] = precip[i]
-            if i < len(precip_prob):
-                item["precipitation_probability"] = precip_prob[i]
-            if i < len(press):
-                item["pressure"] = press[i]
-            if i < len(hum):
-                item["humidity"] = hum[i]
-            if i < len(cloud):
-                item["cloud_coverage"] = cloud[i]
-            if i < len(uvi):
-                item["uv_index"] = uvi[i]
+        for i, dt in enumerate(time_entries):
+            item: dict[str, Any] = {
+                ATTR_FORECAST_TIME: dt,
+                ATTR_FORECAST_TEMP: temp[i] if i < len(temp) else None,
+                ATTR_FORECAST_CONDITION: _map_condition(wcode[i]) if i < len(wcode) else None,
+                ATTR_FORECAST_WIND_SPEED: ws[i] if i < len(ws) else None,
+                ATTR_FORECAST_WIND_BEARING: wd[i] if i < len(wd) else None,
+                ATTR_FORECAST_PRECIPITATION: precip[i] if i < len(precip) else None,
+                ATTR_FORECAST_PRECIPITATION_PROBABILITY: precip_prob[i] if i < len(precip_prob) else None,
+            }
+            if i < len(press): item["pressure"] = press[i]
+            if i < len(hum): item["humidity"] = hum[i]
+            if i < len(cloud): item["cloud_coverage"] = cloud[i]
+            if i < len(uvi): item["uv_index"] = uvi[i]
             out.append(item)
         return out
+        
 
-    # Właściwości (zachowane dla kompatybilności)
     @property
     def forecast_daily(self) -> list[dict[str, Any]]:
         return self._map_daily_forecast()
@@ -237,9 +219,15 @@ class OpenMeteoWeather(WeatherEntity):
     def forecast_hourly(self) -> list[dict[str, Any]]:
         return self._map_hourly_forecast()
 
-    # Metody wymagane przez nowe API pogody
-    async def async_forecast_daily(self) -> list[dict[str, Any]] | None:
-        return self._map_daily_forecast()
+    async def async_forecast_daily(self) -> list[dict[str, Any]]:
+        return self.forecast_daily
 
-    async def async_forecast_hourly(self) -> list[dict[str, Any]] | None:
-        return self._map_hourly_forecast()
+    async def async_forecast_hourly(self) -> list[dict[str, Any]]:
+        return self.forecast_hourly
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(self.coordinator.async_add_listener(self._handle_coordinator_update))
