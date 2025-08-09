@@ -41,7 +41,7 @@ if errorlevel 1 ( echo [WARN] no changes to commit - continue )
 
 echo [STEP] Sprawdzam czy tag istnieje: %VERSION%
 "%GIT%" rev-parse -q --verify "refs/tags/%VERSION%" >nul 2>&1
-if not errorlevel 1 (
+if errorlevel 0 (
   echo [WARN] Tag %VERSION% juz istnieje.
   set "CHOICE=N"
   set /p CHOICE=Czy NADPISAC tag? (T/N): 
@@ -50,7 +50,10 @@ if not errorlevel 1 (
     "%GIT%" tag -f -a %VERSION% -m "Release %VERSION%" || (echo [ERROR] git tag -f fail & popd & pause & exit /b 1)
     set "FORCE_TAG=1"
   ) else (
-    set "FORCE_TAG=0"
+    echo [INFO] Nie nadpisuje tagu. Anuluje operacje.
+    popd
+    pause
+    exit /b 1
   )
 ) else (
   echo [STEP] Tworze nowy tag
