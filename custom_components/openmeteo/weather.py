@@ -14,6 +14,7 @@ from homeassistant.components.weather import (
     ATTR_FORECAST_TIME,
     ATTR_FORECAST_WIND_BEARING,
     ATTR_FORECAST_WIND_SPEED,
+    ATTR_CONDITION_CLEAR_NIGHT, # Ten import został przeniesiony tutaj
     WeatherEntity,
     WeatherEntityFeature,
     Forecast,
@@ -25,7 +26,6 @@ from homeassistant.const import (
     UnitOfPressure,
     UnitOfSpeed,
     UnitOfTemperature,
-    ATTR_CONDITION_CLEAR_NIGHT,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
