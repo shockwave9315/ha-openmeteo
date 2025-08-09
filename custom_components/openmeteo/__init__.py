@@ -10,9 +10,9 @@ from zoneinfo import ZoneInfo
 import aiohttp
 import async_timeout
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, callback, Event
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.event import async_track_state_change
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -51,6 +51,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        coordinator = hass.data[DOMAIN].get(entry.entry_id)
+        if coordinator and coordinator._unsub_device_listener:
+            coordinator._unsub_device_listener()
         hass.data[DOMAIN].pop(entry.entry_id, None)
         if not hass.data[DOMAIN]:
             hass.data.pop(DOMAIN)
@@ -78,13 +81,11 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         super().__init__(hass, _LOGGER, name="Open-Meteo", update_interval=timedelta(seconds=scan_interval))
 
-        # cache ostatnich dobrych współrzędnych dla trybu DEVICE
         self._last_device_coords: tuple[float, float] | None = None
         self._listening_entity_id: str | None = None
         self._unsub_device_listener = None
 
     def _ensure_device_listener(self, ent_id: str) -> None:
-        """Listen for state changes of the tracked entity in the event loop thread."""
         if not ent_id:
             return
         if self._listening_entity_id == ent_id and self._unsub_device_listener:
@@ -94,7 +95,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._unsub_device_listener = None
 
         @callback
-        def _state_changed(entity_id, old_state, new_state):
+        def _state_changed_event(event: Event):
+            new_state = event.data.get("new_state")
             if new_state and ("latitude" in new_state.attributes) and ("longitude" in new_state.attributes):
                 try:
                     lat = float(new_state.attributes["latitude"])
@@ -102,10 +104,9 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._last_device_coords = (lat, lon)
                 except (TypeError, ValueError):
                     pass
-            # jesteśmy w wątku pętli — bezpiecznie planujemy refresh
             self.hass.async_create_task(self.async_request_refresh())
 
-        self._unsub_device_listener = async_track_state_change(self.hass, ent_id, _state_changed)
+        self._unsub_device_listener = async_track_state_change_event(self.hass, ent_id, _state_changed_event)
         self._listening_entity_id = ent_id
 
     # helper — defensywne parsowanie czasu i lokalizacja do strefy usera
@@ -124,7 +125,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return dt.astimezone(user_tz)
 
     async def _async_update_data(self) -> dict[str, Any]:
-        # 1) Ustal lokalizację i strefę
         opts = self.entry.options
         data = self.entry.data
 
@@ -160,7 +160,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             latitude = opts.get(CONF_LATITUDE, data.get(CONF_LATITUDE, self.hass.config.latitude))
             longitude = opts.get(CONF_LONGITUDE, data.get(CONF_LONGITUDE, self.hass.config.longitude))
 
-        # 2) Zmienne z konfiguracji
         default_hourly = list(DEFAULT_HOURLY_VARIABLES)
         for add in ("pressure_msl", "surface_pressure", "visibility"):
             if add not in default_hourly:
@@ -199,7 +198,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "timezone": timezone_opt,
             }
 
-            # 3) Przytnij hourly do przyszłości w strefie usera (auto = strefa HA)
             hourly = data.get("hourly", {})
             times = hourly.get("time", [])
             if times:
