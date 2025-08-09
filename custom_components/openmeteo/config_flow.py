@@ -80,7 +80,10 @@ def get_tracked_entities_options(
 
 
 def _tz_options_with_auto() -> list[str]:
-    """Return timezone options with 'auto' prepended."""
+    """Return timezone options with 'auto' prepended.
+
+    NOTE: This touches tzdata on disk; call it from executor to avoid blocking.
+    """
     tzs = sorted(available_timezones())
     return ["auto"] + tzs
 
@@ -162,20 +165,22 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
     """Handle Open-Meteo options."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
+        # NIE nadpisuj self.config_entry (deprecated). Trzymaj własne pole.
+        self._entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        options = self.config_entry.options
-        data = self.config_entry.data
+        options = self._entry.options
+        data = self._entry.data
 
         tracking_mode = options.get(CONF_TRACKING_MODE, data.get(CONF_TRACKING_MODE, TRACKING_MODE_FIXED))
         tracked_entity_id = options.get(CONF_TRACKED_ENTITY_ID, data.get(CONF_TRACKED_ENTITY_ID))
 
-        tz_options = _tz_options_with_auto()
+        # Pobierz listę stref czasu w executorze — unikamy blokowania event loopa.
+        tz_options = await self.hass.async_add_executor_job(_tz_options_with_auto)
 
         options_schema = vol.Schema(
             {
@@ -196,7 +201,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     selector.SelectSelectorConfig(
                         options=[{"value": var, "label": var} for var in DEFAULT_HOURLY_VARIABLES],
                         multiple=True,
-                        mode=selector.SelectSelectorMode.LIST,  # <-- FIX
+                        mode=selector.SelectSelectorMode.LIST,  # kompatybilnie z HA
                     )
                 ),
                 vol.Required(
@@ -205,7 +210,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     selector.SelectSelectorConfig(
                         options=[{"value": var, "label": var} for var in DEFAULT_DAILY_VARIABLES],
                         multiple=True,
-                        mode=selector.SelectSelectorMode.LIST,  # <-- FIX
+                        mode=selector.SelectSelectorMode.LIST,  # kompatybilnie z HA
                     )
                 ),
                 vol.Required(CONF_TRACKING_MODE, default=tracking_mode): selector.SelectSelector(
