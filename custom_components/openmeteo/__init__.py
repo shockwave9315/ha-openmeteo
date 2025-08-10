@@ -265,6 +265,24 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     if isinstance(arr, list) and len(arr) == len(times):
                         hourly[key] = arr[first_future:]
                 hourly["time"] = [t.isoformat() for t in parsed[first_future:]]
+                # Normalize daily sunrise/sunset to timezone-aware ISO strings for UI/sensors
+                daily = api_data.get("daily", {})
+                if daily:
+                    ha_tz = self.hass.config.time_zone or "UTC"
+                    try:
+                        user_tz = ZoneInfo(timezone_opt) if timezone_opt != "auto" else ZoneInfo(ha_tz)
+                    except Exception:
+                        _LOGGER.warning("Invalid timezone '%s', falling back to HA timezone.", timezone_opt)
+                        user_tz = ZoneInfo(ha_tz)
+                    for _k in ("sunrise", "sunset"):
+                        _arr = daily.get(_k)
+                        if isinstance(_arr, list):
+                            try:
+                                daily[_k] = [self._parse_time_local(str(ts), user_tz).isoformat() for ts in _arr]
+                            except Exception:
+                                # Leave as-is on parse failure
+                                pass
+    
 
             return api_data
 

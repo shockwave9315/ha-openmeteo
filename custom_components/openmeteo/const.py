@@ -46,7 +46,8 @@ DEFAULT_DAILY_VARIABLES = [
     "weathercode",
     "precipitation_sum",
     "windspeed_10m_max",
-    "winddirection_10m_dominant",
+    "winddirection_10m_dominant",    "sunrise",
+    "sunset",
 ]
 
 DEFAULT_HOURLY_VARIABLES = [

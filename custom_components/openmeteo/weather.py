@@ -27,6 +27,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from datetime import datetime
 
 from . import OpenMeteoDataUpdateCoordinator
 from .const import CONDITION_MAP, DOMAIN
@@ -235,3 +236,23 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(self.coordinator.async_add_listener(self._handle_coordinator_update))
+
+    @property
+    def sunrise(self) -> datetime | None:
+        try:
+            val = self.coordinator.data.get("daily", {}).get("sunrise", [None])[0]
+            if isinstance(val, str):
+                return datetime.fromisoformat(val)
+            return val
+        except Exception:
+            return None
+
+    @property
+    def sunset(self) -> datetime | None:
+        try:
+            val = self.coordinator.data.get("daily", {}).get("sunset", [None])[0]
+            if isinstance(val, str):
+                return datetime.fromisoformat(val)
+            return val
+        except Exception:
+            return None

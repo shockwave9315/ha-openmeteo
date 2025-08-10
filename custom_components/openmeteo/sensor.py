@@ -14,12 +14,26 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from datetime import datetime
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import OpenMeteoDataUpdateCoordinator
 from .const import DOMAIN
 
 
+
+
+def _first_daily_dt(data: dict, key: str):
+    try:
+        val = data.get("daily", {}).get(key, [None])[0]
+        if isinstance(val, str):
+            try:
+                return datetime.fromisoformat(val)
+            except Exception:
+                return None
+        return val
+    except Exception:
+        return None
 def _first_hourly(data: dict, key: str):
     arr = data.get("hourly", {}).get(key)
     if isinstance(arr, list) and arr:
@@ -132,7 +146,21 @@ SENSOR_TYPES: dict[str, dict] = {
             else None
         ),
     },
-}
+
+    "sunrise": {
+        "name": "Wschód słońca",
+        "unit": None,
+        "icon": "mdi:weather-sunset-up",
+        "device_class": "timestamp",
+        "value_fn": lambda d: _first_daily_dt(d, "sunrise"),
+    },
+    "sunset": {
+        "name": "Zachód słońca",
+        "unit": None,
+        "icon": "mdi:weather-sunset-down",
+        "device_class": "timestamp",
+        "value_fn": lambda d: _first_daily_dt(d, "sunset"),
+    },}
 
 
 async def async_setup_entry(
