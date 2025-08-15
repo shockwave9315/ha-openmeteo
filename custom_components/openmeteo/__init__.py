@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from collections.abc import Callable
 from datetime import timedelta, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import aiohttp
-import async_timeout
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback, Event
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -96,6 +96,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_device_coords: tuple[float, float] | None = None
         self._listening_entity_id: str | None = None
         self._unsub_device_listener: Callable[[], None] | None = None
+        self._last_data: dict[str, Any] | None = None
 
     async def _debounced_refresh_cb(self, _now: datetime | None = None) -> None:
         """Timer callback executed in event loop; safe to await refresh."""
@@ -229,15 +230,56 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
 
         session = async_get_clientsession(self.hass)
-
         try:
-            async with async_timeout.timeout(30):
-                async with session.get(URL, params=params) as resp:
-                    if resp.status != 200:
-                        text = await resp.text()
-                        _LOGGER.error("Open-Meteo HTTP %s: %s", resp.status, text[:200])
-                        raise UpdateFailed(f"API returned {resp.status}")
-                    api_data: dict[str, Any] = await resp.json()
+            headers = {
+                "User-Agent": "HomeAssistant-OpenMeteo/1.0 (+https://www.home-assistant.io)"
+            }
+            max_attempts = 3
+            api_data: dict[str, Any] | None = None
+            last_exc: UpdateFailed | None = None
+
+            for attempt in range(max_attempts):
+                try:
+                    async with session.get(
+                        URL,
+                        params=params,
+                        headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=20),
+                    ) as resp:
+                        if resp.status >= 500:
+                            text = await resp.text()
+                            _LOGGER.warning(
+                                "Open-Meteo HTTP %s: %s", resp.status, text[:300]
+                            )
+                            last_exc = UpdateFailed(f"API returned {resp.status}")
+                        elif resp.status >= 400:
+                            text = await resp.text()
+                            _LOGGER.error(
+                                "Open-Meteo HTTP %s for %s params=%s: %s",
+                                resp.status,
+                                resp.url,
+                                params,
+                                text[:500],
+                            )
+                            raise UpdateFailed(f"API returned {resp.status}")
+                        else:
+                            api_data = await resp.json()
+                            self._last_data = api_data
+                            break
+                except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                    last_exc = UpdateFailed(f"Open-Meteo network error: {e}")
+                if api_data is not None:
+                    break
+                if attempt < max_attempts - 1:
+                    await asyncio.sleep(1.5 ** attempt + random.random() / 2)
+
+            if api_data is None:
+                _LOGGER.error(
+                    "Open-Meteo data fetch failed after %s attempts", max_attempts
+                )
+                if self._last_data is not None:
+                    return self._last_data
+                raise last_exc or UpdateFailed("Open-Meteo data fetch failed")
 
             api_data["location"] = {
                 "latitude": latitude,
@@ -286,8 +328,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             return api_data
 
-        except (asyncio.TimeoutError, aiohttp.ClientError) as e:
-            raise UpdateFailed(f"Open-Meteo network error: {e}") from e
+        except UpdateFailed:
+            raise
         except Exception as e:
             _LOGGER.exception("Unexpected error")
             raise UpdateFailed(f"Unexpected error: {e}") from e
