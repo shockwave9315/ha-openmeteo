@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import random
 from datetime import datetime, timedelta
 from typing import Any
@@ -37,6 +38,16 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _dew_point_c(temp_c: float | None, rh_pct: float | None) -> float | None:
+    """Magnus-Tetens formula. Returns dew point in °C (1 decimal)."""
+    if temp_c is None or rh_pct is None or rh_pct <= 0:
+        return None
+    a, b = 17.62, 243.12
+    gamma = math.log(rh_pct / 100.0) + (a * temp_c) / (b + temp_c)
+    dp = (b * gamma) / (a - gamma)
+    return round(dp, 1)
+
+
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Class to manage fetching Open-Meteo data and tracking coordinates."""
 
@@ -58,6 +69,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hass, _LOGGER, name="Open-Meteo", update_interval=timedelta(seconds=interval)
         )
         self._cached: tuple[float, float] | None = None
+        self._accepted_lat: float | None = None
+        self._accepted_lon: float | None = None
         self._accepted_at: datetime | None = None
         self.location_name: str | None = entry.options.get(
             CONF_AREA_NAME_OVERRIDE, entry.data.get(CONF_AREA_NAME_OVERRIDE)
@@ -84,11 +97,41 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return MODE_TRACK
         return MODE_STATIC
 
+    async def _reverse_geocode(self, lat: float, lon: float) -> str | None:
+        url = (
+            "https://geocoding-api.open-meteo.com/v1/reverse"
+            f"?latitude={lat:.5f}&longitude={lon:.5f}&language=pl&format=json"
+        )
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=10) as resp:
+                    if resp.status != 200:
+                        return None
+                    js = await resp.json()
+                    results = js.get("results") or []
+                    if not results:
+                        return None
+                    r = results[0]
+                    name = r.get("name") or r.get("admin2") or r.get("admin1")
+                    country = r.get("country_code")
+                    if name and country:
+                        return f"{name}, {country}"
+                    return name
+        except Exception:
+            return None
+
+    def _coords_fallback(self, lat: float, lon: float) -> str:
+        return f"{lat:.2f},{lon:.2f}"
+
     async def _async_update_data(self) -> dict[str, Any]:
         mode = self._current_mode()
         data = {**self.entry.data, **self.entry.options}
         min_track = int(data.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL))
         now = dt_util.utcnow()
+
+        prev_name = self.data.get("location_name") if self.data else None
+        prev_loc_ts = self.data.get("last_location_update") if self.data else None
+        coords_changed = False
 
         if mode == MODE_TRACK:
             ent_id = data.get(CONF_ENTITY_ID) or data.get(CONF_TRACKED_ENTITY_ID)
@@ -109,9 +152,10 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         )
                     ):
                         self._cached = (lat, lon)
+                        self._accepted_lat = lat
+                        self._accepted_lon = lon
                         self._accepted_at = now
-                        if not data.get(CONF_AREA_NAME_OVERRIDE):
-                            self.location_name = f"{lat:.2f},{lon:.2f}"
+                        coords_changed = True
                     self._warned_missing = False
                 except (TypeError, ValueError):
                     pass
@@ -128,11 +172,31 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             lon = float(
                 data.get(CONF_LONGITUDE, self.hass.config.longitude)
             )
-            self._cached = (lat, lon)
-            if self._accepted_at is None:
+            if (
+                self._cached is None
+                or abs(lat - self._cached[0]) > self.EPS
+                or abs(lon - self._cached[1]) > self.EPS
+            ):
+                self._cached = (lat, lon)
+                self._accepted_lat = lat
+                self._accepted_lon = lon
+                self._accepted_at = now if self._accepted_at is None else self._accepted_at
+                coords_changed = True
+            elif self._accepted_at is None:
                 self._accepted_at = now
-            if not data.get(CONF_AREA_NAME_OVERRIDE):
-                self.location_name = f"{lat:.2f},{lon:.2f}"
+
+        loc_name = prev_name
+        last_loc_ts = prev_loc_ts
+        if coords_changed:
+            if data.get(CONF_AREA_NAME_OVERRIDE):
+                loc_name = data.get(CONF_AREA_NAME_OVERRIDE)
+            else:
+                name = await self._reverse_geocode(lat, lon)
+                loc_name = name or self._coords_fallback(lat, lon)
+            last_loc_ts = now.isoformat()
+            self.location_name = loc_name
+        elif self.location_name:
+            loc_name = self.location_name
 
         if not self._cached:
             raise UpdateFailed("No valid coordinates available")
@@ -175,6 +239,12 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._last_data is None:
                 raise UpdateFailed("No data received")
             self._last_data["location"] = {"latitude": latitude, "longitude": longitude}
+            self._last_data["location_name"] = loc_name
+            self._last_data["last_location_update"] = last_loc_ts
+            cw_temp = self._last_data.get("current_weather", {}).get("temperature")
+            hum_arr = self._last_data.get("hourly", {}).get("relativehumidity_2m", [])
+            hum_val = hum_arr[0] if isinstance(hum_arr, list) and hum_arr else None
+            self._last_data["dew_point"] = _dew_point_c(cw_temp, hum_val)
             return self._last_data
         except UpdateFailed:
             if self._last_data is not None:
