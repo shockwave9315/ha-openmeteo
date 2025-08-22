@@ -116,12 +116,19 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, entry: config_entries.ConfigEntry) -> None:
         self._entry = entry
-        self._mode = entry.options.get(CONF_MODE, entry.data.get(CONF_MODE, MODE_STATIC))
+        # Copy options so we can safely mutate defaults
+        self._options: dict[str, Any] = dict(entry.options)
+        # Migrate old configs that stored an empty string for the entity
+        if self._options.get(CONF_ENTITY_ID) == "":
+            self._options[CONF_ENTITY_ID] = None
+        # Default mode comes only from saved options
+        self._mode = self._options.get(CONF_MODE, MODE_STATIC)
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
         """First step: choose tracking mode."""
+
         if user_input is not None:
             self._mode = user_input[CONF_MODE]
             return await self.async_step_mode_details()
@@ -139,8 +146,10 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.FlowResult:
         """Second step: gather fields for the selected mode."""
         errors: dict[str, str] = {}
+
         data = {**self._entry.data, **self._entry.options}
         defaults = user_input or data
+
 
         if user_input is not None:
             if self._mode == MODE_TRACK:
@@ -155,9 +164,11 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
             if not errors:
                 new_options: dict[str, Any] = {**self._entry.options}
                 if self._mode == MODE_TRACK:
+
                     new_options.pop(CONF_LATITUDE, None)
                     new_options.pop(CONF_LONGITUDE, None)
                 else:
+
                     new_options.pop(CONF_ENTITY_ID, None)
                     new_options.pop(CONF_MIN_TRACK_INTERVAL, None)
                 new_options.update(user_input)
@@ -169,10 +180,12 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Required(
                         CONF_ENTITY_ID,
+
                         default=defaults.get(CONF_ENTITY_ID, ""),
                     ): selector.EntitySelector(
                         selector.EntitySelectorConfig(
                             domain=["device_tracker", "person"]
+
                         )
                     ),
                     vol.Optional(
