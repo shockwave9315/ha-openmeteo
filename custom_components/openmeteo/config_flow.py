@@ -128,16 +128,16 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
         """First step: choose tracking mode."""
-        # Ensure legacy empty string entity is treated as not set
-        if self._options.get(CONF_ENTITY_ID) == "":
-            self._options[CONF_ENTITY_ID] = None
 
         if user_input is not None:
             self._mode = user_input[CONF_MODE]
             return await self.async_step_mode_details()
-
         schema = vol.Schema(
-            {vol.Required(CONF_MODE, default=self._mode): vol.In([MODE_STATIC, MODE_TRACK])}
+            {
+                vol.Required(CONF_MODE, default=self._mode): vol.In(
+                    [MODE_STATIC, MODE_TRACK]
+                )
+            }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
 
@@ -146,8 +146,10 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.FlowResult:
         """Second step: gather fields for the selected mode."""
         errors: dict[str, str] = {}
-        data = {**self._entry.data, **self._options}
-        defaults = data if user_input is None else {**data, **user_input}
+
+        data = {**self._entry.data, **self._entry.options}
+        defaults = user_input or data
+
 
         if user_input is not None:
             if self._mode == MODE_TRACK:
@@ -162,15 +164,11 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
             if not errors:
                 new_options: dict[str, Any] = {**self._entry.options}
                 if self._mode == MODE_TRACK:
-                    # Remove static fields
-                    user_input.pop(CONF_LATITUDE, None)
-                    user_input.pop(CONF_LONGITUDE, None)
+
                     new_options.pop(CONF_LATITUDE, None)
                     new_options.pop(CONF_LONGITUDE, None)
                 else:
-                    # Remove tracking fields
-                    user_input.pop(CONF_ENTITY_ID, None)
-                    user_input.pop(CONF_MIN_TRACK_INTERVAL, None)
+
                     new_options.pop(CONF_ENTITY_ID, None)
                     new_options.pop(CONF_MIN_TRACK_INTERVAL, None)
                 new_options.update(user_input)
@@ -182,11 +180,12 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Required(
                         CONF_ENTITY_ID,
-                        default=defaults.get(CONF_ENTITY_ID),
+
+                        default=defaults.get(CONF_ENTITY_ID, ""),
                     ): selector.EntitySelector(
                         selector.EntitySelectorConfig(
-                            domain=["device_tracker", "person"],
-                            multiple=False,
+                            domain=["device_tracker", "person"]
+
                         )
                     ),
                     vol.Optional(
