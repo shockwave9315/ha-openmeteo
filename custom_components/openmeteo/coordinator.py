@@ -151,9 +151,25 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 if not self._warned_missing:
                     _LOGGER.warning(
-                        "Tracked entity %s missing or lacks GPS attributes", ent_id
+                        "Tracked entity %s missing or lacks GPS attributes, "
+                        "falling back to configured coordinates",
+                        ent_id,
                     )
                     self._warned_missing = True
+                if self._cached is None:
+                    lat = float(
+                        data.get(CONF_LATITUDE, self.hass.config.latitude)
+                    )
+                    lon = float(
+                        data.get(CONF_LONGITUDE, self.hass.config.longitude)
+                    )
+                    self._cached = (lat, lon)
+                    self._accepted_lat = lat
+                    self._accepted_lon = lon
+                    self._accepted_at = (
+                        now if self._accepted_at is None else self._accepted_at
+                    )
+                    coords_changed = True
         else:
             lat = float(
                 data.get(CONF_LATITUDE, self.hass.config.latitude)
