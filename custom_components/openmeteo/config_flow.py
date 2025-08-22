@@ -29,7 +29,7 @@ from .const import (
 
 
 def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> vol.Schema:
-    """Build a schema for config/option flows depending on mode."""
+    """Build a schema for config/option flows."""
     data: dict[Any, Any] = {
         vol.Required(CONF_MODE, default=mode): vol.In([MODE_STATIC, MODE_TRACK]),
         vol.Required(
@@ -47,37 +47,27 @@ def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> v
             CONF_AREA_NAME_OVERRIDE,
             default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
         ): str,
+        vol.Optional(
+            CONF_ENTITY_ID,
+            default=defaults.get(CONF_ENTITY_ID, ""),
+        ): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=["device_tracker", "person"])
+        ),
+        vol.Optional(
+            CONF_LATITUDE,
+            default=defaults.get(CONF_LATITUDE, hass.config.latitude),
+        ): vol.All(vol.Coerce(float), vol.Range(min=-90, max=90)),
+        vol.Optional(
+            CONF_LONGITUDE,
+            default=defaults.get(CONF_LONGITUDE, hass.config.longitude),
+        ): vol.All(vol.Coerce(float), vol.Range(min=-180, max=180)),
+        vol.Optional(
+            CONF_MIN_TRACK_INTERVAL,
+            default=defaults.get(
+                CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL
+            ),
+        ): vol.All(vol.Coerce(int), vol.Range(min=1)),
     }
-    if mode == MODE_STATIC:
-        data.update(
-            {
-                vol.Required(
-                    CONF_LATITUDE,
-                    default=defaults.get(CONF_LATITUDE, hass.config.latitude),
-                ): vol.All(vol.Coerce(float), vol.Range(min=-90, max=90)),
-                vol.Required(
-                    CONF_LONGITUDE,
-                    default=defaults.get(CONF_LONGITUDE, hass.config.longitude),
-                ): vol.All(vol.Coerce(float), vol.Range(min=-180, max=180)),
-            }
-        )
-    else:
-        data.update(
-            {
-                vol.Required(
-                    CONF_ENTITY_ID,
-                    default=defaults.get(CONF_ENTITY_ID, ""),
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["device_tracker", "person"])
-                ),
-                vol.Required(
-                    CONF_MIN_TRACK_INTERVAL,
-                    default=defaults.get(
-                        CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL
-                    ),
-                ): vol.All(vol.Coerce(int), vol.Range(min=1)),
-            }
-        )
     return vol.Schema(data)
 
 
@@ -94,17 +84,19 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         defaults = user_input or {}
         mode = defaults.get(CONF_MODE, self._mode)
         if user_input is not None:
-            if mode == MODE_STATIC:
-                if CONF_LATITUDE not in user_input or CONF_LONGITUDE not in user_input:
-                    errors["base"] = "missing_location"
-            elif mode == MODE_TRACK:
+            if mode == MODE_TRACK:
                 entity = user_input.get(CONF_ENTITY_ID)
                 if not entity:
-                    errors["base"] = "missing_entity"
+                    errors[CONF_ENTITY_ID] = "required"
                 else:
                     state = self.hass.states.get(entity)
                     if not state or "latitude" not in state.attributes or "longitude" not in state.attributes:
-                        errors["base"] = "invalid_entity"
+                        errors[CONF_ENTITY_ID] = "invalid_entity"
+            else:
+                if not user_input.get(CONF_LATITUDE):
+                    errors[CONF_LATITUDE] = "required"
+                if not user_input.get(CONF_LONGITUDE):
+                    errors[CONF_LONGITUDE] = "required"
             if not errors:
                 return self.async_create_entry(title="Open-Meteo", data=user_input)
         self._mode = mode
@@ -134,18 +126,19 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
         defaults = user_input or data
         mode = defaults.get(CONF_MODE, self._mode)
         if user_input is not None:
-            if mode == MODE_STATIC and (
-                CONF_LATITUDE not in user_input or CONF_LONGITUDE not in user_input
-            ):
-                errors["base"] = "missing_location"
-            elif mode == MODE_TRACK:
+            if mode == MODE_TRACK:
                 entity = user_input.get(CONF_ENTITY_ID)
                 if not entity:
-                    errors["base"] = "missing_entity"
+                    errors[CONF_ENTITY_ID] = "required"
                 else:
                     state = self.hass.states.get(entity)
                     if not state or "latitude" not in state.attributes or "longitude" not in state.attributes:
-                        errors["base"] = "invalid_entity"
+                        errors[CONF_ENTITY_ID] = "invalid_entity"
+            else:
+                if not user_input.get(CONF_LATITUDE):
+                    errors[CONF_LATITUDE] = "required"
+                if not user_input.get(CONF_LONGITUDE):
+                    errors[CONF_LONGITUDE] = "required"
             if not errors:
                 return self.async_create_entry(title="", data=user_input)
         self._mode = mode
