@@ -14,10 +14,10 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from datetime import datetime
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
-from . import OpenMeteoDataUpdateCoordinator
+from .coordinator import OpenMeteoDataUpdateCoordinator
 from .const import DOMAIN
 
 
@@ -28,7 +28,11 @@ def _first_daily_dt(data: dict, key: str):
         val = data.get("daily", {}).get(key, [None])[0]
         if isinstance(val, str):
             try:
-                return datetime.fromisoformat(val)
+                dt = dt_util.parse_datetime(val)
+                if dt and dt.tzinfo is None:
+                    tz = dt_util.get_time_zone(data.get("timezone")) or dt_util.UTC
+                    dt = dt.replace(tzinfo=tz)
+                return dt
             except Exception:
                 return None
         return val

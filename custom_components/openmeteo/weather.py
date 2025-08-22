@@ -1,4 +1,4 @@
-"""Support for Open-Meteo weather service."""
+"""Weather entity for the Open-Meteo integration."""
 from __future__ import annotations
 
 import logging
@@ -29,8 +29,19 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from datetime import datetime
 
-from . import OpenMeteoDataUpdateCoordinator
-from .const import CONDITION_MAP, DOMAIN
+from .coordinator import OpenMeteoDataUpdateCoordinator
+from .const import (
+    CONDITION_MAP,
+    DOMAIN,
+    CONF_MODE,
+    CONF_MIN_TRACK_INTERVAL,
+    CONF_API_PROVIDER,
+    CONF_ENTITY_ID,
+    CONF_TRACKED_ENTITY_ID,
+    MODE_STATIC,
+    MODE_TRACK,
+    DEFAULT_MIN_TRACK_INTERVAL,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -86,6 +97,18 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             "name": "Open-Meteo",
             "manufacturer": "Open-Meteo",
         }
+        data = {**config_entry.data, **config_entry.options}
+        mode = data.get(CONF_MODE)
+        if not mode:
+            if data.get(CONF_ENTITY_ID) or data.get(CONF_TRACKED_ENTITY_ID):
+                mode = MODE_TRACK
+            else:
+                mode = MODE_STATIC
+        self._mode = mode
+        self._min_track_interval = data.get(
+            CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL
+        )
+        self._provider = data.get(CONF_API_PROVIDER, coordinator.provider)
 
     @property
     def available(self) -> bool:
@@ -132,8 +155,8 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     @property
     def native_dew_point(self) -> float | None:
         """Return the current dew point."""
-        dew = self._first_hourly_value("dewpoint_2m")
-        return round(dew, 1) if isinstance(dew, (int, float)) else None
+        dew = self.coordinator.data.get("dew_point")
+        return dew if isinstance(dew, (int, float)) else None
 
     @property
     def condition(self) -> str | None:
@@ -256,3 +279,19 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             return val
         except Exception:
             return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional state attributes."""
+        coord = self.coordinator
+        attrs = {
+            "location_name": coord.data.get("location_name"),
+            "mode": self._mode,
+            "min_track_interval": self._min_track_interval,
+            "last_location_update": coord.data.get("last_location_update"),
+            "provider": self._provider,
+        }
+        dp = coord.data.get("dew_point")
+        if dp is not None:
+            attrs["dew_point"] = dp
+        return attrs
