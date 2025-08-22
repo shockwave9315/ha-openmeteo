@@ -17,7 +17,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from datetime import datetime
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import OpenMeteoDataUpdateCoordinator
+from .coordinator import OpenMeteoDataUpdateCoordinator
 from .const import DOMAIN
 
 
