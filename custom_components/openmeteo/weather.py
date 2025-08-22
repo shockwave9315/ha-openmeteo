@@ -126,7 +126,8 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     @property
     def native_pressure(self) -> float | None:
         """Return the current pressure."""
-        return self._first_hourly_value("surface_pressure")
+        val = self._hourly_value("pressure_msl")
+        return round(val, 1) if isinstance(val, (int, float)) else None
 
     @property
     def native_wind_speed(self) -> float | None:
@@ -145,20 +146,23 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     @property
     def native_visibility(self) -> float | None:
         """Return the current visibility."""
-        vis = self._first_hourly_value("visibility")
+        vis = self._hourly_value("visibility")
         return round(vis / 1000, 2) if isinstance(vis, (int, float)) else None
 
     @property
     def humidity(self) -> int | None:
         """Return the current humidity."""
-        hum = self._first_hourly_value("relativehumidity_2m")
+        hum = self._hourly_value("relative_humidity_2m")
         return round(hum) if isinstance(hum, (int, float)) else None
 
     @property
     def native_dew_point(self) -> float | None:
         """Return the current dew point."""
-        dp = self.coordinator.data.get("dew_point")
-        return dp if isinstance(dp, (int, float)) else None
+        current_dp = self.coordinator.data.get("current", {}).get("dewpoint_2m")
+        if isinstance(current_dp, (int, float)):
+            return round(current_dp, 1)
+        val = self._hourly_value("dewpoint_2m")
+        return round(val, 1) if isinstance(val, (int, float)) else None
 
     @property
     def condition(self) -> str | None:
@@ -168,10 +172,25 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         is_day = cw.get("is_day")
         return _map_condition(weather_code, is_day) if weather_code is not None else None
     
-    def _first_hourly_value(self, key: str) -> float | None:
+    def _current_hour_index(self) -> int:
+        times = self.coordinator.data.get("hourly", {}).get("time") or []
+        if not isinstance(times, list):
+            return 0
+        now = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
+        for i, ts in enumerate(times):
+            dt = dt_util.parse_datetime(ts)
+            if dt and dt_util.as_utc(dt) >= now:
+                return i
+        return max(len(times) - 1, 0)
+
+    def _hourly_value(self, key: str, idx: int | None = None) -> float | None:
         arr = self.coordinator.data.get("hourly", {}).get(key)
-        if isinstance(arr, list) and arr:
-            return arr[0]
+        if not isinstance(arr, list) or not arr:
+            return None
+        if idx is None:
+            idx = self._current_hour_index()
+        if idx < len(arr):
+            return arr[idx]
         return None
 
     def _map_daily_forecast(self) -> list[dict[str, Any]]:
@@ -183,8 +202,8 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         temp_min = daily.get("temperature_2m_min", [])
         wcodes = daily.get("weathercode", [])
         precip_sum = daily.get("precipitation_sum", [])
-        ws_max = daily.get("windspeed_10m_max", [])
-        wd_dom = daily.get("winddirection_10m_dominant", [])
+        ws_max = daily.get("wind_speed_10m_max", [])
+        wd_dom = daily.get("wind_direction_10m_dominant", [])
         pop = daily.get("precipitation_probability_max", [])
         
         out = []
@@ -202,58 +221,66 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             out.append(forecast)
         return out
 
-    def _map_hourly_forecast(self) -> list[dict[str, Any]]:
-        if not (hourly := self.coordinator.data.get("hourly")):
-            return []
-
-        time_entries = hourly.get("time", [])
-        temp = hourly.get("temperature_2m", [])
-        wcode = hourly.get("weathercode", [])
-        ws = hourly.get("windspeed_10m", [])
-        wd = hourly.get("winddirection_10m", [])
-        precip = hourly.get("precipitation", [])
-        precip_prob = hourly.get("precipitation_probability", [])
-        press = hourly.get("surface_pressure", [])
-        hum = hourly.get("relativehumidity_2m", [])
-        cloud = hourly.get("cloudcover", [])
-        uvi = hourly.get("uv_index", [])
-        is_day_arr = hourly.get("is_day", [])
-
-        out: list[dict[str, Any]] = []
-        for i, dt in enumerate(time_entries):
-            item: dict[str, Any] = {
-                ATTR_FORECAST_TIME: dt,
-                ATTR_FORECAST_TEMP: temp[i] if i < len(temp) else None,
-                ATTR_FORECAST_CONDITION: _map_condition(
-                    wcode[i],
-                    is_day_arr[i] if i < len(is_day_arr) else 1
-                ) if i < len(wcode) else None,
-                ATTR_FORECAST_WIND_SPEED: ws[i] if i < len(ws) else None,
-                ATTR_FORECAST_WIND_BEARING: wd[i] if i < len(wd) else None,
-                ATTR_FORECAST_PRECIPITATION: precip[i] if i < len(precip) else None,
-                ATTR_FORECAST_PRECIPITATION_PROBABILITY: precip_prob[i] if i < len(precip_prob) else None,
-            }
-            if i < len(press): item["pressure"] = press[i]
-            if i < len(hum): item["humidity"] = hum[i]
-            if i < len(cloud): item["cloud_coverage"] = cloud[i]
-            if i < len(uvi): item["uv_index"] = uvi[i]
-            out.append(item)
-        return out
-        
 
     @property
     def forecast_daily(self) -> list[dict[str, Any]]:
         return self._map_daily_forecast()
 
-    @property
-    def forecast_hourly(self) -> list[dict[str, Any]]:
-        return self._map_hourly_forecast()
-
     async def async_forecast_daily(self) -> list[dict[str, Any]]:
         return self.forecast_daily
 
     async def async_forecast_hourly(self) -> list[dict[str, Any]]:
-        return self.forecast_hourly
+        hourly = self.coordinator.data.get("hourly") or {}
+        times = hourly.get("time") or []
+        if not isinstance(times, list) or not times:
+            _LOGGER.debug("Hourly forecast: 0 entries")
+            return []
+
+        idx = self._current_hour_index()
+        end = min(len(times), idx + 72)
+        result: list[dict[str, Any]] = []
+        for i in range(idx, end):
+            ts = times[i]
+            dt = dt_util.parse_datetime(ts)
+            if not dt:
+                continue
+            dt_local = dt_util.as_local(dt)
+            item: dict[str, Any] = {"datetime": dt_local.isoformat()}
+            for out_key, src_key in {
+                "temperature": "temperature_2m",
+                "dew_point": "dewpoint_2m",
+                "humidity": "relative_humidity_2m",
+                "pressure": "pressure_msl",
+                "wind_speed": "wind_speed_10m",
+                "wind_bearing": "wind_direction_10m",
+                "wind_gust_speed": "wind_gusts_10m",
+                "precipitation": "precipitation",
+                "precipitation_probability": "precipitation_probability",
+                "cloud_coverage": "cloud_cover",
+            }.items():
+                arr = hourly.get(src_key)
+                item[out_key] = arr[i] if isinstance(arr, list) and i < len(arr) else None
+            wcodes = hourly.get("weathercode")
+            if isinstance(wcodes, list) and i < len(wcodes):
+                is_day_arr = hourly.get("is_day", [])
+                is_day_val = is_day_arr[i] if isinstance(is_day_arr, list) and i < len(is_day_arr) else 1
+                item["condition"] = _map_condition(wcodes[i], is_day_val)
+            else:
+                item["condition"] = None
+            result.append(item)
+
+        missing = sorted({k for f in result for k, v in f.items() if v is None})
+        if result:
+            _LOGGER.debug(
+                "Hourly forecast: %d entries from %s to %s; missing fields: %s",
+                len(result),
+                result[0]["datetime"],
+                result[-1]["datetime"],
+                ", ".join(missing) if missing else "none",
+            )
+        else:
+            _LOGGER.debug("Hourly forecast: 0 entries")
+        return result
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -300,7 +327,7 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             "last_location_update": self.coordinator.data.get("last_location_update"),
             "provider": self._provider,
         }
-        dp = self.coordinator.data.get("dew_point")
+        dp = self.native_dew_point
         if dp is not None:
             attrs["dew_point"] = dp
         return attrs

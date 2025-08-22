@@ -64,7 +64,7 @@ SENSOR_TYPES: dict[str, dict] = {
         "unit": PERCENTAGE,
         "icon": "mdi:water-percent",
         "device_class": "humidity",
-        "value_fn": lambda d: _first_hourly(d, "relativehumidity_2m"),
+        "value_fn": lambda d: _first_hourly(d, "relative_humidity_2m"),
     },
     "apparent_temperature": {
         "name": "Temperatura odczuwalna",
@@ -108,7 +108,7 @@ SENSOR_TYPES: dict[str, dict] = {
         "unit": UnitOfSpeed.KILOMETERS_PER_HOUR,
         "icon": "mdi:weather-windy-variant",
         "device_class": None,
-        "value_fn": lambda d: _first_hourly(d, "windgusts_10m"),
+        "value_fn": lambda d: _first_hourly(d, "wind_gusts_10m"),
     },
     "wind_bearing": {
         "name": "Kierunek wiatru",
@@ -122,7 +122,7 @@ SENSOR_TYPES: dict[str, dict] = {
         "unit": UnitOfPressure.HPA,
         "icon": "mdi:gauge",
         "device_class": "pressure",
-        "value_fn": lambda d: _first_hourly(d, "surface_pressure"),
+        "value_fn": lambda d: _first_hourly(d, "pressure_msl"),
     },
     "visibility": {
         "name": "Widzialność",
@@ -136,7 +136,8 @@ SENSOR_TYPES: dict[str, dict] = {
         "unit": UnitOfTemperature.CELSIUS,
         "icon": "mdi:water",
         "device_class": "temperature",
-        "value_fn": lambda d: _first_hourly(d, "dewpoint_2m"),
+        "value_fn": lambda d: d.get("current", {}).get("dewpoint_2m")
+        or _first_hourly(d, "dewpoint_2m"),
     },
     "location": {
         "name": "Lokalizacja",
