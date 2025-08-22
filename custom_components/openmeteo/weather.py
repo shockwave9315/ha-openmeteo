@@ -1,4 +1,4 @@
-"""Support for Open-Meteo weather service."""
+"""Weather entity for the Open-Meteo integration."""
 from __future__ import annotations
 
 import logging
@@ -29,8 +29,19 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from datetime import datetime
 
-from . import OpenMeteoDataUpdateCoordinator
-from .const import CONDITION_MAP, DOMAIN
+from .coordinator import OpenMeteoDataUpdateCoordinator
+from .const import (
+    CONDITION_MAP,
+    DOMAIN,
+    CONF_MODE,
+    CONF_MIN_TRACK_INTERVAL,
+    CONF_API_PROVIDER,
+    CONF_ENTITY_ID,
+    CONF_TRACKED_ENTITY_ID,
+    MODE_STATIC,
+    MODE_TRACK,
+    DEFAULT_MIN_TRACK_INTERVAL,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -256,3 +267,29 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             return val
         except Exception:
             return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional state attributes."""
+        coord = self.coordinator
+        mode = coord.entry.options.get(CONF_MODE, coord.entry.data.get(CONF_MODE))
+        if not mode:
+            mode = (
+                MODE_TRACK
+                if coord.entry.options.get(CONF_ENTITY_ID, coord.entry.data.get(CONF_ENTITY_ID))
+                or coord.entry.options.get(CONF_TRACKED_ENTITY_ID, coord.entry.data.get(CONF_TRACKED_ENTITY_ID))
+                else MODE_STATIC
+            )
+        min_track = coord.entry.options.get(
+            CONF_MIN_TRACK_INTERVAL,
+            coord.entry.data.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL),
+        )
+        return {
+            "location_name": coord.location_name,
+            "mode": mode,
+            "min_track_interval": min_track,
+            "last_location_update": coord.last_location_update.isoformat()
+            if coord.last_location_update
+            else None,
+            "provider": coord.provider,
+        }
