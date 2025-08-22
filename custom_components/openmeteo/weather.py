@@ -28,6 +28,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from datetime import datetime
+from homeassistant.util import dt as dt_util
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
 from .const import (
@@ -97,6 +98,19 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             "name": "Open-Meteo",
             "manufacturer": "Open-Meteo",
         }
+        data = {**config_entry.data, **config_entry.options}
+        mode = data.get(CONF_MODE)
+        if not mode:
+            mode = (
+                MODE_TRACK
+                if data.get(CONF_ENTITY_ID) or data.get(CONF_TRACKED_ENTITY_ID)
+                else MODE_STATIC
+            )
+        self._mode = mode
+        self._min_track_interval = int(
+            data.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL)
+        )
+        self._provider = coordinator.provider
 
     @property
     def available(self) -> bool:
@@ -143,8 +157,8 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     @property
     def native_dew_point(self) -> float | None:
         """Return the current dew point."""
-        dew = self._first_hourly_value("dewpoint_2m")
-        return round(dew, 1) if isinstance(dew, (int, float)) else None
+        dp = self.coordinator.data.get("dew_point")
+        return dp if isinstance(dp, (int, float)) else None
 
     @property
     def condition(self) -> str | None:
@@ -250,46 +264,43 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
     @property
     def sunrise(self) -> datetime | None:
-        try:
-            val = self.coordinator.data.get("daily", {}).get("sunrise", [None])[0]
-            if isinstance(val, str):
-                return datetime.fromisoformat(val)
-            return val
-        except Exception:
+        val = self.coordinator.data.get("daily", {}).get("sunrise", [None])[0]
+        if isinstance(val, str):
+            dt = dt_util.parse_datetime(val)
+        else:
+            dt = val
+        if not dt:
             return None
+        if dt.tzinfo is None:
+            tz = dt_util.get_time_zone(self.hass.config.time_zone) or dt_util.UTC
+            dt = dt.replace(tzinfo=tz)
+        return dt_util.as_utc(dt)
 
     @property
     def sunset(self) -> datetime | None:
-        try:
-            val = self.coordinator.data.get("daily", {}).get("sunset", [None])[0]
-            if isinstance(val, str):
-                return datetime.fromisoformat(val)
-            return val
-        except Exception:
+        val = self.coordinator.data.get("daily", {}).get("sunset", [None])[0]
+        if isinstance(val, str):
+            dt = dt_util.parse_datetime(val)
+        else:
+            dt = val
+        if not dt:
             return None
+        if dt.tzinfo is None:
+            tz = dt_util.get_time_zone(self.hass.config.time_zone) or dt_util.UTC
+            dt = dt.replace(tzinfo=tz)
+        return dt_util.as_utc(dt)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional state attributes."""
-        coord = self.coordinator
-        mode = coord.entry.options.get(CONF_MODE, coord.entry.data.get(CONF_MODE))
-        if not mode:
-            mode = (
-                MODE_TRACK
-                if coord.entry.options.get(CONF_ENTITY_ID, coord.entry.data.get(CONF_ENTITY_ID))
-                or coord.entry.options.get(CONF_TRACKED_ENTITY_ID, coord.entry.data.get(CONF_TRACKED_ENTITY_ID))
-                else MODE_STATIC
-            )
-        min_track = coord.entry.options.get(
-            CONF_MIN_TRACK_INTERVAL,
-            coord.entry.data.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL),
-        )
-        return {
-            "location_name": coord.location_name,
-            "mode": mode,
-            "min_track_interval": min_track,
-            "last_location_update": coord.last_location_update.isoformat()
-            if coord.last_location_update
-            else None,
-            "provider": coord.provider,
+        attrs = {
+            "location_name": self.coordinator.data.get("location_name"),
+            "mode": self._mode,
+            "min_track_interval": self._min_track_interval,
+            "last_location_update": self.coordinator.data.get("last_location_update"),
+            "provider": self._provider,
         }
+        dp = self.coordinator.data.get("dew_point")
+        if dp is not None:
+            attrs["dew_point"] = dp
+        return attrs
