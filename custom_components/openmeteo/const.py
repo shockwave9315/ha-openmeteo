@@ -20,7 +20,7 @@ ATTRIBUTION = "Weather data provided by Open-Meteo"
 MANUFACTURER = "Open-Meteo"
 NAME = "Open-Meteo"
 
-# Configuration keys
+"""Configuration keys and defaults."""
 CONF_NAME = "name"
 CONF_DAILY_VARIABLES = "daily_variables"
 CONF_HOURLY_VARIABLES = "hourly_variables"
@@ -29,16 +29,34 @@ CONF_LONGITUDE = "longitude"
 CONF_ALTITUDE = "altitude"
 CONF_TIME_ZONE = "time_zone"
 CONF_SCAN_INTERVAL = "scan_interval"
+# New options for dynamic tracking
+CONF_MODE = "mode"
+CONF_ENTITY_ID = "entity_id"
+CONF_MIN_TRACK_INTERVAL = "min_track_interval"
+CONF_UPDATE_INTERVAL = "update_interval"
+CONF_UNITS = "units"
+CONF_API_PROVIDER = "api_provider"
+CONF_API_KEY = "api_key"
+CONF_AREA_NAME_OVERRIDE = "area_name_override"
+
+# Modes
+MODE_STATIC = "static"
+MODE_TRACK = "track"
+
+# Legacy keys for backward compatibility
 CONF_TRACKING_MODE = "tracking_mode"
 CONF_TRACKED_ENTITY_ID = "tracked_entity_id"
-
-# Tracking modes
 TRACKING_MODE_FIXED = "fixed"
 TRACKING_MODE_DEVICE = "device"
 
 # Default values
 DEFAULT_NAME = "Open-Meteo"
-DEFAULT_SCAN_INTERVAL = 600  # seconds
+# Default update interval in seconds. Historical configs may use scan_interval.
+DEFAULT_SCAN_INTERVAL = 600
+DEFAULT_UPDATE_INTERVAL = DEFAULT_SCAN_INTERVAL
+DEFAULT_MIN_TRACK_INTERVAL = 15  # minutes
+DEFAULT_UNITS = "metric"
+DEFAULT_API_PROVIDER = "open_meteo"
 
 DEFAULT_DAILY_VARIABLES = [
     "temperature_2m_max",
