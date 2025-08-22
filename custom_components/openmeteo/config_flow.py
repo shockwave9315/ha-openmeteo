@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: Apache-2.0
 """Config and options flows for Open-Meteo."""
 from __future__ import annotations
 
