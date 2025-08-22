@@ -33,7 +33,7 @@ def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> v
     if mode == MODE_TRACK:
         data: dict[Any, Any] = {
             vol.Required(
-                CONF_ENTITY_ID, default=defaults.get(CONF_ENTITY_ID, "")
+                CONF_ENTITY_ID, default=defaults.get(CONF_ENTITY_ID, None)
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["device_tracker", "person"])
             ),
@@ -208,7 +208,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     vol.Required(
                         CONF_ENTITY_ID,
 
-                        default=defaults.get(CONF_ENTITY_ID, ""),
+                        default=defaults.get(CONF_ENTITY_ID, None),
                     ): selector.EntitySelector(
                         selector.EntitySelectorConfig(
                             domain=["device_tracker", "person"]
