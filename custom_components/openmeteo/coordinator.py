@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 import random
 from datetime import datetime, timedelta
 from typing import Any
@@ -36,16 +35,6 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def _dew_point_c(temp_c: float | None, rh_pct: float | None) -> float | None:
-    """Magnus-Tetens formula. Returns dew point in °C (1 decimal)."""
-    if temp_c is None or rh_pct is None or rh_pct <= 0:
-        return None
-    a, b = 17.62, 243.12
-    gamma = math.log(rh_pct / 100.0) + (a * temp_c) / (b + temp_c)
-    dp = (b * gamma) / (a - gamma)
-    return round(dp, 1)
 
 
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -211,7 +200,24 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "temperature_unit": "celsius",
             "windspeed_unit": "kmh",
             "precipitation_unit": "mm",
+            "timezone": "auto",
+            "timeformat": "iso8601",
         }
+        params["current"] = ",".join(
+            [
+                "temperature_2m",
+                "relative_humidity_2m",
+                "dewpoint_2m",
+                "pressure_msl",
+                "wind_speed_10m",
+                "wind_direction_10m",
+                "wind_gusts_10m",
+                "weathercode",
+                "cloud_cover",
+                "precipitation",
+                "visibility",
+            ]
+        )
 
         session = async_get_clientsession(self.hass)
         headers = {
@@ -241,10 +247,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._last_data["location"] = {"latitude": latitude, "longitude": longitude}
             self._last_data["location_name"] = loc_name
             self._last_data["last_location_update"] = last_loc_ts
-            cw_temp = self._last_data.get("current_weather", {}).get("temperature")
-            hum_arr = self._last_data.get("hourly", {}).get("relativehumidity_2m", [])
-            hum_val = hum_arr[0] if isinstance(hum_arr, list) and hum_arr else None
-            self._last_data["dew_point"] = _dew_point_c(cw_temp, hum_val)
             return self._last_data
         except UpdateFailed:
             if self._last_data is not None:

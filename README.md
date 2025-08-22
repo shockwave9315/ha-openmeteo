@@ -75,7 +75,7 @@ openmeteo:
     device_tracker.phone_2: "Wakacje"
   hourly_variables:
     - temperature_2m
-    - relativehumidity_2m
+    - relative_humidity_2m
     - precipitation
     - weathercode
   daily_variables:
@@ -87,7 +87,7 @@ openmeteo:
     - precipitation_sum
     - precipitation_hours
     - precipitation_probability_max
-    - windspeed_10m_max
+    - wind_speed_10m_max
 ```
 
 ---
