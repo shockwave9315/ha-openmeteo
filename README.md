@@ -48,6 +48,8 @@
 2. Włącz „Śledź urządzenia” i wybierz trackery.
 3. Opcjonalnie: nadpisz nazwę obszaru, używaj nazw urządzeń.
 
+*Options flow jest dwukrokowy: najpierw wybór trybu (Static/Tracker), potem odpowiednie pola.*
+
 ### 🔹 Opcje zaawansowane
 - **Interwał aktualizacji** – domyślnie 30 min.
 - **Zmienne godzinowe/dzienne** – wybierz, które dane pobierać.
@@ -76,6 +78,7 @@ openmeteo:
   hourly_variables:
     - temperature_2m
     - relative_humidity_2m
+    - dewpoint_2m
     - precipitation
     - weathercode
   daily_variables:
