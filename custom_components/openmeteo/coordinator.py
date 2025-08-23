@@ -113,8 +113,9 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Return (lat, lon, from_entity) chosen by precedence."""
         entry = self.config_entry
         opts = entry.options or {}
-        track_enabled = bool(
-            opts.get("track", opts.get("track_enabled", False))
+        track_enabled = (
+            opts.get("track")
+            or opts.get("track_enabled")
             or (entry.options.get(CONF_MODE) or entry.data.get(CONF_MODE)) == MODE_TRACK
         )
         track_entity_id = (
@@ -122,6 +123,10 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             or opts.get("track_entity")
             or opts.get(CONF_ENTITY_ID)
             or opts.get(CONF_TRACKED_ENTITY_ID)
+            or entry.data.get("track_entity_id")
+            or entry.data.get("track_entity")
+            or entry.data.get(CONF_ENTITY_ID)
+            or entry.data.get(CONF_TRACKED_ENTITY_ID)
         )
         lat = opts.get(CONF_LATITUDE, entry.data.get(CONF_LATITUDE))
         lon = opts.get(CONF_LONGITUDE, entry.data.get(CONF_LONGITUDE))
