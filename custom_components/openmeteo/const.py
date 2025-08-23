@@ -40,8 +40,7 @@ CONF_UNITS = "units"
 CONF_API_PROVIDER = "api_provider"
 CONF_API_KEY = "api_key"
 CONF_AREA_NAME_OVERRIDE = "area_name_override"
-CONF_UV_INDEX_HOURLY = "uv_index_hourly"
-CONF_UV_INDEX_MAX = "uv_index_max_daily"
+CONF_UV_INDEX = "uv_index"
 
 # Modes
 MODE_STATIC = "static"
@@ -71,8 +70,6 @@ DEFAULT_DAILY_VARIABLES = [
     "wind_direction_10m_dominant",
     "sunrise",
     "sunset",
-    "uv_index_max",
-    "uv_index_clear_sky_max",
 ]
 
 DEFAULT_HOURLY_VARIABLES = [

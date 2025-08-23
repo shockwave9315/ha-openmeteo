@@ -1,4 +1,4 @@
-# 🌤 Open-Meteo – Integracja dla Home Assistant (v1.3.9)
+# 🌤 Open-Meteo – Integracja dla Home Assistant (v1.3.19)
 
 [Open-Meteo](https://open-meteo.com/) — darmowe, szybkie API pogody **bez klucza API**.  
 Integracja dostarcza encję `weather` z bieżącą pogodą i prognozą oraz zestaw sensorów do automatyzacji.
@@ -12,7 +12,7 @@ Integracja dostarcza encję `weather` z bieżącą pogodą i prognozą oraz zest
   - **Static** — stałe współrzędne,
   - **Tracker** — z encji `device_tracker` / `person` (GPS) z **automatycznym fallbackiem**.
 - **Punkt rosy** z API: `dewpoint_2m` (bez lokalnych obliczeń).
-- **Sensory pomocnicze** (łatwe do automatyzacji): temperatura, wilgotność, ciśnienie, wiatr (prędkość / porywy / kierunek), widzialność, UV, opady i ich prawdopodobieństwo.
+- **Sensory pomocnicze** (łatwe do automatyzacji): temperatura, wilgotność, ciśnienie, wiatr (prędkość / porywy / kierunek), widzialność, Indeks UV (godzinowy), opady i ich prawdopodobieństwo.
 
 ---
 
@@ -192,6 +192,9 @@ cards:
 ---
 
 ## 🗒️ Changelog
+
+### 1.3.19
+- Uproszczono obsługę UV – pozostaje tylko jeden sensor godzinowy.
 
 ### 1.3.9
 - **Punkt rosy** z API (`dewpoint_2m`) — usunięto lokalne liczenie.

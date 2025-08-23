@@ -47,6 +47,5 @@
       "invalid_entity": "Encja nie ma współrzędnych GPS"
     }
   },
-  "uv_index_hourly": { "name": "Indeks UV (godzinowy)" },
-  "uv_index_max_daily": { "name": "Indeks UV (max dziś)" }
+  "uv_index": { "name": "Indeks UV" }
 }
