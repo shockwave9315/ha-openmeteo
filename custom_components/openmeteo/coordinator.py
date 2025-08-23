@@ -172,12 +172,14 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         elif self.location_name:
             loc_name = self.location_name
 
+        hourly_vars = list(dict.fromkeys(DEFAULT_HOURLY_VARIABLES + ["uv_index"]))
+        daily_vars = list(dict.fromkeys(DEFAULT_DAILY_VARIABLES + ["uv_index_max"]))
         params = {
             "latitude": latitude,
             "longitude": longitude,
             "current_weather": "true",
-            "hourly": ",".join(DEFAULT_HOURLY_VARIABLES),
-            "daily": ",".join(DEFAULT_DAILY_VARIABLES),
+            "hourly": ",".join(hourly_vars),
+            "daily": ",".join(daily_vars),
             "temperature_unit": "celsius",
             "windspeed_unit": "kmh",
             "precipitation_unit": "mm",
@@ -229,6 +231,12 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._last_data["location"] = {"latitude": latitude, "longitude": longitude}
             self._last_data["location_name"] = loc_name
             self._last_data["last_location_update"] = last_loc_ts
+            hourly = self._last_data.setdefault("hourly", {})
+            hourly.setdefault("time", [])
+            hourly.setdefault("uv_index", [])
+            daily = self._last_data.setdefault("daily", {})
+            daily.setdefault("time", [])
+            daily.setdefault("uv_index_max", [])
             if from_entity:
                 self._last_coords = (latitude, longitude)
             return self._last_data

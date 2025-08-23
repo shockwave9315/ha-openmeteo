@@ -46,5 +46,7 @@
       "missing_entity": "Tracking entity is required",
       "invalid_entity": "Entity has no GPS coordinates"
     }
-  }
+  },
+  "uv_index_hourly": { "name": "UV Index (hourly)" },
+  "uv_index_max_daily": { "name": "UV Index (max today)" }
 }

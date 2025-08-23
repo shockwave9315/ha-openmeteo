@@ -3,7 +3,7 @@
 """Sensor platform for Open-Meteo."""
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     DEGREE,
@@ -20,7 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
-from .const import DOMAIN
+from .const import DOMAIN, ATTRIBUTION
 
 
 
@@ -51,6 +51,18 @@ def _first_hourly(data: dict, key: str):
 def _visibility_km(data: dict):
     v = _first_hourly(data, "visibility")
     return v / 1000 if isinstance(v, (int, float)) else None
+
+
+def _extra_attrs(data: dict) -> dict:
+    loc = (data or {}).get("location") or {}
+    return {
+        "attribution": ATTRIBUTION,
+        "latitude": loc.get("latitude"),
+        "longitude": loc.get("longitude"),
+        "model": data.get("model"),
+        "source": "open-meteo",
+        "last_update": (data.get("current_weather") or {}).get("time"),
+    }
 
 
 SENSOR_TYPES: dict[str, dict] = {
@@ -180,6 +192,12 @@ async def async_setup_entry(
 ) -> None:
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     entities = [OpenMeteoSensor(coordinator, config_entry, k) for k in SENSOR_TYPES]
+    entities.extend(
+        [
+            OpenMeteoUvIndexHourlySensor(coordinator, config_entry),
+            OpenMeteoUvIndexMaxDailySensor(coordinator, config_entry),
+        ]
+    )
     async_add_entities(entities)
 
 
@@ -224,3 +242,102 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     @property
     def available(self) -> bool:
         return self.coordinator.last_update_success
+
+    @property
+    def extra_state_attributes(self):
+        return _extra_attrs(self.coordinator.data or {})
+
+
+class OpenMeteoUvIndexHourlySensor(CoordinatorEntity, SensorEntity):
+    """Hourly UV Index sensor."""
+
+    def __init__(
+        self,
+        coordinator: OpenMeteoDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        name = config_entry.data.get("name", "Open-Meteo")
+        self._attr_name = f"{name} Indeks UV (godzinowy)"
+        self._attr_unique_id = f"{config_entry.entry_id}-uv_index_hourly"
+        self._attr_native_unit_of_measurement = "UV Index"
+        self._attr_icon = "mdi:weather-sunny-alert"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, config_entry.entry_id)},
+            "name": "Open-Meteo",
+            "manufacturer": "Open-Meteo",
+        }
+
+    @property
+    def native_value(self):
+        data = self.coordinator.data or {}
+        hourly = data.get("hourly") or {}
+        times = hourly.get("time") or []
+        values = hourly.get("uv_index") or []
+        if not times or not values:
+            return None
+        tz = dt_util.get_time_zone(data.get("timezone")) or dt_util.UTC
+        now = dt_util.now(tz).replace(minute=0, second=0, microsecond=0)
+        for t_str, val in zip(times, values):
+            try:
+                dt = dt_util.parse_datetime(t_str)
+                if dt and dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=tz)
+                if dt == now and isinstance(val, (int, float)):
+                    return round(val, 2)
+            except Exception:
+                continue
+        return None
+
+    @property
+    def extra_state_attributes(self):
+        return _extra_attrs(self.coordinator.data or {})
+
+
+class OpenMeteoUvIndexMaxDailySensor(CoordinatorEntity, SensorEntity):
+    """Daily maximum UV Index sensor."""
+
+    def __init__(
+        self,
+        coordinator: OpenMeteoDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        name = config_entry.data.get("name", "Open-Meteo")
+        self._attr_name = f"{name} Indeks UV (max dziś)"
+        self._attr_unique_id = f"{config_entry.entry_id}-uv_index_max_daily"
+        self._attr_native_unit_of_measurement = "UV Index"
+        self._attr_icon = "mdi:weather-sunny-alert"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, config_entry.entry_id)},
+            "name": "Open-Meteo",
+            "manufacturer": "Open-Meteo",
+        }
+
+    @property
+    def native_value(self):
+        data = self.coordinator.data or {}
+        daily = data.get("daily") or {}
+        times = daily.get("time") or []
+        values = daily.get("uv_index_max") or []
+        if not times or not values:
+            return None
+        tz = dt_util.get_time_zone(data.get("timezone")) or dt_util.UTC
+        today = dt_util.now(tz).date()
+        for t_str, val in zip(times, values):
+            try:
+                dt = dt_util.parse_datetime(t_str)
+                if dt:
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=tz)
+                    if dt.date() == today and isinstance(val, (int, float)):
+                        return round(val, 2)
+            except Exception:
+                continue
+        return None
+
+    @property
+    def extra_state_attributes(self):
+        return _extra_attrs(self.coordinator.data or {})
