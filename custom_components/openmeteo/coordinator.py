@@ -11,7 +11,7 @@ from typing import Any
 import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.event import async_track_state_change
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -75,11 +75,13 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._unsub_entity = None
         self._tracked_entity_id = entity_id
         if entity_id:
-            def _on_state_change(event, prev, new):
+            async def _on_state_change(event):
                 # refresh soon when entity coords appear/change
-                self.hass.async_create_task(self.async_request_refresh())
+                await self.async_request_refresh()
 
-            self._unsub_entity = async_track_state_change(self.hass, [entity_id], _on_state_change)
+            self._unsub_entity = async_track_state_change_event(
+                self.hass, [entity_id], _on_state_change
+            )
 
     async def _reverse_geocode(self, lat: float, lon: float) -> str | None:
         url = (
