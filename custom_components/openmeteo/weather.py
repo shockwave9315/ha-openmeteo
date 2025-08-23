@@ -119,6 +119,20 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         return bool(self.coordinator.data) and getattr(self.coordinator, "last_update_success", True)
 
     @property
+    def name(self) -> str | None:
+        base = self._attr_name or "Open-Meteo"
+        data = self.coordinator.data or {}
+        loc_name = data.get("location_name")
+        if loc_name:
+            return f"{base} — {loc_name}"
+        loc = data.get("location") or {}
+        lat = loc.get("latitude")
+        lon = loc.get("longitude")
+        if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+            return f"{base} — {lat:.5f},{lon:.5f}"
+        return base
+
+    @property
     def native_temperature(self) -> float | None:
         """Return the current temperature."""
         cw = self.coordinator.data.get("current_weather", {})
@@ -321,15 +335,23 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return additional state attributes."""
-        attrs = {
-            "location_name": self.coordinator.data.get("location_name"),
-            "mode": self._mode,
-            "min_track_interval": self._min_track_interval,
-            "last_location_update": self.coordinator.data.get("last_location_update"),
-            "provider": self._provider,
-        }
+        attrs = dict(super().extra_state_attributes or {})
+        data = self.coordinator.data or {}
+        loc = data.get("location") or {}
+        attrs.update(
+            {
+                "location_name": data.get("location_name"),
+                "mode": self._mode,
+                "min_track_interval": self._min_track_interval,
+                "last_location_update": data.get("last_location_update"),
+                "provider": self._provider,
+            }
+        )
         dp = self.native_dew_point
         if dp is not None:
             attrs["dew_point"] = dp
+        if "latitude" not in attrs:
+            attrs["latitude"] = loc.get("latitude")
+        if "longitude" not in attrs:
+            attrs["longitude"] = loc.get("longitude")
         return attrs
