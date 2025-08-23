@@ -69,6 +69,8 @@ DEFAULT_DAILY_VARIABLES = [
     "wind_direction_10m_dominant",
     "sunrise",
     "sunset",
+    "uv_index_max",
+    "uv_index_clear_sky_max",
 ]
 
 DEFAULT_HOURLY_VARIABLES = [
