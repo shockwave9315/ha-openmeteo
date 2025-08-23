@@ -234,6 +234,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "cloud_cover",
                 "precipitation",
                 "visibility",
+                "uv_index",
             ]
         )
 
