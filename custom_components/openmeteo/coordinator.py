@@ -11,6 +11,7 @@ from typing import Any
 import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -58,10 +59,27 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.provider: str = entry.options.get("api_provider", DEFAULT_API_PROVIDER)
         self._last_data: dict[str, Any] | None = None
         self._last_coords: tuple[float, float] | None = None
+        self._tracked_entity_id: str | None = None
+        self._unsub_entity: callable | None = None
 
     async def async_options_updated(self) -> None:
         """Call when ConfigEntry options changed."""
         self._last_coords = None
+        opts = self.config_entry.options or {}
+        entity_id = opts.get("entity_id") or opts.get("track_entity") or opts.get("track_entity_id")
+        await self._resubscribe_tracked_entity(entity_id)
+
+    async def _resubscribe_tracked_entity(self, entity_id: str | None) -> None:
+        if self._unsub_entity:
+            self._unsub_entity()
+            self._unsub_entity = None
+        self._tracked_entity_id = entity_id
+        if entity_id:
+            def _on_state_change(event, prev, new):
+                # refresh soon when entity coords appear/change
+                self.hass.async_create_task(self.async_request_refresh())
+
+            self._unsub_entity = async_track_state_change(self.hass, [entity_id], _on_state_change)
 
     async def _reverse_geocode(self, lat: float, lon: float) -> str | None:
         url = (
