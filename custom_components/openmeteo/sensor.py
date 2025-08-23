@@ -87,16 +87,6 @@ SENSOR_TYPES: dict[str, dict] = {
         "device_class": "temperature",
         "value_fn": lambda d: _first_hourly(d, "apparent_temperature"),
     },
-    "uv_index": {
-        "name": "Indeks UV",
-        "unit": "UV Index",
-        "icon": "mdi:sun-wireless-outline",
-        "device_class": None,
-        "value_fn": lambda d: (d.get("current", {}) or {}).get("uv_index")
-        or _first_hourly(d, "uv_index")
-        or (d.get("daily", {}).get("uv_index_max", [None])[0])
-        or 0,
-    },
     "precipitation_probability": {
         "name": "Prawdopodobieństwo opadów",
         "unit": PERCENTAGE,
@@ -192,12 +182,7 @@ async def async_setup_entry(
 ) -> None:
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     entities = [OpenMeteoSensor(coordinator, config_entry, k) for k in SENSOR_TYPES]
-    entities.extend(
-        [
-            OpenMeteoUvIndexHourlySensor(coordinator, config_entry),
-            OpenMeteoUvIndexMaxDailySensor(coordinator, config_entry),
-        ]
-    )
+    entities.append(OpenMeteoUvIndexSensor(coordinator, config_entry))
     async_add_entities(entities)
 
 
@@ -248,8 +233,8 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         return _extra_attrs(self.coordinator.data or {})
 
 
-class OpenMeteoUvIndexHourlySensor(CoordinatorEntity, SensorEntity):
-    """Hourly UV Index sensor."""
+class OpenMeteoUvIndexSensor(CoordinatorEntity, SensorEntity):
+    """UV Index sensor for the current hour."""
 
     def __init__(
         self,
@@ -258,8 +243,8 @@ class OpenMeteoUvIndexHourlySensor(CoordinatorEntity, SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         name = config_entry.data.get("name", "Open-Meteo")
-        self._attr_name = f"{name} Indeks UV (godzinowy)"
-        self._attr_unique_id = f"{config_entry.entry_id}-uv_index_hourly"
+        self._attr_name = f"{name} Indeks UV"
+        self._attr_unique_id = f"{config_entry.entry_id}-uv_index"
         self._attr_native_unit_of_measurement = "UV Index"
         self._attr_icon = "mdi:weather-sunny-alert"
         self._attr_state_class = SensorStateClass.MEASUREMENT
@@ -286,54 +271,6 @@ class OpenMeteoUvIndexHourlySensor(CoordinatorEntity, SensorEntity):
                     dt = dt.replace(tzinfo=tz)
                 if dt == now and isinstance(val, (int, float)):
                     return round(val, 2)
-            except Exception:
-                continue
-        return None
-
-    @property
-    def extra_state_attributes(self):
-        return _extra_attrs(self.coordinator.data or {})
-
-
-class OpenMeteoUvIndexMaxDailySensor(CoordinatorEntity, SensorEntity):
-    """Daily maximum UV Index sensor."""
-
-    def __init__(
-        self,
-        coordinator: OpenMeteoDataUpdateCoordinator,
-        config_entry: ConfigEntry,
-    ) -> None:
-        super().__init__(coordinator)
-        name = config_entry.data.get("name", "Open-Meteo")
-        self._attr_name = f"{name} Indeks UV (max dziś)"
-        self._attr_unique_id = f"{config_entry.entry_id}-uv_index_max_daily"
-        self._attr_native_unit_of_measurement = "UV Index"
-        self._attr_icon = "mdi:weather-sunny-alert"
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, config_entry.entry_id)},
-            "name": "Open-Meteo",
-            "manufacturer": "Open-Meteo",
-        }
-
-    @property
-    def native_value(self):
-        data = self.coordinator.data or {}
-        daily = data.get("daily") or {}
-        times = daily.get("time") or []
-        values = daily.get("uv_index_max") or []
-        if not times or not values:
-            return None
-        tz = dt_util.get_time_zone(data.get("timezone")) or dt_util.UTC
-        today = dt_util.now(tz).date()
-        for t_str, val in zip(times, values):
-            try:
-                dt = dt_util.parse_datetime(t_str)
-                if dt:
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=tz)
-                    if dt.date() == today and isinstance(val, (int, float)):
-                        return round(val, 2)
             except Exception:
                 continue
         return None
