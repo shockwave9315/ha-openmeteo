@@ -1,12 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-License-Identifier: Apache-2.0
 """Data update coordinator for Open-Meteo."""
 from __future__ import annotations
 
 import asyncio
 import logging
 import random
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 import aiohttp
@@ -20,18 +19,13 @@ from .const import (
     CONF_ENTITY_ID,
     CONF_LATITUDE,
     CONF_LONGITUDE,
-    CONF_MIN_TRACK_INTERVAL,
     CONF_MODE,
-    CONF_UPDATE_INTERVAL,
     CONF_TRACKED_ENTITY_ID,
-    CONF_TRACKING_MODE,
+    CONF_UPDATE_INTERVAL,
     DEFAULT_API_PROVIDER,
     DEFAULT_DAILY_VARIABLES,
     DEFAULT_HOURLY_VARIABLES,
-    DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
-    DOMAIN,
-    MODE_STATIC,
     MODE_TRACK,
     URL,
 )
@@ -42,10 +36,9 @@ _LOGGER = logging.getLogger(__name__)
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Class to manage fetching Open-Meteo data and tracking coordinates."""
 
-    EPS = 1e-4
-
     def __init__(self, hass: HomeAssistant, entry) -> None:
-        self.entry = entry
+        self.hass = hass
+        self.config_entry = entry
         interval = entry.options.get(
             CONF_UPDATE_INTERVAL,
             entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
@@ -59,34 +52,16 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         super().__init__(
             hass, _LOGGER, name="Open-Meteo", update_interval=timedelta(seconds=interval)
         )
-        self._cached: tuple[float, float] | None = None
-        self._accepted_lat: float | None = None
-        self._accepted_lon: float | None = None
-        self._accepted_at: datetime | None = None
         self.location_name: str | None = entry.options.get(
             CONF_AREA_NAME_OVERRIDE, entry.data.get(CONF_AREA_NAME_OVERRIDE)
         )
         self.provider: str = entry.options.get("api_provider", DEFAULT_API_PROVIDER)
-        self._warned_missing = False
         self._last_data: dict[str, Any] | None = None
+        self._last_coords: tuple[float, float] | None = None
 
-    @property
-    def last_location_update(self) -> datetime | None:
-        """Return timestamp when coordinates were last accepted."""
-        return self._accepted_at
-
-    def _current_mode(self) -> str:
-        data = {**self.entry.data, **self.entry.options}
-        mode = data.get(CONF_MODE) or data.get(CONF_TRACKING_MODE)
-        if not mode:
-            if data.get(CONF_ENTITY_ID) or data.get(CONF_TRACKED_ENTITY_ID):
-                return MODE_TRACK
-            return MODE_STATIC
-        if mode in (MODE_STATIC, MODE_TRACK):
-            return mode
-        if mode == "device":
-            return MODE_TRACK
-        return MODE_STATIC
+    async def async_options_updated(self) -> None:
+        """Call when ConfigEntry options changed."""
+        self._last_coords = None
 
     async def _reverse_geocode(self, lat: float, lon: float) -> str | None:
         url = (
@@ -114,100 +89,63 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _coords_fallback(self, lat: float, lon: float) -> str:
         return f"{lat:.2f},{lon:.2f}"
 
+    def _resolve_location(self) -> tuple[float, float, bool]:
+        """Return (lat, lon, from_entity) chosen by precedence."""
+        entry = self.config_entry
+        opts = entry.options or {}
+        track_enabled = bool(
+            opts.get("track", opts.get("track_enabled", False))
+            or (entry.options.get(CONF_MODE) or entry.data.get(CONF_MODE)) == MODE_TRACK
+        )
+        track_entity_id = (
+            opts.get("track_entity_id")
+            or opts.get("track_entity")
+            or opts.get(CONF_ENTITY_ID)
+            or opts.get(CONF_TRACKED_ENTITY_ID)
+        )
+        lat = opts.get(CONF_LATITUDE, entry.data.get(CONF_LATITUDE))
+        lon = opts.get(CONF_LONGITUDE, entry.data.get(CONF_LONGITUDE))
+
+        if track_enabled and track_entity_id:
+            st = self.hass.states.get(track_entity_id)
+            if st:
+                attrs = st.attributes or {}
+                ent_lat = attrs.get("latitude")
+                ent_lon = attrs.get("longitude")
+                if isinstance(ent_lat, (int, float)) and isinstance(ent_lon, (int, float)):
+                    return float(ent_lat), float(ent_lon), True
+
+        if self._last_coords:
+            return (*self._last_coords, False)
+
+        if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+            return float(lat), float(lon), False
+
+        return float(self.hass.config.latitude), float(self.hass.config.longitude), False
+
     async def _async_update_data(self) -> dict[str, Any]:
-        mode = self._current_mode()
-        data = {**self.entry.data, **self.entry.options}
-        min_track = int(data.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL))
-        now = dt_util.utcnow()
+        latitude, longitude, from_entity = self._resolve_location()
 
-        prev_name = self.data.get("location_name") if self.data else None
-        prev_loc_ts = self.data.get("last_location_update") if self.data else None
-        coords_changed = False
+        prev_loc = (self.data or {}).get("location") if self.data else None
+        prev_lat = prev_loc.get("latitude") if prev_loc else None
+        prev_lon = prev_loc.get("longitude") if prev_loc else None
+        coords_changed = prev_lat != latitude or prev_lon != longitude
 
-        if mode == MODE_TRACK:
-            ent_id = data.get(CONF_ENTITY_ID) or data.get(CONF_TRACKED_ENTITY_ID)
-            state = self.hass.states.get(ent_id) if ent_id else None
-            if state and "latitude" in state.attributes and "longitude" in state.attributes:
-                try:
-                    lat = float(state.attributes["latitude"])
-                    lon = float(state.attributes["longitude"])
-                    if (
-                        self._cached is None
-                        or (
-                            abs(lat - self._cached[0]) > self.EPS
-                            or abs(lon - self._cached[1]) > self.EPS
-                        )
-                        and (
-                            self._accepted_at is None
-                            or now - self._accepted_at >= timedelta(minutes=min_track)
-                        )
-                    ):
-                        self._cached = (lat, lon)
-                        self._accepted_lat = lat
-                        self._accepted_lon = lon
-                        self._accepted_at = now
-                        coords_changed = True
-                    self._warned_missing = False
-                except (TypeError, ValueError):
-                    pass
-            else:
-                if not self._warned_missing:
-                    _LOGGER.warning(
-                        "Tracked entity %s missing or lacks GPS attributes, "
-                        "falling back to configured coordinates",
-                        ent_id,
-                    )
-                    self._warned_missing = True
-                if self._cached is None:
-                    lat = float(
-                        data.get(CONF_LATITUDE, self.hass.config.latitude)
-                    )
-                    lon = float(
-                        data.get(CONF_LONGITUDE, self.hass.config.longitude)
-                    )
-                    self._cached = (lat, lon)
-                    self._accepted_lat = lat
-                    self._accepted_lon = lon
-                    self._accepted_at = (
-                        now if self._accepted_at is None else self._accepted_at
-                    )
-                    coords_changed = True
-        else:
-            lat = float(
-                data.get(CONF_LATITUDE, self.hass.config.latitude)
-            )
-            lon = float(
-                data.get(CONF_LONGITUDE, self.hass.config.longitude)
-            )
-            if (
-                self._cached is None
-                or abs(lat - self._cached[0]) > self.EPS
-                or abs(lon - self._cached[1]) > self.EPS
-            ):
-                self._cached = (lat, lon)
-                self._accepted_lat = lat
-                self._accepted_lon = lon
-                self._accepted_at = now if self._accepted_at is None else self._accepted_at
-                coords_changed = True
-            elif self._accepted_at is None:
-                self._accepted_at = now
-
-        loc_name = prev_name
-        last_loc_ts = prev_loc_ts
+        loc_name = self.location_name
+        last_loc_ts = (self.data or {}).get("last_location_update") if self.data else None
         if coords_changed:
-            if data.get(CONF_AREA_NAME_OVERRIDE):
-                loc_name = data.get(CONF_AREA_NAME_OVERRIDE)
+            override = self.config_entry.options.get(
+                CONF_AREA_NAME_OVERRIDE, self.config_entry.data.get(CONF_AREA_NAME_OVERRIDE)
+            )
+            if override:
+                loc_name = override
             else:
-                name = await self._reverse_geocode(lat, lon)
-                loc_name = name or self._coords_fallback(lat, lon)
-            last_loc_ts = now.isoformat()
+                name = await self._reverse_geocode(latitude, longitude)
+                loc_name = name or self._coords_fallback(latitude, longitude)
+            last_loc_ts = dt_util.utcnow().isoformat()
             self.location_name = loc_name
         elif self.location_name:
             loc_name = self.location_name
-
-        if not self._cached:
-            raise UpdateFailed("No valid coordinates available")
-        latitude, longitude = self._cached
 
         params = {
             "latitude": latitude,
@@ -266,6 +204,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._last_data["location"] = {"latitude": latitude, "longitude": longitude}
             self._last_data["location_name"] = loc_name
             self._last_data["last_location_update"] = last_loc_ts
+            if from_entity:
+                self._last_coords = (latitude, longitude)
             return self._last_data
         except UpdateFailed:
             if self._last_data is not None:
