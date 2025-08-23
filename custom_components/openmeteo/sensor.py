@@ -80,8 +80,10 @@ SENSOR_TYPES: dict[str, dict] = {
         "unit": "UV Index",
         "icon": "mdi:sun-wireless-outline",
         "device_class": None,
-        "value_fn": lambda d: d.get("current", {}).get("uv_index")
-        or _first_hourly(d, "uv_index"),
+        "value_fn": lambda d: (d.get("current", {}) or {}).get("uv_index")
+        or _first_hourly(d, "uv_index")
+        or (d.get("daily", {}).get("uv_index_max", [None])[0])
+        or 0,
     },
     "precipitation_probability": {
         "name": "Prawdopodobieństwo opadów",
