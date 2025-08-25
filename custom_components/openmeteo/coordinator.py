@@ -89,11 +89,38 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._tracked_entity_id: str | None = None
         self._unsub_entity: callable | None = None
 
+    async def maybe_update_entry_title(
+        self, latitude: float, longitude: float, loc_name: str | None
+    ) -> None:
+        """Update config entry title if needed."""
+        override = self.config_entry.options.get(CONF_AREA_NAME_OVERRIDE) or self.config_entry.data.get(
+            CONF_AREA_NAME_OVERRIDE
+        )
+        if override:
+            new_title = override
+        else:
+            new_title = loc_name or f"{latitude:.5f},{longitude:.5f}"
+        if new_title and new_title != self.config_entry.title:
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, title=new_title
+            )
+
+    async def async_shutdown(self) -> None:
+        """Cancel subscriptions and shut down."""
+        if self._unsub_entity:
+            self._unsub_entity()
+            self._unsub_entity = None
+        await super().async_shutdown()
+
     async def async_options_updated(self) -> None:
         """Call when ConfigEntry options changed."""
         opts = self.config_entry.options or {}
         entity_id = opts.get("entity_id") or opts.get("track_entity") or opts.get("track_entity_id")
         await self._resubscribe_tracked_entity(entity_id)
+        from . import resolve_coords
+
+        latitude, longitude, _ = await resolve_coords(self.hass, self.config_entry)
+        await self.maybe_update_entry_title(latitude, longitude, self.location_name)
 
     async def _resubscribe_tracked_entity(self, entity_id: str | None) -> None:
         if self._unsub_entity:
@@ -108,6 +135,16 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._unsub_entity = async_track_state_change_event(
                 self.hass, [entity_id], _on_state_change
             )
+            from . import register_unsub
+
+            register_unsub(self.hass, self.config_entry, self._unsub_entity)
+
+    def _schedule_refresh(self) -> None:
+        super()._schedule_refresh()
+        if self._unsub_refresh:
+            from . import register_unsub
+
+            register_unsub(self.hass, self.config_entry, self._unsub_refresh)
 
     async def _async_update_data(self) -> dict[str, Any]:
         from . import resolve_coords
@@ -135,6 +172,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.location_name = loc_name
         elif self.location_name:
             loc_name = self.location_name
+
+        await self.maybe_update_entry_title(latitude, longitude, loc_name)
 
         hourly_vars = list(dict.fromkeys(DEFAULT_HOURLY_VARIABLES + ["uv_index"]))
         daily_vars = DEFAULT_DAILY_VARIABLES

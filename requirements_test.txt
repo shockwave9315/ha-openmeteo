@@ -1,0 +1,2 @@
+pytest-homeassistant-custom-component
+# Do NOT pin 'homeassistant'. PHACC will install a compatible HA build.

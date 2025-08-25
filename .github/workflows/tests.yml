@@ -1,0 +1,33 @@
+name: tests
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Upgrade pip
+        run: python -m pip install -U pip
+      - name: Install test tooling (PHACC -> installs matching Home Assistant)
+        run: python -m pip install -r requirements_test.txt
+      - name: Show resolved versions
+        run: |
+          python - <<'PY'
+          try:
+              import importlib.metadata as im
+          except Exception:
+              import importlib_metadata as im
+          def ver(p):
+              try:
+                  print(p, "=>", im.version(p))
+              except Exception:
+                  print(p, "=> NOT INSTALLED")
+          for pkg in ("homeassistant", "pytest-homeassistant-custom-component", "pytest"):
+              ver(pkg)
+          PY
+      - name: Run tests
+        run: pytest -q

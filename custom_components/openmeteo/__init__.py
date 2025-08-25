@@ -3,6 +3,8 @@
 """The Open-Meteo integration."""
 from __future__ import annotations
 
+from typing import Callable
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
@@ -25,6 +27,19 @@ from .const import (
     CONF_UNITS,
 )
 from .coordinator import OpenMeteoDataUpdateCoordinator, async_reverse_geocode
+
+
+def _entry_store(hass: HomeAssistant, entry: ConfigEntry) -> dict:
+    """Return per-entry storage."""
+    return hass.data.setdefault(DOMAIN, {}).setdefault("entries", {}).setdefault(
+        entry.entry_id, {}
+    )
+
+
+def register_unsub(hass: HomeAssistant, entry: ConfigEntry, fn: Callable[[], None]) -> None:
+    """Register an unsubscribe callback for the entry."""
+    store = _entry_store(hass, entry)
+    store.setdefault("unsubs", []).append(fn)
 
 
 async def resolve_coords(
@@ -58,9 +73,7 @@ async def resolve_coords(
         lat = float(hass.config.latitude)
         lon = float(hass.config.longitude)
 
-    store = (
-        hass.data.setdefault(DOMAIN, {}).setdefault("entries", {}).setdefault(entry.entry_id, {})
-    )
+    store = _entry_store(hass, entry)
     store["coords"] = (lat, lon)
     store["source"] = src
     store["lat"] = lat
@@ -75,7 +88,7 @@ async def build_title(
     """Build a title for the entry based on coordinates."""
     override = entry.data.get("name_override")
     geocode = entry.data.get("geocode_name", True)
-    store = hass.data[DOMAIN]["entries"].setdefault(entry.entry_id, {})
+    store = _entry_store(hass, entry)
     if override:
         store["place_name"] = override
         store["place"] = override
@@ -94,8 +107,8 @@ async def build_title(
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Open-Meteo from a config entry."""
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
-    store = hass.data.setdefault(DOMAIN, {}).setdefault("entries", {})
-    store[entry.entry_id] = {"coordinator": coordinator}
+    store = _entry_store(hass, entry)
+    store["coordinator"] = coordinator
 
     lat, lon, _src = await resolve_coords(hass, entry)
     title = await build_title(hass, entry, lat, lon)
@@ -115,6 +128,16 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         domain_data = hass.data.get(DOMAIN, {})
         entries = domain_data.get("entries", {})
+        store = entries.get(entry.entry_id, {})
+        coordinator = store.get("coordinator")
+        if coordinator:
+            await coordinator.async_shutdown()
+        for fn in store.get("unsubs", []):
+            try:
+                fn()
+            except Exception:
+                pass
+        store["unsubs"] = []
         entries.pop(entry.entry_id, None)
         if not entries and DOMAIN in hass.data:
             hass.data.pop(DOMAIN)

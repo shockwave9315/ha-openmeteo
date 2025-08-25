@@ -57,7 +57,15 @@ Integracja dostarcza encję `weather` z bieżącą pogodą i prognozą oraz zest
 
 ## 🧪 Testy i debug
 
-- **Bieżące atrybuty**: Narzędzia deweloperskie → **Stany** → `weather.open_meteo_*`  
+### Run tests
+
+```bash
+python -m pip install -U pip
+python -m pip install -r requirements_test.txt
+pytest -q
+```
+
+- **Bieżące atrybuty**: Narzędzia deweloperskie → **Stany** → `weather.open_meteo_*`
   Sprawdź `temperature`, `humidity`, **`dew_point`**, itd.
 - **Prognoza godzinowa / dzienna**: Narzędzia deweloperskie → **Usługi** → `weather.get_forecasts`  
   Parametry:
