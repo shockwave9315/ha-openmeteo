@@ -3,6 +3,9 @@
 """The Open-Meteo integration."""
 from __future__ import annotations
 
+# Changelog:
+# 1.3.33 - Standardize entity IDs and migrate legacy unique IDs.
+
 from typing import Callable
 
 from homeassistant.config_entries import ConfigEntry
