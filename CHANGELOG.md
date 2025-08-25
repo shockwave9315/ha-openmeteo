@@ -1,3 +1,6 @@
+## 1.3.25
+- feat: use reverse geocoded place name for entry titles; fallback to lat,lon only if geocode fails
+
 ## 1.3.20
 - fix: per-entry coords/title; remove global coords cache; add diagnostics attributes
 

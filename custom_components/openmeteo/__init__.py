@@ -181,10 +181,6 @@ async def _options_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> N
     data = hass.data.get(DOMAIN, {}).get("entries", {}).get(entry.entry_id)
     if data and data.get("coordinator"):
         await data["coordinator"].async_options_updated()
-        lat, lon, _src = await resolve_coords(hass, entry)
-        title = await build_title(hass, entry, lat, lon)
-        if title != entry.title:
-            hass.config_entries.async_update_entry(entry, title=title)
         await data["coordinator"].async_request_refresh()
     else:
         await hass.config_entries.async_reload(entry.entry_id)
