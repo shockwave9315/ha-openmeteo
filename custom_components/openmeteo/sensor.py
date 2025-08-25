@@ -133,14 +133,6 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         device_class="temperature",
         value_fn=lambda d: _first_hourly(d, "apparent_temperature"),
     ),
-    "precipitation_probability": OpenMeteoSensorDescription(
-        key="precipitation_probability",
-        name="Prawdopodobieństwo opadów",
-        native_unit_of_measurement=PERCENTAGE,
-        icon="mdi:weather-pouring",
-        device_class=None,
-        value_fn=lambda d: _first_hourly(d, "precipitation_probability"),
-    ),
     "precipitation_total": OpenMeteoSensorDescription(
         key="precipitation_total",
         name="Suma opadów",
@@ -261,7 +253,6 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
             CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
         )
         self._attr_has_entity_name = True
-        self._attr_name = None
         if self._use_place:
             place_slug = slugify(get_place_title(coordinator.hass, config_entry))
             if place_slug:
@@ -368,7 +359,6 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity, SensorEntity):
         self._attr_icon = "mdi:weather-sunny-alert"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_has_entity_name = True
-        self._attr_name = None
         self._attr_translation_key = "uv_index"
         if self._use_place:
             place_slug = slugify(get_place_title(coordinator.hass, config_entry))

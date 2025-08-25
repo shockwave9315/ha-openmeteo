@@ -16,16 +16,30 @@ def get_place_title(hass: HomeAssistant, entry: ConfigEntry) -> str:
         .get("entries", {})
         .get(entry.entry_id, {})
     )
-    lat = store.get("lat")
-    lon = store.get("lon")
     override = entry.options.get("name_override") or entry.data.get("name_override")
     if override:
         return override
     if store.get("place"):
         return store["place"]
+    lat = store.get("lat")
+    lon = store.get("lon")
     if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
         return f"{lat:.5f},{lon:.5f}"
-    return entry.title or "Open-Meteo"
+    return entry.title
+
+
+async def maybe_update_entry_title(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    lat: float,
+    lon: float,
+    place: str | None,
+) -> None:
+    """Update config entry title if needed."""
+    override = entry.options.get("name_override") or entry.data.get("name_override")
+    new_title = override or place or f"{lat:.5f},{lon:.5f}"
+    if new_title != entry.title:
+        hass.config_entries.async_update_entry(entry, title=new_title)
 
 
 def _get_device(hass: HomeAssistant, entry: ConfigEntry) -> dr.DeviceEntry | None:

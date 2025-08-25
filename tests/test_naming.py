@@ -49,7 +49,9 @@ async def test_sensor_has_entity_name_label():
             sensor = OpenMeteoSensor(coordinator, entry, "temperature")
             assert SENSOR_TYPES["temperature"].name == "Temperatura"
             assert sensor._attr_has_entity_name is True
-            assert sensor.entity_description.name == "Temperatura"
+            assert sensor.name == "Temperatura"
+            assert "Open-Meteo" not in sensor.name
+            assert f"{A_LAT:.5f}" not in sensor.name
             assert all("Open-Meteo" not in (desc.name or "") for desc in SENSOR_TYPES.values())
             await hass.async_stop()
 
@@ -95,9 +97,9 @@ async def test_device_name_follows_place_and_respects_user_rename(expected_linge
             weather = OpenMeteoWeather(DummyCoordinator(hass), entry)
             weather.hass = hass
             weather.entity_id = "weather.test"
-            weather._handle_place_update()
-            assert weather._attr_name == "Radłów"
-            assert "Open-Meteo" not in (weather._attr_name or "")
+            await weather.async_added_to_hass()
+            assert weather.name == "Radłów"
+            assert "Open-Meteo" not in weather.name
 
             dev_reg.async_update_device(device.id, name_by_user="My Station")
             device = dev_reg.async_get(device.id)

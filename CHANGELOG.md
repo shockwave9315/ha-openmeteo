@@ -1,3 +1,8 @@
+## 1.3.31
+- fix(naming): compute and store place for entities; weather name uses place only
+- fix(naming): sensors use static labels and entity names; remove dynamic names
+- fix: respect user device renames via registry; dispatch updates to entities
+
 ## 1.3.30
 - fix(naming): sensor labels restored; respect user device renames; static mode always uses place (no toggle); stop writing device_info.name from entities; title remains place
 
