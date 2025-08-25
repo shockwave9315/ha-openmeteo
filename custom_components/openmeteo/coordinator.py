@@ -31,33 +31,93 @@ from .const import (
     DOMAIN,
     MODE_TRACK,
     URL,
+    CONF_SHOW_PLACE_NAME,
+    CONF_GEOCODE_INTERVAL_MIN,
+    CONF_GEOCODE_MIN_DISTANCE_M,
+    CONF_GEOCODER_PROVIDER,
+    DEFAULT_SHOW_PLACE_NAME,
+    DEFAULT_GEOCODE_INTERVAL_MIN,
+    DEFAULT_GEOCODE_MIN_DISTANCE_M,
+    DEFAULT_GEOCODER_PROVIDER,
 )
 from .helpers import maybe_update_device_name, maybe_update_entry_title
 
 _LOGGER = logging.getLogger(__name__)
 
 
+_GEOCODE_CACHE: dict[tuple[float, float], str] = {}
+_GEOCODE_LOCK = asyncio.Lock()
+_LAST_GEOCODE: float = 0.0
+
+
 async def async_reverse_geocode(
-    hass: HomeAssistant, lat: float, lon: float
+    hass: HomeAssistant, lat: float, lon: float, provider: str
 ) -> str | None:
-    """Reverse geocode coordinates to a place name."""
-    url = (
-        "https://geocoding-api.open-meteo.com/v1/reverse"
-        f"?latitude={lat:.5f}&longitude={lon:.5f}&language=pl&format=json"
-    )
-    try:
-        session = async_get_clientsession(hass)
-        async with session.get(url, timeout=10) as resp:
-            if resp.status != 200:
-                return None
-            js = await resp.json()
-        results = js.get("results") or []
-        if not results:
-            return None
-        r = results[0]
-        return r.get("name") or r.get("admin2") or r.get("admin1")
-    except Exception:
+    """Reverse geocode coordinates to a place name with caching."""
+    key = (round(lat, 4), round(lon, 4))
+    if key in _GEOCODE_CACHE:
+        return _GEOCODE_CACHE[key]
+    if provider == "none":
         return None
+
+    session = async_get_clientsession(hass)
+    url: str | None = None
+    headers = {"User-Agent": "HomeAssistant-OpenMeteo/1.0"}
+    if provider == "osm_nominatim":
+        url = (
+            "https://nominatim.openstreetmap.org/reverse"
+            f"?format=jsonv2&lat={lat:.5f}&lon={lon:.5f}&zoom=10&addressdetails=1"
+        )
+    elif provider == "photon":
+        url = (
+            "https://photon.komoot.io/reverse"
+            f"?lat={lat:.5f}&lon={lon:.5f}&lang=pl"
+        )
+    if not url:
+        return None
+
+    async with _GEOCODE_LOCK:
+        import time
+
+        global _LAST_GEOCODE
+        wait = 1.0 - (time.monotonic() - _LAST_GEOCODE)
+        if wait > 0:
+            await asyncio.sleep(wait)
+        try:
+            async with session.get(url, headers=headers, timeout=10) as resp:
+                if resp.status != 200:
+                    return None
+                js = await resp.json()
+        finally:
+            _LAST_GEOCODE = time.monotonic()
+
+    name: str | None = None
+    try:
+        if provider == "osm_nominatim":
+            addr = js.get("address", {})
+            name = (
+                addr.get("town")
+                or addr.get("city")
+                or addr.get("village")
+                or addr.get("municipality")
+            )
+            cc = addr.get("country_code")
+            if name and cc:
+                name = f"{name}, {cc.upper()}"
+        elif provider == "photon":
+            feats = js.get("features") or []
+            if feats:
+                props = feats[0].get("properties", {})
+                name = props.get("city") or props.get("name")
+                cc = props.get("country")
+                if name and cc:
+                    name = f"{name}, {cc.upper()}"
+    except Exception:  # pragma: no cover - defensive
+        name = None
+
+    if name:
+        _GEOCODE_CACHE[key] = name
+    return name
 
 
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -109,12 +169,11 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         latitude, longitude, _ = await resolve_coords(
             self.hass, self.config_entry
         )
-        geocode_on = self.config_entry.options.get(
-            "geocode_name", self.config_entry.data.get("geocode_name", True)
-        )
+        show_place = opts.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME)
+        provider = opts.get(CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER)
         place = (
-            await async_reverse_geocode(self.hass, latitude, longitude)
-            if geocode_on
+            await async_reverse_geocode(self.hass, latitude, longitude, provider)
+            if show_place
             else None
         )
         _LOGGER.debug(
@@ -132,6 +191,10 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         store["lat"] = latitude
         store["lon"] = longitude
         store["place"] = place
+        store["location_name"] = place
+        store["geocode_provider"] = provider
+        if place:
+            store["geocode_last_success"] = dt_util.utcnow().isoformat()
         await maybe_update_entry_title(
             self.hass, self.config_entry, latitude, longitude, place
         )
@@ -175,14 +238,53 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass, self.config_entry
         )
 
-        geocode_on = self.config_entry.options.get(
-            "geocode_name", self.config_entry.data.get("geocode_name", True)
+        opts = self.config_entry.options
+        show_place = opts.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME)
+        provider = opts.get(CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER)
+        interval = int(opts.get(CONF_GEOCODE_INTERVAL_MIN, DEFAULT_GEOCODE_INTERVAL_MIN))
+        min_dist = int(
+            opts.get(CONF_GEOCODE_MIN_DISTANCE_M, DEFAULT_GEOCODE_MIN_DISTANCE_M)
         )
-        place = (
-            await async_reverse_geocode(self.hass, latitude, longitude)
-            if geocode_on
-            else None
+
+        store = (
+            self.hass.data.setdefault(DOMAIN, {})
+            .setdefault("entries", {})
+            .setdefault(self.config_entry.entry_id, {})
         )
+        last_time = store.get("geocode_last")
+        last_lat = store.get("geocode_lat")
+        last_lon = store.get("geocode_lon")
+        now = dt_util.utcnow()
+        delta = (now - last_time).total_seconds() / 60 if last_time else interval + 1
+        need_geocode = show_place and (last_time is None or delta >= interval)
+        if show_place and not need_geocode and isinstance(last_lat, (int, float)) and isinstance(last_lon, (int, float)):
+            # check distance
+            try:
+                from math import radians, sin, cos, sqrt, atan2
+
+                R = 6371000
+                dlat = radians(latitude - last_lat)
+                dlon = radians(longitude - last_lon)
+                a = sin(dlat / 2) ** 2 + cos(radians(last_lat)) * cos(radians(latitude)) * sin(
+                    dlon / 2
+                ) ** 2
+                c = 2 * atan2(sqrt(a), sqrt(1 - a))
+                dist = R * c
+                if dist > min_dist:
+                    need_geocode = True
+            except Exception:
+                pass
+
+        place = None
+        if show_place and (need_geocode or store.get("location_name") is None):
+            place = await async_reverse_geocode(self.hass, latitude, longitude, provider)
+            store["geocode_last"] = now
+            if place:
+                store["geocode_lat"] = latitude
+                store["geocode_lon"] = longitude
+                store["geocode_last_success"] = now.isoformat()
+        else:
+            place = store.get("location_name")
         _LOGGER.debug(
             "Reverse geocode result for %s,%s: %s", latitude, longitude, place
         )
@@ -190,17 +292,14 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         override = self.config_entry.options.get(CONF_AREA_NAME_OVERRIDE)
         if override is None:
             override = self.config_entry.data.get(CONF_AREA_NAME_OVERRIDE)
-        store = (
-            self.hass.data.setdefault(DOMAIN, {})
-            .setdefault("entries", {})
-            .setdefault(self.config_entry.entry_id, {})
-        )
         store["coords"] = (latitude, longitude)
         store["source"] = src
         store["lat"] = latitude
         store["lon"] = longitude
         store["place_name"] = place
         store["place"] = place
+        store["location_name"] = place
+        store["geocode_provider"] = provider
         last_loc_ts = dt_util.utcnow().isoformat()
         await maybe_update_entry_title(
             self.hass, self.config_entry, latitude, longitude, place

@@ -5,12 +5,14 @@ from __future__ import annotations
 
 # Changelog:
 # 1.3.33 - Standardize entity IDs and migrate legacy unique IDs.
+# 1.3.35 - Stable entry-based IDs; dynamic names with reverse geocoding and caching.
 
 from typing import Callable
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_API_PROVIDER,
@@ -22,11 +24,15 @@ from .const import (
     CONF_UPDATE_INTERVAL,
     CONF_USE_PLACE_AS_DEVICE_NAME,
     CONF_AREA_NAME_OVERRIDE,
+    CONF_SHOW_PLACE_NAME,
+    CONF_GEOCODER_PROVIDER,
     DEFAULT_API_PROVIDER,
     DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_UNITS,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_USE_PLACE_AS_DEVICE_NAME,
+    DEFAULT_SHOW_PLACE_NAME,
+    DEFAULT_GEOCODER_PROVIDER,
     DOMAIN,
     MODE_STATIC,
     MODE_TRACK,
@@ -99,20 +105,27 @@ async def build_title(
     override = entry.options.get(CONF_AREA_NAME_OVERRIDE)
     if override is None:
         override = entry.data.get(CONF_AREA_NAME_OVERRIDE)
-    geocode = entry.options.get("geocode_name", entry.data.get("geocode_name", True))
+    show_place = entry.options.get(
+        CONF_SHOW_PLACE_NAME, entry.data.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME)
+    )
+    provider = entry.options.get(CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER)
     store = _entry_store(hass, entry)
     if override:
         store["place_name"] = override
         store["place"] = override
         return override
-    if geocode:
-        name = await async_reverse_geocode(hass, lat, lon)
+    if show_place:
+        name = await async_reverse_geocode(hass, lat, lon, provider)
         if name:
             store["place_name"] = name
             store["place"] = name
+            store["location_name"] = name
+            store["geocode_provider"] = provider
+            store["geocode_last_success"] = dt_util.utcnow().isoformat()
             return name
     store["place_name"] = None
     store["place"] = None
+    store["location_name"] = None
     return f"{lat:.5f},{lon:.5f}"
 
 

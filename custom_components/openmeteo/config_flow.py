@@ -29,6 +29,14 @@ from .const import (
     DEFAULT_API_PROVIDER,
     CONF_USE_PLACE_AS_DEVICE_NAME,
     DEFAULT_USE_PLACE_AS_DEVICE_NAME,
+    CONF_SHOW_PLACE_NAME,
+    CONF_GEOCODE_INTERVAL_MIN,
+    CONF_GEOCODE_MIN_DISTANCE_M,
+    CONF_GEOCODER_PROVIDER,
+    DEFAULT_SHOW_PLACE_NAME,
+    DEFAULT_GEOCODE_INTERVAL_MIN,
+    DEFAULT_GEOCODE_MIN_DISTANCE_M,
+    DEFAULT_GEOCODER_PROVIDER,
 )
 
 
@@ -261,6 +269,32 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                         CONF_AREA_NAME_OVERRIDE,
                         default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
                     ): str,
+                    vol.Optional(
+                        CONF_SHOW_PLACE_NAME,
+                        default=defaults.get(
+                            CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME
+                        ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_GEOCODE_INTERVAL_MIN,
+                        default=defaults.get(
+                            CONF_GEOCODE_INTERVAL_MIN,
+                            DEFAULT_GEOCODE_INTERVAL_MIN,
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1)),
+                    vol.Optional(
+                        CONF_GEOCODE_MIN_DISTANCE_M,
+                        default=defaults.get(
+                            CONF_GEOCODE_MIN_DISTANCE_M,
+                            DEFAULT_GEOCODE_MIN_DISTANCE_M,
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0)),
+                    vol.Optional(
+                        CONF_GEOCODER_PROVIDER,
+                        default=defaults.get(
+                            CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER
+                        ),
+                    ): vol.In(["osm_nominatim", "photon", "none"]),
                 }
             )
         else:
@@ -297,6 +331,32 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                         CONF_AREA_NAME_OVERRIDE,
                         default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
                     ): str,
+                    vol.Optional(
+                        CONF_SHOW_PLACE_NAME,
+                        default=defaults.get(
+                            CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME
+                        ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_GEOCODE_INTERVAL_MIN,
+                        default=defaults.get(
+                            CONF_GEOCODE_INTERVAL_MIN,
+                            DEFAULT_GEOCODE_INTERVAL_MIN,
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1)),
+                    vol.Optional(
+                        CONF_GEOCODE_MIN_DISTANCE_M,
+                        default=defaults.get(
+                            CONF_GEOCODE_MIN_DISTANCE_M,
+                            DEFAULT_GEOCODE_MIN_DISTANCE_M,
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0)),
+                    vol.Optional(
+                        CONF_GEOCODER_PROVIDER,
+                        default=defaults.get(
+                            CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER
+                        ),
+                    ): vol.In(["osm_nominatim", "photon", "none"]),
                 }
             )
 

@@ -47,6 +47,8 @@ from .const import (
     MODE_STATIC,
     MODE_TRACK,
     DEFAULT_MIN_TRACK_INTERVAL,
+    CONF_SHOW_PLACE_NAME,
+    DEFAULT_SHOW_PLACE_NAME,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -65,7 +67,7 @@ async def async_migrate_entry(
     hass: HomeAssistant, entry: RegistryEntry
 ) -> dict | None:
     """Migrate old entity unique IDs."""
-    if re.match(r".*\d{1,3}\.\d+[_,-]\d{1,3}\.\d+.*", entry.unique_id):
+    if re.match(r".*\d{1,3}\.\d+[_,-]\d{1,3}\.\d+.*", entry.unique_id) or entry.unique_id.endswith("_none") or entry.unique_id.endswith("-none"):
         return {"new_unique_id": f"{entry.config_entry_id}_weather"}
     if entry.unique_id.endswith("-weather"):
         return {"new_unique_id": entry.unique_id.replace("-weather", "_weather")}
@@ -108,10 +110,11 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         super().__init__(coordinator)
         self._config_entry = config_entry
         self._attr_has_entity_name = False
-        self._attr_name = "Open Meteo"
-        self._attr_suggested_object_id = "open_meteo"
+        self._base_name = "Open Meteo"
+        suggested = "open_meteo"
         if coordinator.hass.states.get("weather.open_meteo"):
-            self._attr_suggested_object_id = "open_meteo_2"
+            suggested = "open_meteo_2"
+        self._attr_suggested_object_id = suggested
         self._attr_unique_id = f"{config_entry.entry_id}_weather"
         data = {**config_entry.data, **config_entry.options}
         self._attr_device_info = DeviceInfo(
@@ -130,6 +133,26 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             data.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL)
         )
         self._provider = coordinator.provider
+
+    @property
+    def name(self) -> str:
+        show_place = self._config_entry.options.get(
+            CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME
+        )
+        store = (
+            self.hass.data.get(DOMAIN, {})
+            .get("entries", {})
+            .get(self._config_entry.entry_id, {})
+        )
+        if show_place:
+            loc = store.get("location_name")
+            lat = store.get("lat")
+            lon = store.get("lon")
+            if loc:
+                return f"{self._base_name} — {loc}"
+            if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+                return f"{self._base_name} — {lat:.5f},{lon:.5f}"
+        return self._base_name
 
     @property
     def available(self) -> bool:
@@ -362,46 +385,15 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        attrs = dict(super().extra_state_attributes or {})
-        data = self.coordinator.data or {}
-        loc = data.get("location") or {}
-        attrs.update(
-            {
-                "location_name": data.get("location_name"),
-                "mode": self._mode,
-                "min_track_interval": self._min_track_interval,
-                "last_location_update": data.get("last_location_update"),
-                "provider": self._provider,
-            }
+        store = (
+            self.hass.data.get(DOMAIN, {})
+            .get("entries", {})
+            .get(self._config_entry.entry_id, {})
         )
-        dp = self.native_dew_point
-        if dp is not None:
-            attrs["dew_point"] = dp
-        if "latitude" not in attrs:
-            attrs["latitude"] = loc.get("latitude")
-        if "longitude" not in attrs:
-            attrs["longitude"] = loc.get("longitude")
-
-        # --- diagnostics ---
-        try:
-            store = (
-                self.hass.data.get(DOMAIN, {})
-                .get("entries", {})
-                .get(self._config_entry.entry_id, {})
-            )
-            src = store.get("src")
-            if src:
-                attrs["om_source"] = src
-
-            lat = store.get("lat", loc.get("latitude"))
-            lon = store.get("lon", loc.get("longitude"))
-            if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-                attrs["om_coords_used"] = f"{float(lat):.6f},{float(lon):.6f}"
-
-            place = data.get("location_name") or store.get("place")
-            if place:
-                attrs["om_place_name"] = place
-        except Exception:
-            pass
-
-        return attrs
+        return {
+            "location_name": store.get("location_name"),
+            "latitude": store.get("lat"),
+            "longitude": store.get("lon"),
+            "geocode_provider": store.get("geocode_provider"),
+            "geocode_last_success": store.get("geocode_last_success"),
+        }
