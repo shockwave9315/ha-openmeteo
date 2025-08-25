@@ -100,6 +100,7 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         super().__init__(coordinator)
         self._config_entry = config_entry
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
+        self._attr_name = None
         data = {**config_entry.data, **config_entry.options}
         self._use_place = data.get(
             CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
@@ -129,16 +130,9 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     def available(self) -> bool:
         return bool(self.coordinator.data) and getattr(self.coordinator, "last_update_success", True)
 
-    @callback
-    def _handle_place_update(self) -> None:
-        self._use_place = self._config_entry.options.get(
-            CONF_USE_PLACE_AS_DEVICE_NAME,
-            self._config_entry.data.get(
-                CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
-            ),
-        )
-        self._attr_name = get_place_title(self.hass, self._config_entry)
-        self.async_write_ha_state()
+    @property
+    def name(self) -> str | None:
+        return get_place_title(self.hass, self._config_entry)
 
     @property
     def native_temperature(self) -> float | None:
@@ -314,9 +308,9 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         await super().async_added_to_hass()
         signal = f"openmeteo_place_updated_{self._config_entry.entry_id}"
         self.async_on_remove(
-            async_dispatcher_connect(self.hass, signal, self._handle_place_update)
+            async_dispatcher_connect(self.hass, signal, self.async_write_ha_state)
         )
-        self._handle_place_update()
+        self.async_write_ha_state()
         store = (
             self.hass.data.setdefault(DOMAIN, {})
             .setdefault("entries", {})
