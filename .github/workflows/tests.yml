@@ -21,13 +21,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
+          cache: "pip"            # działa, bo teraz mamy requirements.txt
 
       - name: Cache pip (extra fallback)
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('requirements_test.txt') }}
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             pip-${{ runner.os }}-
 
@@ -35,7 +35,7 @@ jobs:
         run: python -m pip install -U pip
 
       - name: Install test tooling (PHACC -> HA)
-        run: python -m pip install --prefer-binary -r requirements_test.txt
+        run: python -m pip install --prefer-binary -r requirements.txt
 
       - name: Show resolved versions
         run: |
