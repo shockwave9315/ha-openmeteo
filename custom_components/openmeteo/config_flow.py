@@ -125,7 +125,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if not errors:
                 data = {**user_input, CONF_MODE: self._mode}
-                return self.async_create_entry(title="Open-Meteo", data=data)
+                return self.async_create_entry(title="", data=data)
 
         schema = _build_schema(self.hass, self._mode, defaults)
         return self.async_show_form(

@@ -99,3 +99,29 @@ async def test_per_entry_coords_and_title():
             async_fire_time_changed(hass, dt_util.utcnow() + timedelta(days=1))
             await hass.async_block_till_done()
             await hass.async_stop()
+
+
+@pytest.mark.asyncio
+async def test_build_title_fallback():
+    with patch("homeassistant.util.dt.get_time_zone", return_value=dt_util.UTC):
+        async with async_test_home_assistant() as hass:
+            entry = MockConfigEntry(
+                domain=DOMAIN,
+                data={CONF_MODE: MODE_STATIC, CONF_LATITUDE: A_LAT, CONF_LONGITUDE: A_LON},
+                title="",
+                options={},
+            )
+            entry.add_to_hass(hass)
+
+            with patch(
+                "custom_components.openmeteo.async_reverse_geocode",
+                return_value=None,
+            ):
+                title = await build_title(hass, entry, A_LAT, A_LON)
+
+            assert title == f"{A_LAT:.5f},{A_LON:.5f}"
+
+            assert await hass.config_entries.async_unload(entry.entry_id)
+            async_fire_time_changed(hass, dt_util.utcnow() + timedelta(days=1))
+            await hass.async_block_till_done()
+            await hass.async_stop()

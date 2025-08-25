@@ -52,11 +52,7 @@ async def async_reverse_geocode(
         if not results:
             return None
         r = results[0]
-        name = r.get("name") or r.get("admin2") or r.get("admin1")
-        country = r.get("country_code")
-        if name and country:
-            return f"{name}, {country}"
-        return name
+        return r.get("name") or r.get("admin2") or r.get("admin1")
     except Exception:
         return None
 
@@ -92,14 +88,12 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self, latitude: float, longitude: float, loc_name: str | None
     ) -> None:
         """Update config entry title if needed."""
-        override = self.config_entry.options.get(CONF_AREA_NAME_OVERRIDE) or self.config_entry.data.get(
-            CONF_AREA_NAME_OVERRIDE
-        )
+        override = self.config_entry.data.get("name_override")
         if override:
             new_title = override
         else:
             new_title = loc_name or f"{latitude:.5f},{longitude:.5f}"
-        if new_title and new_title != self.config_entry.title:
+        if new_title != self.config_entry.title:
             self.hass.config_entries.async_update_entry(
                 self.config_entry, title=new_title
             )
@@ -119,7 +113,11 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         from . import resolve_coords
 
         latitude, longitude, _ = await resolve_coords(self.hass, self.config_entry)
-        await self.maybe_update_entry_title(latitude, longitude, self.location_name)
+        loc_name = None
+        if self.config_entry.data.get("geocode_name", True):
+            loc_name = await async_reverse_geocode(self.hass, latitude, longitude)
+        self.location_name = loc_name
+        await self.maybe_update_entry_title(latitude, longitude, loc_name)
 
     async def _resubscribe_tracked_entity(self, entity_id: str | None) -> None:
         if self._unsub_entity:
@@ -171,8 +169,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.location_name = loc_name
         elif self.location_name:
             loc_name = self.location_name
-
-        await self.maybe_update_entry_title(latitude, longitude, loc_name)
 
         hourly_vars = list(dict.fromkeys(DEFAULT_HOURLY_VARIABLES + ["uv_index"]))
         daily_vars = DEFAULT_DAILY_VARIABLES
@@ -240,6 +236,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hourly = self._last_data.setdefault("hourly", {})
             hourly.setdefault("time", [])
             hourly.setdefault("uv_index", [])
+            await self.maybe_update_entry_title(latitude, longitude, loc_name)
             return self._last_data
         except UpdateFailed:
             if self._last_data is not None:
