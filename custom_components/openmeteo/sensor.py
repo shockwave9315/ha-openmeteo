@@ -232,16 +232,26 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         attrs = _extra_attrs(self.coordinator.data or {})
-        store = self.hass.data[DOMAIN]["entries"].get(self._config_entry.entry_id, {})
-        src = store.get("source")
-        coords = store.get("coords")
-        place = store.get("place_name")
-        if src:
-            attrs["om_source"] = src
-        if coords:
-            attrs["om_coords_used"] = f"{coords[0]:.5f},{coords[1]:.5f}"
-        if place:
-            attrs["om_place_name"] = place
+        try:
+            store = (
+                self.hass.data.get(DOMAIN, {})
+                .get("entries", {})
+                .get(self._config_entry.entry_id, {})
+            )
+            src = store.get("src")
+            if src:
+                attrs["om_source"] = src
+
+            lat = store.get("lat", attrs.get("latitude"))
+            lon = store.get("lon", attrs.get("longitude"))
+            if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+                attrs["om_coords_used"] = f"{float(lat):.6f},{float(lon):.6f}"
+
+            place = (self.coordinator.data or {}).get("location_name") or store.get("place")
+            if place:
+                attrs["om_place_name"] = place
+        except Exception:
+            pass
         return attrs
 
 
@@ -291,14 +301,24 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         attrs = _extra_attrs(self.coordinator.data or {})
-        store = self.hass.data[DOMAIN]["entries"].get(self._config_entry.entry_id, {})
-        src = store.get("source")
-        coords = store.get("coords")
-        place = store.get("place_name")
-        if src:
-            attrs["om_source"] = src
-        if coords:
-            attrs["om_coords_used"] = f"{coords[0]:.5f},{coords[1]:.5f}"
-        if place:
-            attrs["om_place_name"] = place
+        try:
+            store = (
+                self.hass.data.get(DOMAIN, {})
+                .get("entries", {})
+                .get(self._config_entry.entry_id, {})
+            )
+            src = store.get("src")
+            if src:
+                attrs["om_source"] = src
+
+            lat = store.get("lat", attrs.get("latitude"))
+            lon = store.get("lon", attrs.get("longitude"))
+            if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+                attrs["om_coords_used"] = f"{float(lat):.6f},{float(lon):.6f}"
+
+            place = (self.coordinator.data or {}).get("location_name") or store.get("place")
+            if place:
+                attrs["om_place_name"] = place
+        except Exception:
+            pass
         return attrs
