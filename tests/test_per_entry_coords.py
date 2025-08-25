@@ -18,8 +18,11 @@ from custom_components.openmeteo.const import (
 
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
+    async_fire_time_changed,
     async_test_home_assistant,
 )
+from datetime import timedelta
+
 from homeassistant.util import dt as dt_util
 
 A_LAT, A_LON = 50.067, 20.000
@@ -71,7 +74,12 @@ async def test_per_entry_coords_and_title():
             assert title_a != title_b
 
             # Simulate options flow toggle for entry_b
-            entry_b.options = {CONF_MODE: MODE_STATIC}
+            hass.config_entries.async_update_entry(
+                entry_b, options={CONF_MODE: MODE_STATIC}
+            )
+            await hass.async_block_till_done()
+            async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+            await hass.async_block_till_done()
             with patch(
                 "custom_components.openmeteo.coordinator.async_reverse_geocode",
                 side_effect=fake_geocode,
@@ -86,6 +94,8 @@ async def test_per_entry_coords_and_title():
             assert title_b2 == title_b
             assert title_b2 != title_a
 
-            await hass.config_entries.async_unload(entry_a.entry_id)
-            await hass.config_entries.async_unload(entry_b.entry_id)
+            assert await hass.config_entries.async_unload(entry_a.entry_id)
+            assert await hass.config_entries.async_unload(entry_b.entry_id)
+            async_fire_time_changed(hass, dt_util.utcnow() + timedelta(days=1))
+            await hass.async_block_till_done()
             await hass.async_stop()

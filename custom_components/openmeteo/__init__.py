@@ -6,8 +6,8 @@ from __future__ import annotations
 from typing import Callable
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
+from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_API_PROVIDER,
@@ -15,6 +15,7 @@ from .const import (
     CONF_MIN_TRACK_INTERVAL,
     CONF_MODE,
     CONF_TRACKED_ENTITY_ID,
+    CONF_UNITS,
     CONF_UPDATE_INTERVAL,
     DEFAULT_API_PROVIDER,
     DEFAULT_MIN_TRACK_INTERVAL,
@@ -24,19 +25,22 @@ from .const import (
     MODE_STATIC,
     MODE_TRACK,
     PLATFORMS,
-    CONF_UNITS,
 )
 from .coordinator import OpenMeteoDataUpdateCoordinator, async_reverse_geocode
 
 
 def _entry_store(hass: HomeAssistant, entry: ConfigEntry) -> dict:
-    """Return per-entry storage."""
-    return hass.data.setdefault(DOMAIN, {}).setdefault("entries", {}).setdefault(
+    """Return the per-entry storage."""
+    from .const import DOMAIN as _DOMAIN
+
+    return hass.data.setdefault(_DOMAIN, {}).setdefault("entries", {}).setdefault(
         entry.entry_id, {}
     )
 
 
-def register_unsub(hass: HomeAssistant, entry: ConfigEntry, fn: Callable[[], None]) -> None:
+def _register_unsub(
+    hass: HomeAssistant, entry: ConfigEntry, fn: Callable[[], None]
+) -> None:
     """Register an unsubscribe callback for the entry."""
     store = _entry_store(hass, entry)
     store.setdefault("unsubs", []).append(fn)
@@ -124,20 +128,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    store = _entry_store(hass, entry)
+    for fn in store.get("unsubs", []):
+        try:
+            fn()
+        except Exception:
+            pass
+    store["unsubs"] = []
+    coordinator = store.get("coordinator")
+    if coordinator:
+        coordinator._unsub_entity = None
+        coordinator._unsub_refresh = None
+        await coordinator.async_shutdown()
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         domain_data = hass.data.get(DOMAIN, {})
         entries = domain_data.get("entries", {})
-        store = entries.get(entry.entry_id, {})
-        coordinator = store.get("coordinator")
-        if coordinator:
-            await coordinator.async_shutdown()
-        for fn in store.get("unsubs", []):
-            try:
-                fn()
-            except Exception:
-                pass
-        store["unsubs"] = []
+        store.clear()
         entries.pop(entry.entry_id, None)
         if not entries and DOMAIN in hass.data:
             hass.data.pop(DOMAIN)

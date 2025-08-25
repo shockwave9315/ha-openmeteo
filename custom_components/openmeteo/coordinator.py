@@ -29,7 +29,6 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL,
     MODE_TRACK,
     URL,
-    DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -135,19 +134,19 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._unsub_entity = async_track_state_change_event(
                 self.hass, [entity_id], _on_state_change
             )
-            from . import register_unsub
+            from . import _register_unsub
 
-            register_unsub(self.hass, self.config_entry, self._unsub_entity)
+            _register_unsub(self.hass, self.config_entry, self._unsub_entity)
 
     def _schedule_refresh(self) -> None:
         super()._schedule_refresh()
         if self._unsub_refresh:
-            from . import register_unsub
+            from . import _register_unsub
 
-            register_unsub(self.hass, self.config_entry, self._unsub_refresh)
+            _register_unsub(self.hass, self.config_entry, self._unsub_refresh)
 
     async def _async_update_data(self) -> dict[str, Any]:
-        from . import resolve_coords
+        from . import resolve_coords, _entry_store
 
         latitude, longitude, src = await resolve_coords(self.hass, self.config_entry)
         from_entity = src != "static"
@@ -234,9 +233,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._last_data["location"] = {"latitude": latitude, "longitude": longitude}
             self._last_data["location_name"] = loc_name
             self._last_data["last_location_update"] = last_loc_ts
-            store = self.hass.data.setdefault(DOMAIN, {}).setdefault("entries", {}).setdefault(
-                self.config_entry.entry_id, {}
-            )
+            store = _entry_store(self.hass, self.config_entry)
             store["coords"] = (latitude, longitude)
             store["source"] = src
             store["place_name"] = loc_name
