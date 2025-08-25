@@ -9,4 +9,5 @@
 - fix: dynamically refresh entry title when coords change
 
 ## 1.3.23
-- fix(cleanup): unregister timers/subscriptions on unload to avoid lingering timer in tests; keep dynamic title refresh
+- fix(tests): use async_update_entry for options in tests; unload entries
+- fix(cleanup): track and unsubscribe timers/subscriptions on unload to avoid lingering timers
