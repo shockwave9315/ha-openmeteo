@@ -28,6 +28,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from datetime import datetime
@@ -49,6 +50,7 @@ from .const import (
     DEFAULT_USE_PLACE_AS_DEVICE_NAME,
 )
 from homeassistant.util import slugify
+from .helpers import get_place_title
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,30 +71,6 @@ def _map_condition(weather_code: int | None, is_day: int | None = 1) -> str | No
     if weather_code in (0, 1) and is_day == 0:
         return "clear-night"
     return CONDITION_MAP.get(weather_code)
-
-
-def get_place_title(hass: HomeAssistant, entry: ConfigEntry) -> str:
-    """Return the best available place title for a config entry."""
-    override = entry.options.get("name_override") or entry.data.get("name_override")
-    if override:
-        return override
-    store = (
-        hass.data.get(DOMAIN, {})
-        .get("entries", {})
-        .get(entry.entry_id, {})
-    )
-    coordinator = store.get("coordinator")
-    if coordinator and coordinator.data:
-        loc = coordinator.data.get("location_name")
-        if loc:
-            return loc
-    if (place := store.get("place")):
-        return place
-    lat = store.get("lat")
-    lon = store.get("lon")
-    if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-        return f"{lat:.5f},{lon:.5f}"
-    return entry.title
 
 
 class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
@@ -126,12 +104,14 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         self._use_place = data.get(
             CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
         )
-        if not self._use_place:
-            self._attr_name = config_entry.data.get("name", "Open-Meteo")
-        else:
+        if self._use_place:
             place_slug = slugify(get_place_title(coordinator.hass, config_entry))
             if place_slug:
                 self._attr_suggested_object_id = place_slug
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, config_entry.entry_id)},
+            manufacturer="Open-Meteo",
+        )
         mode = data.get(CONF_MODE)
         if not mode:
             mode = (
@@ -149,24 +129,16 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     def available(self) -> bool:
         return bool(self.coordinator.data) and getattr(self.coordinator, "last_update_success", True)
 
-    @property
-    def name(self) -> str | None:
-        if self._use_place:
-            return get_place_title(self.hass, self._config_entry)
-        return self._attr_name or "Open-Meteo"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        name = (
-            get_place_title(self.hass, self._config_entry)
-            if self._use_place
-            else "Open-Meteo"
+    @callback
+    def _handle_place_update(self) -> None:
+        self._use_place = self._config_entry.options.get(
+            CONF_USE_PLACE_AS_DEVICE_NAME,
+            self._config_entry.data.get(
+                CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
+            ),
         )
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._config_entry.entry_id)},
-            manufacturer="Open-Meteo",
-            name=name,
-        )
+        self._attr_name = get_place_title(self.hass, self._config_entry)
+        self.async_write_ha_state()
 
     @property
     def native_temperature(self) -> float | None:
@@ -340,6 +312,11 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        signal = f"openmeteo_place_updated_{self._config_entry.entry_id}"
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, signal, self._handle_place_update)
+        )
+        self._handle_place_update()
         store = (
             self.hass.data.setdefault(DOMAIN, {})
             .setdefault("entries", {})

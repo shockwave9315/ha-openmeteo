@@ -1,3 +1,8 @@
+## 1.3.28
+- fix(naming): respect user device renames; keep place-driven names only when allowed; remove "Open-Meteo" remnants
+- fix: expose and persist `use_place_as_device_name` option for existing entries
+- fix: sensor labels with `has_entity_name=True`
+
 ## 1.3.27
 - fix(sensor): reorder dataclass fields (Python 3.13) so required `value_fn` precedes optional fields; prevents import error
 - chore: mark dataclass `kw_only=True` for forward compatibility

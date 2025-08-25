@@ -134,7 +134,12 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if not errors:
                 data = {**user_input, CONF_MODE: self._mode}
-                return self.async_create_entry(title="", data=data)
+                use_place = data.pop(
+                    CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
+                )
+                return self.async_create_entry(
+                    title="", data=data, options={CONF_USE_PLACE_AS_DEVICE_NAME: use_place}
+                )
 
         schema = _build_schema(self.hass, self._mode, defaults)
         return self.async_show_form(
@@ -247,6 +252,13 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                             CONF_API_PROVIDER, DEFAULT_API_PROVIDER
                         ),
                     ): vol.In(["open_meteo"]),
+                    vol.Required(
+                        CONF_USE_PLACE_AS_DEVICE_NAME,
+                        default=defaults.get(
+                            CONF_USE_PLACE_AS_DEVICE_NAME,
+                            DEFAULT_USE_PLACE_AS_DEVICE_NAME,
+                        ),
+                    ): bool,
                     vol.Optional(
                         CONF_AREA_NAME_OVERRIDE,
                         default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
@@ -283,6 +295,13 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                             CONF_API_PROVIDER, DEFAULT_API_PROVIDER
                         ),
                     ): vol.In(["open_meteo"]),
+                    vol.Required(
+                        CONF_USE_PLACE_AS_DEVICE_NAME,
+                        default=defaults.get(
+                            CONF_USE_PLACE_AS_DEVICE_NAME,
+                            DEFAULT_USE_PLACE_AS_DEVICE_NAME,
+                        ),
+                    ): bool,
                     vol.Optional(
                         CONF_AREA_NAME_OVERRIDE,
                         default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),

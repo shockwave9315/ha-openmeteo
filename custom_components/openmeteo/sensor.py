@@ -23,8 +23,9 @@ from homeassistant.const import (
     UnitOfSpeed,
     UnitOfTemperature,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -38,7 +39,7 @@ from .const import (
     CONF_USE_PLACE_AS_DEVICE_NAME,
     DEFAULT_USE_PLACE_AS_DEVICE_NAME,
 )
-from .weather import get_place_title
+from .helpers import get_place_title
 
 
 
@@ -259,28 +260,16 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         self._use_place = data.get(
             CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
         )
+        self._attr_has_entity_name = True
+        self._attr_name = None
         if self._use_place:
-            self._attr_has_entity_name = True
-            self._attr_name = None
             place_slug = slugify(get_place_title(coordinator.hass, config_entry))
             if place_slug:
                 self._attr_suggested_object_id = f"{place_slug}_{sensor_type}"
-        else:
-            base = config_entry.data.get("name", "Open-Meteo")
-            self._attr_name = f"{base} {self.entity_description.name}"
         self._attr_unique_id = f"{config_entry.entry_id}-{sensor_type}"
-        
-    @property
-    def device_info(self) -> DeviceInfo:
-        name = (
-            get_place_title(self.hass, self._config_entry)
-            if self._use_place
-            else "Open-Meteo"
-        )
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._config_entry.entry_id)},
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, config_entry.entry_id)},
             manufacturer="Open-Meteo",
-            name=name,
         )
 
     @property
@@ -331,8 +320,17 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
             pass
         return attrs
 
+    @callback
+    def _handle_place_update(self) -> None:
+        self.async_write_ha_state()
+
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        signal = f"openmeteo_place_updated_{self._config_entry.entry_id}"
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, signal, self._handle_place_update)
+        )
+        self._handle_place_update()
         store = (
             self.hass.data.setdefault(DOMAIN, {})
             .setdefault("entries", {})
@@ -369,16 +367,17 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity, SensorEntity):
         self._attr_native_unit_of_measurement = "UV Index"
         self._attr_icon = "mdi:weather-sunny-alert"
         self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_has_entity_name = True
+        self._attr_name = None
+        self._attr_translation_key = "uv_index"
         if self._use_place:
-            self._attr_has_entity_name = True
-            self._attr_name = None
-            self._attr_translation_key = "uv_index"
             place_slug = slugify(get_place_title(coordinator.hass, config_entry))
             if place_slug:
                 self._attr_suggested_object_id = f"{place_slug}_uv_index"
-        else:
-            base = config_entry.data.get("name", "Open-Meteo")
-            self._attr_name = f"{base} Indeks UV"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, config_entry.entry_id)},
+            manufacturer="Open-Meteo",
+        )
 
     @property
     def native_value(self):
@@ -426,21 +425,13 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity, SensorEntity):
             pass
         return attrs
 
-    @property
-    def device_info(self) -> DeviceInfo:
-        name = (
-            get_place_title(self.hass, self._config_entry)
-            if self._use_place
-            else "Open-Meteo"
-        )
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._config_entry.entry_id)},
-            manufacturer="Open-Meteo",
-            name=name,
-        )
-
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        signal = f"openmeteo_place_updated_{self._config_entry.entry_id}"
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, signal, self._handle_place_update)
+        )
+        self._handle_place_update()
         store = (
             self.hass.data.setdefault(DOMAIN, {})
             .setdefault("entries", {})
@@ -457,3 +448,7 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity, SensorEntity):
         if store and self in store.get("entities", []):
             store["entities"].remove(self)
         await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_place_update(self) -> None:
+        self.async_write_ha_state()

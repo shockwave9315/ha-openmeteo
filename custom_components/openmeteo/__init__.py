@@ -17,10 +17,12 @@ from .const import (
     CONF_TRACKED_ENTITY_ID,
     CONF_UNITS,
     CONF_UPDATE_INTERVAL,
+    CONF_USE_PLACE_AS_DEVICE_NAME,
     DEFAULT_API_PROVIDER,
     DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_UNITS,
     DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_USE_PLACE_AS_DEVICE_NAME,
     DOMAIN,
     MODE_STATIC,
     MODE_TRACK,
@@ -110,6 +112,15 @@ async def build_title(
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Open-Meteo from a config entry."""
+    if CONF_USE_PLACE_AS_DEVICE_NAME not in entry.options:
+        use_place = entry.data.pop(
+            CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
+        )
+        hass.config_entries.async_update_entry(
+            entry,
+            data=entry.data,
+            options={**entry.options, CONF_USE_PLACE_AS_DEVICE_NAME: use_place},
+        )
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
     store = _entry_store(hass, entry)
     store["coordinator"] = coordinator
