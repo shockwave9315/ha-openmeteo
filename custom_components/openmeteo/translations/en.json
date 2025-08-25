@@ -14,7 +14,8 @@
           "update_interval": "Update interval (s)",
           "units": "Units",
           "api_provider": "API provider",
-          "area_name_override": "Area name override"
+          "area_name_override": "Area name override",
+          "use_place_as_device_name": "Use place as device name"
         }
       }
     },
@@ -37,7 +38,8 @@
           "update_interval": "Update interval (s)",
           "units": "Units",
           "api_provider": "API provider",
-          "area_name_override": "Area name override"
+          "area_name_override": "Area name override",
+          "use_place_as_device_name": "Use place as device name"
         }
       }
     },

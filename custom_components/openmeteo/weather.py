@@ -27,6 +27,7 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from datetime import datetime
@@ -44,7 +45,10 @@ from .const import (
     MODE_STATIC,
     MODE_TRACK,
     DEFAULT_MIN_TRACK_INTERVAL,
+    CONF_USE_PLACE_AS_DEVICE_NAME,
+    DEFAULT_USE_PLACE_AS_DEVICE_NAME,
 )
+from homeassistant.util import slugify
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,6 +69,30 @@ def _map_condition(weather_code: int | None, is_day: int | None = 1) -> str | No
     if weather_code in (0, 1) and is_day == 0:
         return "clear-night"
     return CONDITION_MAP.get(weather_code)
+
+
+def get_place_title(hass: HomeAssistant, entry: ConfigEntry) -> str:
+    """Return the best available place title for a config entry."""
+    override = entry.options.get("name_override") or entry.data.get("name_override")
+    if override:
+        return override
+    store = (
+        hass.data.get(DOMAIN, {})
+        .get("entries", {})
+        .get(entry.entry_id, {})
+    )
+    coordinator = store.get("coordinator")
+    if coordinator and coordinator.data:
+        loc = coordinator.data.get("location_name")
+        if loc:
+            return loc
+    if (place := store.get("place")):
+        return place
+    lat = store.get("lat")
+    lon = store.get("lon")
+    if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+        return f"{lat:.5f},{lon:.5f}"
+    return entry.title
 
 
 class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
@@ -93,14 +121,17 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         """Initialize the weather entity."""
         super().__init__(coordinator)
         self._config_entry = config_entry
-        self._attr_name = config_entry.data.get("name", "Open-Meteo")
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, config_entry.entry_id)},
-            "name": "Open-Meteo",
-            "manufacturer": "Open-Meteo",
-        }
         data = {**config_entry.data, **config_entry.options}
+        self._use_place = data.get(
+            CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
+        )
+        if not self._use_place:
+            self._attr_name = config_entry.data.get("name", "Open-Meteo")
+        else:
+            place_slug = slugify(get_place_title(coordinator.hass, config_entry))
+            if place_slug:
+                self._attr_suggested_object_id = place_slug
         mode = data.get(CONF_MODE)
         if not mode:
             mode = (
@@ -120,17 +151,22 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
     @property
     def name(self) -> str | None:
-        base = self._attr_name or "Open-Meteo"
-        data = self.coordinator.data or {}
-        loc_name = data.get("location_name")
-        if loc_name:
-            return f"{base} — {loc_name}"
-        loc = data.get("location") or {}
-        lat = loc.get("latitude")
-        lon = loc.get("longitude")
-        if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-            return f"{base} — {lat:.5f},{lon:.5f}"
-        return base
+        if self._use_place:
+            return get_place_title(self.hass, self._config_entry)
+        return self._attr_name or "Open-Meteo"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        name = (
+            get_place_title(self.hass, self._config_entry)
+            if self._use_place
+            else "Open-Meteo"
+        )
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._config_entry.entry_id)},
+            manufacturer="Open-Meteo",
+            name=name,
+        )
 
     @property
     def native_temperature(self) -> float | None:
@@ -303,7 +339,26 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:
-        self.async_on_remove(self.coordinator.async_add_listener(self._handle_coordinator_update))
+        await super().async_added_to_hass()
+        store = (
+            self.hass.data.setdefault(DOMAIN, {})
+            .setdefault("entries", {})
+            .setdefault(self._config_entry.entry_id, {})
+        )
+        store.setdefault("entities", []).append(self)
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self._handle_coordinator_update)
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        store = (
+            self.hass.data.get(DOMAIN, {})
+            .get("entries", {})
+            .get(self._config_entry.entry_id)
+        )
+        if store and self in store.get("entities", []):
+            store["entities"].remove(self)
+        await super().async_will_remove_from_hass()
 
     @property
     def sunrise(self) -> datetime | None:

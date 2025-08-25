@@ -110,14 +110,24 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         opts = self.config_entry.options or {}
         entity_id = opts.get("entity_id") or opts.get("track_entity") or opts.get("track_entity_id")
         await self._resubscribe_tracked_entity(entity_id)
-        from . import resolve_coords
+        from . import resolve_coords, _entry_store
 
         latitude, longitude, _ = await resolve_coords(self.hass, self.config_entry)
         loc_name = None
         if self.config_entry.data.get("geocode_name", True):
             loc_name = await async_reverse_geocode(self.hass, latitude, longitude)
         self.location_name = loc_name
+        store = _entry_store(self.hass, self.config_entry)
+        prev_place = store.get("place")
+        store["place_name"] = loc_name
+        store["place"] = loc_name
         await self.maybe_update_entry_title(latitude, longitude, loc_name)
+        if prev_place != loc_name:
+            for ent in store.get("entities", []) or []:
+                try:
+                    ent.async_write_ha_state()
+                except Exception:
+                    pass
 
     async def _resubscribe_tracked_entity(self, entity_id: str | None) -> None:
         if self._unsub_entity:
@@ -232,11 +242,19 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             store = _entry_store(self.hass, self.config_entry)
             store["coords"] = (latitude, longitude)
             store["source"] = src
+            prev_place = store.get("place")
             store["place_name"] = loc_name
+            store["place"] = loc_name
             hourly = self._last_data.setdefault("hourly", {})
             hourly.setdefault("time", [])
             hourly.setdefault("uv_index", [])
             await self.maybe_update_entry_title(latitude, longitude, loc_name)
+            if prev_place != loc_name:
+                for ent in store.get("entities", []) or []:
+                    try:
+                        ent.async_write_ha_state()
+                    except Exception:
+                        pass
             return self._last_data
         except UpdateFailed:
             if self._last_data is not None:

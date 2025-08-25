@@ -27,6 +27,8 @@ from .const import (
     MODE_TRACK,
     CONF_API_PROVIDER,
     DEFAULT_API_PROVIDER,
+    CONF_USE_PLACE_AS_DEVICE_NAME,
+    DEFAULT_USE_PLACE_AS_DEVICE_NAME,
 )
 
 
@@ -71,6 +73,13 @@ def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> v
                 CONF_API_PROVIDER,
                 default=defaults.get(CONF_API_PROVIDER, DEFAULT_API_PROVIDER),
             ): vol.In(["open_meteo"]),
+            vol.Required(
+                CONF_USE_PLACE_AS_DEVICE_NAME,
+                default=defaults.get(
+                    CONF_USE_PLACE_AS_DEVICE_NAME,
+                    DEFAULT_USE_PLACE_AS_DEVICE_NAME,
+                ),
+            ): bool,
             vol.Optional(
                 CONF_AREA_NAME_OVERRIDE,
                 default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
