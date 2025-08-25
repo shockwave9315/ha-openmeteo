@@ -1,3 +1,6 @@
+## 1.3.32
+- fix: correct override handling, prevent coords as names, stabilize tests
+
 ## 1.3.31
 - fix(naming): compute and store place for entities; weather name uses place only
 - fix(naming): sensors use static labels and entity names; remove dynamic names

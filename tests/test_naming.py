@@ -203,7 +203,7 @@ async def test_weather_entity_name_from_reverse_geocode(expected_lingering_timer
                 return_value="Radłów",
             ):
                 coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
-                await coordinator.async_config_entry_first_refresh()
+                await coordinator.async_refresh()
             weather = OpenMeteoWeather(coordinator, entry)
             weather.hass = hass
             weather.entity_id = "weather.test"
