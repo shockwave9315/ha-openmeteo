@@ -33,7 +33,6 @@ async def test_sensor_has_entity_name_label():
         CONF_LATITUDE,
         CONF_LONGITUDE,
         CONF_MODE,
-        CONF_USE_PLACE_AS_DEVICE_NAME,
         DOMAIN,
         MODE_STATIC,
     )
@@ -43,13 +42,14 @@ async def test_sensor_has_entity_name_label():
             entry = MockConfigEntry(
                 domain=DOMAIN,
                 data={CONF_MODE: MODE_STATIC, CONF_LATITUDE: A_LAT, CONF_LONGITUDE: A_LON},
-                options={CONF_USE_PLACE_AS_DEVICE_NAME: True},
+                options={},
                 title="Radłów",
             )
             coordinator = DummyCoordinator(hass)
             sensor = OpenMeteoSensor(coordinator, entry, "temperature")
             assert SENSOR_TYPES["temperature"].name == "Temperatura"
             assert sensor._attr_has_entity_name is True
+            assert sensor.entity_description.name == "Temperatura"
             assert all("Open-Meteo" not in (desc.name or "") for desc in SENSOR_TYPES.values())
             await hass.async_stop()
 
@@ -79,7 +79,7 @@ async def test_device_name_follows_place_and_respects_user_rename(expected_linge
             entry = MockConfigEntry(
                 domain=DOMAIN,
                 data={CONF_MODE: MODE_STATIC, CONF_LATITUDE: A_LAT, CONF_LONGITUDE: A_LON},
-                options={CONF_USE_PLACE_AS_DEVICE_NAME: True},
+                options={},
                 title="Radłów",
             )
             entry.add_to_hass(hass)
@@ -111,7 +111,7 @@ async def test_device_name_follows_place_and_respects_user_rename(expected_linge
 
 
 @pytest.mark.asyncio
-async def test_options_flow_persists_use_place():
+async def test_options_flow_static_has_no_use_place():
     from pytest_homeassistant_custom_component.common import (
         MockConfigEntry,
         async_test_home_assistant,
@@ -144,18 +144,67 @@ async def test_options_flow_persists_use_place():
             entry.add_to_hass(hass)
             flow = OpenMeteoOptionsFlow(entry)
             flow.hass = hass
-            result = await flow.async_step_init({CONF_MODE: MODE_STATIC})
-            assert CONF_USE_PLACE_AS_DEVICE_NAME in result["data_schema"].schema
-            result2 = await flow.async_step_mode_details(
-                {
-                    CONF_LATITUDE: A_LAT,
-                    CONF_LONGITUDE: A_LON,
-                    CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
-                    CONF_UNITS: DEFAULT_UNITS,
-                    CONF_API_PROVIDER: DEFAULT_API_PROVIDER,
-                    CONF_USE_PLACE_AS_DEVICE_NAME: False,
-                }
+            await flow.async_step_init({CONF_MODE: MODE_STATIC})
+            result = await flow.async_step_mode_details()
+            assert CONF_USE_PLACE_AS_DEVICE_NAME not in result["data_schema"].schema
+            await hass.async_stop()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("expected_lingering_timers", [True])
+async def test_weather_entity_name_from_reverse_geocode(expected_lingering_timers):
+    from pytest_homeassistant_custom_component.common import (
+        MockConfigEntry,
+        async_test_home_assistant,
+    )
+    from homeassistant.util import dt as dt_util
+    from custom_components.openmeteo.coordinator import OpenMeteoDataUpdateCoordinator
+    from custom_components.openmeteo.weather import OpenMeteoWeather
+    from custom_components.openmeteo.const import (
+        CONF_LATITUDE,
+        CONF_LONGITUDE,
+        CONF_MODE,
+        DOMAIN,
+        MODE_STATIC,
+    )
+
+    class DummyResp:
+        status = 200
+
+        async def json(self):
+            return {"hourly": {"time": [], "uv_index": []}, "timezone": "UTC"}
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+    class DummySession:
+        def get(self, *args, **kwargs):
+            return DummyResp()
+
+    with patch("homeassistant.util.dt.get_time_zone", return_value=dt_util.UTC):
+        async with async_test_home_assistant() as hass:
+            entry = MockConfigEntry(
+                domain=DOMAIN,
+                data={CONF_MODE: MODE_STATIC, CONF_LATITUDE: A_LAT, CONF_LONGITUDE: A_LON},
+                options={},
+                title="X",
             )
-            hass.config_entries.async_update_entry(entry, options=result2["data"])
-            assert entry.options[CONF_USE_PLACE_AS_DEVICE_NAME] is False
+            entry.add_to_hass(hass)
+            with patch(
+                "custom_components.openmeteo.coordinator.async_get_clientsession",
+                return_value=DummySession(),
+            ), patch(
+                "custom_components.openmeteo.coordinator.async_reverse_geocode",
+                return_value="Radłów",
+            ):
+                coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
+                await coordinator.async_config_entry_first_refresh()
+            weather = OpenMeteoWeather(coordinator, entry)
+            weather.hass = hass
+            weather.entity_id = "weather.test"
+            await weather.async_added_to_hass()
+            assert weather.name == "Radłów"
             await hass.async_stop()

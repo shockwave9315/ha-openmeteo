@@ -1,3 +1,6 @@
+## 1.3.30
+- fix(naming): sensor labels restored; respect user device renames; static mode always uses place (no toggle); stop writing device_info.name from entities; title remains place
+
 ## 1.3.28
 - fix(naming): respect user device renames; keep place-driven names only when allowed; remove "Open-Meteo" remnants
 - fix: expose and persist `use_place_as_device_name` option for existing entries

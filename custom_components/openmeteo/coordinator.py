@@ -64,7 +64,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def __init__(self, hass: HomeAssistant, entry) -> None:
         self.hass = hass
-        self.config_entry = entry
         interval = entry.options.get(
             CONF_UPDATE_INTERVAL,
             entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
@@ -78,6 +77,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         super().__init__(
             hass, _LOGGER, name="Open-Meteo", update_interval=timedelta(seconds=interval)
         )
+        self.config_entry = entry
         self.location_name: str | None = entry.options.get(
             CONF_AREA_NAME_OVERRIDE, entry.data.get(CONF_AREA_NAME_OVERRIDE)
         )
@@ -123,7 +123,9 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         store["place_name"] = place
         store["place"] = place
         await self.maybe_update_entry_title(latitude, longitude, place)
-        await maybe_update_device_name(self.hass, self.config_entry, place)
+        await maybe_update_device_name(
+            self.hass, self.config_entry, get_place_title(self.hass, self.config_entry)
+        )
         async_dispatcher_send(
             self.hass, f"openmeteo_place_updated_{self.config_entry.entry_id}"
         )
@@ -169,7 +171,9 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         store["place"] = place
         last_loc_ts = dt_util.utcnow().isoformat()
         await self.maybe_update_entry_title(latitude, longitude, place)
-        await maybe_update_device_name(self.hass, self.config_entry, place)
+        await maybe_update_device_name(
+            self.hass, self.config_entry, get_place_title(self.hass, self.config_entry)
+        )
         new_title = get_place_title(self.hass, self.config_entry)
         if prev_title != new_title:
             async_dispatcher_send(

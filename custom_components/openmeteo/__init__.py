@@ -112,15 +112,30 @@ async def build_title(
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Open-Meteo from a config entry."""
-    if CONF_USE_PLACE_AS_DEVICE_NAME not in entry.options:
-        use_place = entry.data.pop(
-            CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
-        )
-        hass.config_entries.async_update_entry(
-            entry,
-            data=entry.data,
-            options={**entry.options, CONF_USE_PLACE_AS_DEVICE_NAME: use_place},
-        )
+    mode = entry.options.get(CONF_MODE, entry.data.get(CONF_MODE))
+    if mode == MODE_STATIC:
+        data = dict(entry.data)
+        opts = dict(entry.options)
+        changed = False
+        if opts.pop(CONF_USE_PLACE_AS_DEVICE_NAME, None) is not None:
+            changed = True
+        if data.pop(CONF_USE_PLACE_AS_DEVICE_NAME, None) is not None:
+            changed = True
+        if changed:
+            hass.config_entries.async_update_entry(entry, data=data, options=opts)
+    else:
+        if CONF_USE_PLACE_AS_DEVICE_NAME not in entry.options:
+            use_place = entry.data.pop(
+                CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
+            )
+            hass.config_entries.async_update_entry(
+                entry,
+                data=entry.data,
+                options={
+                    **entry.options,
+                    CONF_USE_PLACE_AS_DEVICE_NAME: use_place,
+                },
+            )
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
     store = _entry_store(hass, entry)
     store["coordinator"] = coordinator
