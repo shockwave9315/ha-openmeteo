@@ -6,6 +6,7 @@ from __future__ import annotations
 # Changelog:
 # 1.3.33 - Standardize entity IDs and migrate legacy unique IDs.
 # 1.3.35 - Stable entry-based IDs; dynamic names with reverse geocoding and caching.
+# 1.3.36 - add legacy sensors (precipitation_probability, sunrise, sunset, location); stable IDs; dynamic names; correct icons & device_class for all sensors.
 
 from typing import Callable
 
@@ -26,6 +27,7 @@ from .const import (
     CONF_AREA_NAME_OVERRIDE,
     CONF_SHOW_PLACE_NAME,
     CONF_GEOCODER_PROVIDER,
+    CONF_EXTRA_SENSORS,
     DEFAULT_API_PROVIDER,
     DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_UNITS,
@@ -158,6 +160,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
     store = _entry_store(hass, entry)
     store["coordinator"] = coordinator
+    store["options_snapshot"] = dict(entry.options)
 
     lat, lon, _src = await resolve_coords(hass, entry)
     title = await build_title(hass, entry, lat, lon)
@@ -224,9 +227,16 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def _options_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     data = hass.data.get(DOMAIN, {}).get("entries", {}).get(entry.entry_id)
-    if data and data.get("coordinator"):
-        await data["coordinator"].async_options_updated()
-        await data["coordinator"].async_request_refresh()
-    else:
-        await hass.config_entries.async_reload(entry.entry_id)
+    if data:
+        prev = data.get("options_snapshot", {})
+        if prev.get(CONF_EXTRA_SENSORS) != entry.options.get(CONF_EXTRA_SENSORS):
+            await hass.config_entries.async_reload(entry.entry_id)
+            return
+        data["options_snapshot"] = dict(entry.options)
+        coord = data.get("coordinator")
+        if coord:
+            await coord.async_options_updated()
+            await coord.async_request_refresh()
+            return
+    await hass.config_entries.async_reload(entry.entry_id)
 

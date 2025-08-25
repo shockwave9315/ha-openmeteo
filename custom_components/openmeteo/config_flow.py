@@ -37,6 +37,8 @@ from .const import (
     DEFAULT_GEOCODE_INTERVAL_MIN,
     DEFAULT_GEOCODE_MIN_DISTANCE_M,
     DEFAULT_GEOCODER_PROVIDER,
+    CONF_EXTRA_SENSORS,
+    DEFAULT_EXTRA_SENSORS,
 )
 
 
@@ -295,6 +297,12 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                             CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER
                         ),
                     ): vol.In(["osm_nominatim", "photon", "none"]),
+                    vol.Optional(
+                        CONF_EXTRA_SENSORS,
+                        default=defaults.get(
+                            CONF_EXTRA_SENSORS, DEFAULT_EXTRA_SENSORS
+                        ),
+                    ): bool,
                 }
             )
         else:
@@ -357,6 +365,12 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                             CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER
                         ),
                     ): vol.In(["osm_nominatim", "photon", "none"]),
+                    vol.Optional(
+                        CONF_EXTRA_SENSORS,
+                        default=defaults.get(
+                            CONF_EXTRA_SENSORS, DEFAULT_EXTRA_SENSORS
+                        ),
+                    ): bool,
                 }
             )
 

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 import re
@@ -35,6 +34,8 @@ from .const import (
     DOMAIN,
     CONF_SHOW_PLACE_NAME,
     DEFAULT_SHOW_PLACE_NAME,
+    CONF_EXTRA_SENSORS,
+    DEFAULT_EXTRA_SENSORS,
 )
 from .coordinator import OpenMeteoDataUpdateCoordinator
 
@@ -74,15 +75,104 @@ class SensorSpec:
     base_name: str
     unit: str | None
     device_class: SensorDeviceClass | str | None
-    value_fn: Callable[[dict[str, Any]], Any]
+    icon: str | None
+    value_fn: Callable[[dict[str, Any]], Any] | None
+    state_class: SensorStateClass | None = SensorStateClass.MEASUREMENT
+
+
+BASE_SENSOR_KEYS = [
+    "pressure",
+    "uv_index",
+    "wind_direction",
+    "wind_gust",
+    "wind_speed",
+    "dew_point",
+    "precipitation",
+    "precipitation_probability",
+    "temperature",
+    "apparent_temperature",
+    "visibility",
+    "humidity",
+    "sunrise",
+    "sunset",
+    "location",
+]
+
+EXTRA_SENSOR_KEYS = ["cloud_cover", "solar_radiation", "snow_depth"]
 
 
 SENSOR_SPECS: dict[str, SensorSpec] = {
+    "pressure": SensorSpec(
+        "pressure",
+        "Ciśnienie",
+        UnitOfPressure.HPA,
+        SensorDeviceClass.PRESSURE,
+        "mdi:gauge",
+        lambda d: _first_hourly(d, "pressure_msl"),
+    ),
+    "uv_index": SensorSpec(
+        "uv_index",
+        "Indeks UV",
+        None,
+        None,
+        "mdi:weather-sunny-alert",
+        _uv_index_value,
+    ),
+    "wind_direction": SensorSpec(
+        "wind_direction",
+        "Kierunek wiatru",
+        DEGREE,
+        None,
+        "mdi:compass",
+        lambda d: d.get("current_weather", {}).get("winddirection"),
+    ),
+    "wind_gust": SensorSpec(
+        "wind_gust",
+        "Porywy wiatru",
+        UnitOfSpeed.KILOMETERS_PER_HOUR,
+        None,
+        "mdi:weather-windy",
+        lambda d: _first_hourly(d, "wind_gusts_10m"),
+    ),
+    "wind_speed": SensorSpec(
+        "wind_speed",
+        "Prędkość wiatru",
+        UnitOfSpeed.KILOMETERS_PER_HOUR,
+        None,
+        "mdi:weather-windy-variant",
+        lambda d: d.get("current_weather", {}).get("windspeed"),
+    ),
+    "dew_point": SensorSpec(
+        "dew_point",
+        "Punkt rosy",
+        UnitOfTemperature.CELSIUS,
+        SensorDeviceClass.TEMPERATURE,
+        "mdi:water-percent",
+        lambda d: d.get("current", {}).get("dewpoint_2m")
+        or _first_hourly(d, "dewpoint_2m"),
+    ),
+    "precipitation": SensorSpec(
+        "precipitation",
+        "Suma opadów",
+        UnitOfPrecipitationDepth.MILLIMETERS,
+        SensorDeviceClass.PRECIPITATION,
+        "mdi:weather-rainy",
+        lambda d: _first_hourly(d, "precipitation"),
+    ),
+    "precipitation_probability": SensorSpec(
+        "precipitation_probability",
+        "Prawdopodobieństwo opadów",
+        PERCENTAGE,
+        None,
+        "mdi:weather-pouring",
+        lambda d: _first_hourly(d, "precipitation_probability"),
+    ),
     "temperature": SensorSpec(
         "temperature",
         "Temperatura",
         UnitOfTemperature.CELSIUS,
         SensorDeviceClass.TEMPERATURE,
+        "mdi:thermometer",
         lambda d: d.get("current_weather", {}).get("temperature"),
     ),
     "apparent_temperature": SensorSpec(
@@ -90,77 +180,66 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         "Temperatura odczuwalna",
         UnitOfTemperature.CELSIUS,
         SensorDeviceClass.TEMPERATURE,
+        "mdi:thermometer-lines",
         lambda d: _first_hourly(d, "apparent_temperature"),
-    ),
-    "humidity": SensorSpec(
-        "humidity",
-        "Wilgotność",
-        PERCENTAGE,
-        SensorDeviceClass.HUMIDITY,
-        lambda d: _first_hourly(d, "relative_humidity_2m"),
-    ),
-    "pressure": SensorSpec(
-        "pressure",
-        "Ciśnienie",
-        UnitOfPressure.HPA,
-        SensorDeviceClass.PRESSURE,
-        lambda d: _first_hourly(d, "pressure_msl"),
-    ),
-    "wind_speed": SensorSpec(
-        "wind_speed",
-        "Prędkość wiatru",
-        UnitOfSpeed.KILOMETERS_PER_HOUR,
-        None,
-        lambda d: d.get("current_weather", {}).get("windspeed"),
-    ),
-    "wind_gust": SensorSpec(
-        "wind_gust",
-        "Porywy wiatru",
-        UnitOfSpeed.KILOMETERS_PER_HOUR,
-        None,
-        lambda d: _first_hourly(d, "wind_gusts_10m"),
-    ),
-    "wind_direction": SensorSpec(
-        "wind_direction",
-        "Kierunek wiatru",
-        DEGREE,
-        None,
-        lambda d: d.get("current_weather", {}).get("winddirection"),
-    ),
-    "precipitation": SensorSpec(
-        "precipitation",
-        "Suma opadów",
-        UnitOfPrecipitationDepth.MILLIMETERS,
-        None,
-        lambda d: _first_hourly(d, "precipitation"),
-    ),
-    "cloud_cover": SensorSpec(
-        "cloud_cover",
-        "Zachmurzenie",
-        PERCENTAGE,
-        None,
-        lambda d: _first_hourly(d, "cloud_cover"),
-    ),
-    "dew_point": SensorSpec(
-        "dew_point",
-        "Punkt rosy",
-        UnitOfTemperature.CELSIUS,
-        SensorDeviceClass.TEMPERATURE,
-        lambda d: d.get("current", {}).get("dewpoint_2m")
-        or _first_hourly(d, "dewpoint_2m"),
     ),
     "visibility": SensorSpec(
         "visibility",
         "Widzialność",
         UnitOfLength.KILOMETERS,
         None,
+        "mdi:eye",
         _visibility_km,
+    ),
+    "humidity": SensorSpec(
+        "humidity",
+        "Wilgotność",
+        PERCENTAGE,
+        SensorDeviceClass.HUMIDITY,
+        "mdi:water-percent",
+        lambda d: _first_hourly(d, "relative_humidity_2m"),
+    ),
+    "sunrise": SensorSpec(
+        "sunrise",
+        "Wschód słońca",
+        None,
+        SensorDeviceClass.TIMESTAMP,
+        "mdi:weather-sunset-up",
+        lambda d: (d.get("daily", {}).get("sunrise") or [None])[0],
+        state_class=None,
+    ),
+    "sunset": SensorSpec(
+        "sunset",
+        "Zachód słońca",
+        None,
+        SensorDeviceClass.TIMESTAMP,
+        "mdi:weather-sunset-down",
+        lambda d: (d.get("daily", {}).get("sunset") or [None])[0],
+        state_class=None,
+    ),
+    "location": SensorSpec(
+        "location",
+        "Lokalizacja",
+        None,
+        None,
+        "mdi:map-marker",
+        None,
+        state_class=None,
+    ),
+    "cloud_cover": SensorSpec(
+        "cloud_cover",
+        "Zachmurzenie",
+        PERCENTAGE,
+        None,
+        "mdi:weather-cloudy",
+        lambda d: _first_hourly(d, "cloud_cover"),
     ),
     "solar_radiation": SensorSpec(
         "solar_radiation",
         "Promieniowanie słoneczne",
         "W/m²",
         None,
+        "mdi:weather-sunny",
         lambda d: _first_hourly(d, "shortwave_radiation"),
     ),
     "snow_depth": SensorSpec(
@@ -168,14 +247,8 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         "Pokrywa śnieżna",
         "cm",
         None,
+        "mdi:snowflake",
         lambda d: _first_hourly(d, "snow_depth"),
-    ),
-    "uv_index": SensorSpec(
-        "uv_index",
-        "Indeks UV",
-        None,
-        None,
-        _uv_index_value,
     ),
 }
 
@@ -185,7 +258,11 @@ async def async_setup_entry(
 ) -> None:
     """Set up Open-Meteo sensors."""
     coordinator = hass.data[DOMAIN]["entries"][entry.entry_id]["coordinator"]
-    entities = [OpenMeteoSensor(coordinator, entry, key) for key in SENSOR_SPECS]
+    opts = entry.options or {}
+    keys = list(BASE_SENSOR_KEYS)
+    if opts.get(CONF_EXTRA_SENSORS, DEFAULT_EXTRA_SENSORS):
+        keys += EXTRA_SENSOR_KEYS
+    entities = [OpenMeteoSensor(coordinator, entry, key) for key in keys]
     async_add_entities(entities)
 
 
@@ -203,6 +280,11 @@ async def async_migrate_entry(hass: HomeAssistant, entry: RegistryEntry) -> dict
         if entry.unique_id.endswith(k) or entry.original_name.startswith(spec.base_name):
             key = k
             break
+    if not key and entry.entity_id:
+        for k in SENSOR_SPECS:
+            if entry.entity_id.endswith(f"_{k}"):
+                key = k
+                break
     if not key:
         return None
     return {"new_unique_id": f"{entry.config_entry_id}_{key}"}
@@ -211,7 +293,6 @@ async def async_migrate_entry(hass: HomeAssistant, entry: RegistryEntry) -> dict
 class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     """Representation of an Open-Meteo sensor."""
 
-    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_has_entity_name = False
 
     def __init__(
@@ -234,6 +315,13 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
             identifiers={(DOMAIN, entry.entry_id)},
             manufacturer="Open-Meteo",
         )
+        self._attr_icon = self._spec.icon
+        if self._spec.state_class is not None:
+            self._attr_state_class = self._spec.state_class
+        else:
+            self._attr_state_class = None
+        if key in EXTRA_SENSOR_KEYS:
+            self._attr_entity_registry_enabled_default = False
 
     @property
     def name(self) -> str:
@@ -259,7 +347,35 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     def native_value(self) -> Any:
         if not self.coordinator.data:
             return None
-        val = self._spec.value_fn(self.coordinator.data)
+        if self._key == "location":
+            store = (
+                self.hass.data.get(DOMAIN, {})
+                .get("entries", {})
+                .get(self._config_entry.entry_id, {})
+            )
+            lat = store.get("lat")
+            lon = store.get("lon")
+            if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+                return f"{lat:.7f}, {lon:.7f}"
+            return None
+        if self._key in ("sunrise", "sunset"):
+            val = self._spec.value_fn(self.coordinator.data) if self._spec.value_fn else None
+            if not val:
+                sun = self.hass.states.get("sun.sun")
+                attr = "next_rising" if self._key == "sunrise" else "next_setting"
+                if sun:
+                    val = sun.attributes.get(attr)
+            if isinstance(val, str):
+                dt = dt_util.parse_datetime(val)
+            else:
+                dt = val
+            if not dt:
+                return None
+            if dt.tzinfo is None:
+                tz = dt_util.get_time_zone(self.hass.config.time_zone) or dt_util.UTC
+                dt = dt.replace(tzinfo=tz)
+            return dt_util.as_local(dt)
+        val = self._spec.value_fn(self.coordinator.data) if self._spec.value_fn else None
         return round(val, 2) if isinstance(val, (int, float)) else val
 
     @property

@@ -46,6 +46,7 @@ CONF_SHOW_PLACE_NAME = "show_place_name"
 CONF_GEOCODE_INTERVAL_MIN = "geocode_interval_min"
 CONF_GEOCODE_MIN_DISTANCE_M = "geocode_min_distance_m"
 CONF_GEOCODER_PROVIDER = "geocoder_provider"
+CONF_EXTRA_SENSORS = "extra_sensors"
 
 # Modes
 MODE_STATIC = "static"
@@ -70,6 +71,7 @@ DEFAULT_SHOW_PLACE_NAME = True
 DEFAULT_GEOCODE_INTERVAL_MIN = 120
 DEFAULT_GEOCODE_MIN_DISTANCE_M = 500
 DEFAULT_GEOCODER_PROVIDER = "osm_nominatim"
+DEFAULT_EXTRA_SENSORS = False
 
 DEFAULT_DAILY_VARIABLES = [
     "temperature_2m_max",

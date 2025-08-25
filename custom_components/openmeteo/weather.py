@@ -121,6 +121,7 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             identifiers={(DOMAIN, config_entry.entry_id)},
             manufacturer="Open-Meteo",
         )
+        self._attr_icon = "mdi:weather-partly-cloudy"
         mode = data.get(CONF_MODE)
         if not mode:
             mode = (
