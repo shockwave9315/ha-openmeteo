@@ -16,7 +16,11 @@ from custom_components.openmeteo.const import (
     MODE_STATIC,
 )
 
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_test_home_assistant
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_test_home_assistant,
+)
+from homeassistant.util import dt as dt_util
 
 A_LAT, A_LON = 50.067, 20.000
 B_LAT, B_LON = 51.110, 22.000
@@ -32,41 +36,56 @@ async def fake_geocode(hass, lat, lon):
 
 @pytest.mark.asyncio
 async def test_per_entry_coords_and_title():
-    async with async_test_home_assistant() as hass:
-        entry_a = MockConfigEntry(
-        domain=DOMAIN,
-        data={CONF_MODE: MODE_STATIC, CONF_LATITUDE: A_LAT, CONF_LONGITUDE: A_LON},
-        title="A",
-        options={},
-        )
-        entry_a.add_to_hass(hass)
+    with patch("homeassistant.util.dt.get_time_zone", return_value=dt_util.UTC):
+        async with async_test_home_assistant() as hass:
+            entry_a = MockConfigEntry(
+                domain=DOMAIN,
+                data={CONF_MODE: MODE_STATIC, CONF_LATITUDE: A_LAT, CONF_LONGITUDE: A_LON},
+                title="A",
+                options={},
+            )
+            entry_a.add_to_hass(hass)
 
-        entry_b = MockConfigEntry(
-        domain=DOMAIN,
-        data={CONF_MODE: MODE_STATIC, CONF_LATITUDE: B_LAT, CONF_LONGITUDE: B_LON},
-        title="B",
-        options={},
-        )
-        entry_b.add_to_hass(hass)
+            entry_b = MockConfigEntry(
+                domain=DOMAIN,
+                data={CONF_MODE: MODE_STATIC, CONF_LATITUDE: B_LAT, CONF_LONGITUDE: B_LON},
+                title="B",
+                options={},
+            )
+            entry_b.add_to_hass(hass)
 
-        with patch("custom_components.openmeteo.coordinator.async_reverse_geocode", side_effect=fake_geocode), \
-             patch("custom_components.openmeteo.async_reverse_geocode", side_effect=fake_geocode):
-            lat_a, lon_a, _ = await resolve_coords(hass, entry_a)
-            title_a = await build_title(hass, entry_a, lat_a, lon_a)
-            lat_b, lon_b, _ = await resolve_coords(hass, entry_b)
-            title_b = await build_title(hass, entry_b, lat_b, lon_b)
+            with patch(
+                "custom_components.openmeteo.coordinator.async_reverse_geocode",
+                side_effect=fake_geocode,
+            ), patch(
+                "custom_components.openmeteo.async_reverse_geocode",
+                side_effect=fake_geocode,
+            ):
+                lat_a, lon_a, _ = await resolve_coords(hass, entry_a)
+                title_a = await build_title(hass, entry_a, lat_a, lon_a)
+                lat_b, lon_b, _ = await resolve_coords(hass, entry_b)
+                title_b = await build_title(hass, entry_b, lat_b, lon_b)
 
-        assert (lat_a, lon_a) == (A_LAT, A_LON)
-        assert (lat_b, lon_b) == (B_LAT, B_LON)
-        assert title_a != title_b
+            assert (lat_a, lon_a) == (A_LAT, A_LON)
+            assert (lat_b, lon_b) == (B_LAT, B_LON)
+            assert title_a != title_b
 
-        # Simulate options flow toggle for entry_b
-        entry_b.options = {CONF_MODE: MODE_STATIC}
-        with patch("custom_components.openmeteo.coordinator.async_reverse_geocode", side_effect=fake_geocode), \
-             patch("custom_components.openmeteo.async_reverse_geocode", side_effect=fake_geocode):
-            lat_b2, lon_b2, _ = await resolve_coords(hass, entry_b)
-            title_b2 = await build_title(hass, entry_b, lat_b2, lon_b2)
+            # Simulate options flow toggle for entry_b
+            entry_b.options = {CONF_MODE: MODE_STATIC}
+            with patch(
+                "custom_components.openmeteo.coordinator.async_reverse_geocode",
+                side_effect=fake_geocode,
+            ), patch(
+                "custom_components.openmeteo.async_reverse_geocode",
+                side_effect=fake_geocode,
+            ):
+                lat_b2, lon_b2, _ = await resolve_coords(hass, entry_b)
+                title_b2 = await build_title(hass, entry_b, lat_b2, lon_b2)
 
-        assert (lat_b2, lon_b2) == (B_LAT, B_LON)
-        assert title_b2 == title_b
-        assert title_b2 != title_a
+            assert (lat_b2, lon_b2) == (B_LAT, B_LON)
+            assert title_b2 == title_b
+            assert title_b2 != title_a
+
+            await hass.config_entries.async_unload(entry_a.entry_id)
+            await hass.config_entries.async_unload(entry_b.entry_id)
+            await hass.async_stop()
