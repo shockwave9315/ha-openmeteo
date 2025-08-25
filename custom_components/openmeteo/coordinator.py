@@ -79,9 +79,10 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hass, _LOGGER, name="Open-Meteo", update_interval=timedelta(seconds=interval)
         )
         self.config_entry = entry
-        self.location_name: str | None = entry.options.get(
-            CONF_AREA_NAME_OVERRIDE, entry.data.get(CONF_AREA_NAME_OVERRIDE)
-        )
+        override = entry.options.get(CONF_AREA_NAME_OVERRIDE)
+        if override is None:
+            override = entry.data.get(CONF_AREA_NAME_OVERRIDE)
+        self.location_name: str | None = override
         self.provider: str = entry.options.get("api_provider", DEFAULT_API_PROVIDER)
         self._last_data: dict[str, Any] | None = None
         self._tracked_entity_id: str | None = None
@@ -116,7 +117,13 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if geocode_on
             else None
         )
+        _LOGGER.debug(
+            "Reverse geocode result for %s,%s: %s", latitude, longitude, place
+        )
         self.location_name = place
+        override = self.config_entry.options.get(CONF_AREA_NAME_OVERRIDE)
+        if override is None:
+            override = self.config_entry.data.get(CONF_AREA_NAME_OVERRIDE)
         store = (
             self.hass.data.setdefault(DOMAIN, {})
             .setdefault("entries", {})
@@ -131,7 +138,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await maybe_update_device_name(
             self.hass,
             self.config_entry,
-            place or f"{latitude:.5f},{longitude:.5f}",
+            override or place,
         )
         async_dispatcher_send(
             self.hass, f"openmeteo_place_updated_{self.config_entry.entry_id}"
@@ -176,7 +183,13 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if geocode_on
             else None
         )
+        _LOGGER.debug(
+            "Reverse geocode result for %s,%s: %s", latitude, longitude, place
+        )
         self.location_name = place
+        override = self.config_entry.options.get(CONF_AREA_NAME_OVERRIDE)
+        if override is None:
+            override = self.config_entry.data.get(CONF_AREA_NAME_OVERRIDE)
         store = (
             self.hass.data.setdefault(DOMAIN, {})
             .setdefault("entries", {})
@@ -195,7 +208,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await maybe_update_device_name(
             self.hass,
             self.config_entry,
-            place or f"{latitude:.5f},{longitude:.5f}",
+            override or place,
         )
         async_dispatcher_send(
             self.hass, f"openmeteo_place_updated_{self.config_entry.entry_id}"

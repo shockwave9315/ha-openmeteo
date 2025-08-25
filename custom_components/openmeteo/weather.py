@@ -100,7 +100,6 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         super().__init__(coordinator)
         self._config_entry = config_entry
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
-        self._attr_name = None
         data = {**config_entry.data, **config_entry.options}
         self._use_place = data.get(
             CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME

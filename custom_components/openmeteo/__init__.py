@@ -18,6 +18,7 @@ from .const import (
     CONF_UNITS,
     CONF_UPDATE_INTERVAL,
     CONF_USE_PLACE_AS_DEVICE_NAME,
+    CONF_AREA_NAME_OVERRIDE,
     DEFAULT_API_PROVIDER,
     DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_UNITS,
@@ -92,8 +93,10 @@ async def build_title(
     hass: HomeAssistant, entry: ConfigEntry, lat: float, lon: float
 ) -> str:
     """Build a title for the entry based on coordinates."""
-    override = entry.data.get("name_override")
-    geocode = entry.data.get("geocode_name", True)
+    override = entry.options.get(CONF_AREA_NAME_OVERRIDE)
+    if override is None:
+        override = entry.data.get(CONF_AREA_NAME_OVERRIDE)
+    geocode = entry.options.get("geocode_name", entry.data.get("geocode_name", True))
     store = _entry_store(hass, entry)
     if override:
         store["place_name"] = override
