@@ -1,19 +1,42 @@
 name: tests
+
 on:
   push:
   pull_request:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PYTHONUNBUFFERED: "1"
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Cache pip (extra fallback)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements_test.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+
       - name: Upgrade pip
         run: python -m pip install -U pip
-      - name: Install test tooling (PHACC -> installs matching Home Assistant)
-        run: python -m pip install -r requirements_test.txt
+
+      - name: Install test tooling (PHACC -> HA)
+        run: python -m pip install --prefer-binary -r requirements_test.txt
+
       - name: Show resolved versions
         run: |
           python - <<'PY'
@@ -21,13 +44,12 @@ jobs:
               import importlib.metadata as im
           except Exception:
               import importlib_metadata as im
-          def ver(p):
+          for pkg in ("homeassistant","pytest-homeassistant-custom-component","pytest"):
               try:
-                  print(p, "=>", im.version(p))
+                  print(pkg, "=>", im.version(pkg))
               except Exception:
-                  print(p, "=> NOT INSTALLED")
-          for pkg in ("homeassistant", "pytest-homeassistant-custom-component", "pytest"):
-              ver(pkg)
+                  print(pkg, "=> NOT INSTALLED")
           PY
-      - name: Run tests
-        run: pytest -q
+
+      - name: Run tests (fast-fail)
+        run: pytest -q --maxfail=1
