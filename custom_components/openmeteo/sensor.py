@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Mapping
+import re
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -27,6 +28,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.entity_registry import RegistryEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
@@ -234,6 +236,17 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
+async def async_migrate_entry(
+    hass: HomeAssistant, entry: RegistryEntry
+) -> dict | None:
+    """Migrate old sensor unique IDs."""
+    if re.match(r".*\d{1,3}\.\d+[_,-]\d{1,3}\.\d+.*", entry.unique_id):
+        return {"new_unique_id": f"{entry.config_entry_id}_uv_index"}
+    if entry.unique_id.endswith("-uv_index"):
+        return {"new_unique_id": entry.unique_id.replace("-uv_index", "_uv_index")}
+    return None
+
+
 class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     """Representation of an Open-Meteo sensor."""
 
@@ -350,20 +363,15 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity, SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         self._config_entry = config_entry
-        data = {**config_entry.data, **config_entry.options}
-        self._use_place = data.get(
-            CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
-        )
-        self._attr_unique_id = f"{config_entry.entry_id}-uv_index"
-        self._attr_native_unit_of_measurement = "UV Index"
+        self._attr_name = "Indeks UV"
+        self._attr_has_entity_name = False
         self._attr_icon = "mdi:weather-sunny-alert"
+        self._attr_unique_id = f"{config_entry.entry_id}_uv_index"
+        self._attr_suggested_object_id = "open_meteo_uv_index"
+        if coordinator.hass.states.get("sensor.open_meteo_uv_index"):
+            self._attr_suggested_object_id = "open_meteo_2_uv_index"
+        self._attr_native_unit_of_measurement = None
         self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_has_entity_name = True
-        self._attr_translation_key = "uv_index"
-        if self._use_place:
-            place_slug = slugify(get_place_title(coordinator.hass, config_entry))
-            if place_slug:
-                self._attr_suggested_object_id = f"{place_slug}_uv_index"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
             manufacturer="Open-Meteo",

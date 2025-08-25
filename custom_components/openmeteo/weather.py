@@ -31,8 +31,10 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.entity_registry import RegistryEntry
 from datetime import datetime
 from homeassistant.util import dt as dt_util
+import re
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
 from .const import (
@@ -40,17 +42,12 @@ from .const import (
     DOMAIN,
     CONF_MODE,
     CONF_MIN_TRACK_INTERVAL,
-    CONF_API_PROVIDER,
     CONF_ENTITY_ID,
     CONF_TRACKED_ENTITY_ID,
     MODE_STATIC,
     MODE_TRACK,
     DEFAULT_MIN_TRACK_INTERVAL,
-    CONF_USE_PLACE_AS_DEVICE_NAME,
-    DEFAULT_USE_PLACE_AS_DEVICE_NAME,
 )
-from homeassistant.util import slugify
-from .helpers import get_place_title
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,6 +59,17 @@ async def async_setup_entry(
 ) -> None:
     coordinator = hass.data[DOMAIN]["entries"][config_entry.entry_id]["coordinator"]
     async_add_entities([OpenMeteoWeather(coordinator, config_entry)])
+
+
+async def async_migrate_entry(
+    hass: HomeAssistant, entry: RegistryEntry
+) -> dict | None:
+    """Migrate old entity unique IDs."""
+    if re.match(r".*\d{1,3}\.\d+[_,-]\d{1,3}\.\d+.*", entry.unique_id):
+        return {"new_unique_id": f"{entry.config_entry_id}_weather"}
+    if entry.unique_id.endswith("-weather"):
+        return {"new_unique_id": entry.unique_id.replace("-weather", "_weather")}
+    return None
 
 
 def _map_condition(weather_code: int | None, is_day: int | None = 1) -> str | None:
@@ -99,15 +107,13 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         """Initialize the weather entity."""
         super().__init__(coordinator)
         self._config_entry = config_entry
-        self._attr_unique_id = f"{config_entry.entry_id}-weather"
+        self._attr_has_entity_name = False
+        self._attr_name = "Open Meteo"
+        self._attr_suggested_object_id = "open_meteo"
+        if coordinator.hass.states.get("weather.open_meteo"):
+            self._attr_suggested_object_id = "open_meteo_2"
+        self._attr_unique_id = f"{config_entry.entry_id}_weather"
         data = {**config_entry.data, **config_entry.options}
-        self._use_place = data.get(
-            CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
-        )
-        if self._use_place:
-            place_slug = slugify(get_place_title(coordinator.hass, config_entry))
-            if place_slug:
-                self._attr_suggested_object_id = place_slug
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
             manufacturer="Open-Meteo",
@@ -128,10 +134,6 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     @property
     def available(self) -> bool:
         return bool(self.coordinator.data) and getattr(self.coordinator, "last_update_success", True)
-
-    @property
-    def name(self) -> str | None:
-        return get_place_title(self.hass, self._config_entry)
 
     @property
     def native_temperature(self) -> float | None:
