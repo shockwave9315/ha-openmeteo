@@ -42,6 +42,10 @@ CONF_API_KEY = "api_key"
 CONF_AREA_NAME_OVERRIDE = "area_name_override"
 CONF_UV_INDEX = "uv_index"
 CONF_USE_PLACE_AS_DEVICE_NAME = "use_place_as_device_name"
+CONF_SHOW_PLACE_NAME = "show_place_name"
+CONF_GEOCODE_INTERVAL_MIN = "geocode_interval_min"
+CONF_GEOCODE_MIN_DISTANCE_M = "geocode_min_distance_m"
+CONF_GEOCODER_PROVIDER = "geocoder_provider"
 
 # Modes
 MODE_STATIC = "static"
@@ -62,6 +66,10 @@ DEFAULT_MIN_TRACK_INTERVAL = 15  # minutes
 DEFAULT_UNITS = "metric"
 DEFAULT_API_PROVIDER = "open_meteo"
 DEFAULT_USE_PLACE_AS_DEVICE_NAME = True
+DEFAULT_SHOW_PLACE_NAME = True
+DEFAULT_GEOCODE_INTERVAL_MIN = 120
+DEFAULT_GEOCODE_MIN_DISTANCE_M = 500
+DEFAULT_GEOCODER_PROVIDER = "osm_nominatim"
 
 DEFAULT_DAILY_VARIABLES = [
     "temperature_2m_max",

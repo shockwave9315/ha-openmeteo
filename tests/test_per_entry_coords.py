@@ -29,7 +29,7 @@ A_LAT, A_LON = 50.067, 20.000
 B_LAT, B_LON = 51.110, 22.000
 
 
-async def fake_geocode(hass, lat, lon):
+async def fake_geocode(hass, lat, lon, provider=None):
     if (lat, lon) == (A_LAT, A_LON):
         return "Radłów"
     if (lat, lon) == (B_LAT, B_LON):
