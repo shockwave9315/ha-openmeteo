@@ -63,6 +63,9 @@ async def resolve_coords(
     )
     store["coords"] = (lat, lon)
     store["source"] = src
+    store["lat"] = lat
+    store["lon"] = lon
+    store["src"] = src
     return lat, lon, src
 
 
@@ -75,13 +78,16 @@ async def build_title(
     store = hass.data[DOMAIN]["entries"].setdefault(entry.entry_id, {})
     if override:
         store["place_name"] = override
+        store["place"] = override
         return override
     if geocode:
         name = await async_reverse_geocode(hass, lat, lon)
         if name:
             store["place_name"] = name
+            store["place"] = name
             return name
     store["place_name"] = None
+    store["place"] = None
     return f"{lat:.5f},{lon:.5f}"
 
 
@@ -106,10 +112,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok and DOMAIN in hass.data:
-        entries = hass.data[DOMAIN].get("entries", {})
+    if unload_ok:
+        domain_data = hass.data.get(DOMAIN, {})
+        entries = domain_data.get("entries", {})
         entries.pop(entry.entry_id, None)
-        if not entries:
+        if not entries and DOMAIN in hass.data:
             hass.data.pop(DOMAIN)
     return unload_ok
 
