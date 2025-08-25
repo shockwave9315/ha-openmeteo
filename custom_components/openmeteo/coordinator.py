@@ -11,6 +11,7 @@ from typing import Any
 import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -30,6 +31,7 @@ from .const import (
     MODE_TRACK,
     URL,
 )
+from .helpers import get_place_title, maybe_update_device_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -113,21 +115,18 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         from . import resolve_coords, _entry_store
 
         latitude, longitude, _ = await resolve_coords(self.hass, self.config_entry)
-        loc_name = None
+        place = None
         if self.config_entry.data.get("geocode_name", True):
-            loc_name = await async_reverse_geocode(self.hass, latitude, longitude)
-        self.location_name = loc_name
+            place = await async_reverse_geocode(self.hass, latitude, longitude)
+        self.location_name = place
         store = _entry_store(self.hass, self.config_entry)
-        prev_place = store.get("place")
-        store["place_name"] = loc_name
-        store["place"] = loc_name
-        await self.maybe_update_entry_title(latitude, longitude, loc_name)
-        if prev_place != loc_name:
-            for ent in store.get("entities", []) or []:
-                try:
-                    ent.async_write_ha_state()
-                except Exception:
-                    pass
+        store["place_name"] = place
+        store["place"] = place
+        await self.maybe_update_entry_title(latitude, longitude, place)
+        await maybe_update_device_name(self.hass, self.config_entry, place)
+        async_dispatcher_send(
+            self.hass, f"openmeteo_place_updated_{self.config_entry.entry_id}"
+        )
 
     async def _resubscribe_tracked_entity(self, entity_id: str | None) -> None:
         if self._unsub_entity:
@@ -157,28 +156,25 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         from . import resolve_coords, _entry_store
 
         latitude, longitude, src = await resolve_coords(self.hass, self.config_entry)
-        from_entity = src != "static"
 
-        prev_loc = (self.data or {}).get("location") if self.data else None
-        prev_lat = prev_loc.get("latitude") if prev_loc else None
-        prev_lon = prev_loc.get("longitude") if prev_loc else None
-        coords_changed = prev_lat != latitude or prev_lon != longitude
-
-        loc_name = self.location_name
-        last_loc_ts = (self.data or {}).get("last_location_update") if self.data else None
-        if coords_changed:
-            override = self.config_entry.options.get(
-                CONF_AREA_NAME_OVERRIDE, self.config_entry.data.get(CONF_AREA_NAME_OVERRIDE)
+        store = _entry_store(self.hass, self.config_entry)
+        prev_title = get_place_title(self.hass, self.config_entry)
+        place = None
+        if self.config_entry.data.get("geocode_name", True):
+            place = await async_reverse_geocode(self.hass, latitude, longitude)
+        self.location_name = place
+        store["coords"] = (latitude, longitude)
+        store["source"] = src
+        store["place_name"] = place
+        store["place"] = place
+        last_loc_ts = dt_util.utcnow().isoformat()
+        await self.maybe_update_entry_title(latitude, longitude, place)
+        await maybe_update_device_name(self.hass, self.config_entry, place)
+        new_title = get_place_title(self.hass, self.config_entry)
+        if prev_title != new_title:
+            async_dispatcher_send(
+                self.hass, f"openmeteo_place_updated_{self.config_entry.entry_id}"
             )
-            if override:
-                loc_name = override
-            else:
-                name = await async_reverse_geocode(self.hass, latitude, longitude)
-                loc_name = name or f"{latitude:.2f},{longitude:.2f}"
-            last_loc_ts = dt_util.utcnow().isoformat()
-            self.location_name = loc_name
-        elif self.location_name:
-            loc_name = self.location_name
 
         hourly_vars = list(dict.fromkeys(DEFAULT_HOURLY_VARIABLES + ["uv_index"]))
         daily_vars = DEFAULT_DAILY_VARIABLES
@@ -237,24 +233,11 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._last_data is None:
                 raise UpdateFailed("No data received")
             self._last_data["location"] = {"latitude": latitude, "longitude": longitude}
-            self._last_data["location_name"] = loc_name
+            self._last_data["location_name"] = place
             self._last_data["last_location_update"] = last_loc_ts
-            store = _entry_store(self.hass, self.config_entry)
-            store["coords"] = (latitude, longitude)
-            store["source"] = src
-            prev_place = store.get("place")
-            store["place_name"] = loc_name
-            store["place"] = loc_name
             hourly = self._last_data.setdefault("hourly", {})
             hourly.setdefault("time", [])
             hourly.setdefault("uv_index", [])
-            await self.maybe_update_entry_title(latitude, longitude, loc_name)
-            if prev_place != loc_name:
-                for ent in store.get("entities", []) or []:
-                    try:
-                        ent.async_write_ha_state()
-                    except Exception:
-                        pass
             return self._last_data
         except UpdateFailed:
             if self._last_data is not None:
