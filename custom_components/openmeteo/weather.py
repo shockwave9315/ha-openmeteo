@@ -54,7 +54,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN]["entries"][config_entry.entry_id]["coordinator"]
     async_add_entities([OpenMeteoWeather(coordinator, config_entry)])
 
 
@@ -131,6 +131,21 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
             return f"{base} — {lat:.5f},{lon:.5f}"
         return base
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        attrs = super().extra_state_attributes or {}
+        store = self.hass.data[DOMAIN]["entries"].get(self._config_entry.entry_id, {})
+        src = store.get("source")
+        coords = store.get("coords")
+        place = store.get("place_name")
+        if src:
+            attrs["om_source"] = src
+        if coords:
+            attrs["om_coords_used"] = f"{coords[0]:.5f},{coords[1]:.5f}"
+        if place:
+            attrs["om_place_name"] = place
+        return attrs
 
     @property
     def native_temperature(self) -> float | None:

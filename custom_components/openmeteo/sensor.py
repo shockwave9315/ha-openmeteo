@@ -180,7 +180,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN]["entries"][config_entry.entry_id]["coordinator"]
     entities = [OpenMeteoSensor(coordinator, config_entry, k) for k in SENSOR_TYPES]
     entities.append(OpenMeteoUvIndexSensor(coordinator, config_entry))
     async_add_entities(entities)
@@ -197,6 +197,7 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         self._sensor_type = sensor_type
+        self._config_entry = config_entry
         self._attr_name = f"{config_entry.data.get('name', 'Open-Meteo')} {SENSOR_TYPES[sensor_type]['name']}"
         self._attr_unique_id = f"{config_entry.entry_id}-{sensor_type}"
         self._attr_device_info = {
@@ -230,7 +231,18 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        return _extra_attrs(self.coordinator.data or {})
+        attrs = _extra_attrs(self.coordinator.data or {})
+        store = self.hass.data[DOMAIN]["entries"].get(self._config_entry.entry_id, {})
+        src = store.get("source")
+        coords = store.get("coords")
+        place = store.get("place_name")
+        if src:
+            attrs["om_source"] = src
+        if coords:
+            attrs["om_coords_used"] = f"{coords[0]:.5f},{coords[1]:.5f}"
+        if place:
+            attrs["om_place_name"] = place
+        return attrs
 
 
 class OpenMeteoUvIndexSensor(CoordinatorEntity, SensorEntity):
@@ -243,6 +255,7 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity, SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         name = config_entry.data.get("name", "Open-Meteo")
+        self._config_entry = config_entry
         self._attr_name = f"{name} Indeks UV"
         self._attr_unique_id = f"{config_entry.entry_id}-uv_index"
         self._attr_native_unit_of_measurement = "UV Index"
@@ -277,4 +290,15 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        return _extra_attrs(self.coordinator.data or {})
+        attrs = _extra_attrs(self.coordinator.data or {})
+        store = self.hass.data[DOMAIN]["entries"].get(self._config_entry.entry_id, {})
+        src = store.get("source")
+        coords = store.get("coords")
+        place = store.get("place_name")
+        if src:
+            attrs["om_source"] = src
+        if coords:
+            attrs["om_coords_used"] = f"{coords[0]:.5f},{coords[1]:.5f}"
+        if place:
+            attrs["om_place_name"] = place
+        return attrs
