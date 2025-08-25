@@ -1,3 +1,7 @@
+## 1.3.27
+- fix(sensor): reorder dataclass fields (Python 3.13) so required `value_fn` precedes optional fields; prevents import error
+- chore: mark dataclass `kw_only=True` for forward compatibility
+
 ## 1.3.25
 - feat: use reverse geocoded place name for entry titles; fallback to lat,lon only if geocode fails
 
