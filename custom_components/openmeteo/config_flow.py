@@ -152,6 +152,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if self._mode != MODE_STATIC:
                     use_place = data.pop(CONF_USE_PLACE_AS_DEVICE_NAME, True)
                     options[CONF_USE_PLACE_AS_DEVICE_NAME] = use_place
+                options[CONF_SHOW_PLACE_NAME] = True
                 return self.async_create_entry(title="", data=data, options=options)
 
         schema = _build_schema(self.hass, self._mode, defaults)
@@ -178,6 +179,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
         # Migrate old configs that stored an empty string for the entity
         if self._options.get(CONF_ENTITY_ID) == "":
             self._options[CONF_ENTITY_ID] = None
+        self._options.setdefault(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME)
         self._mode = eff.get(CONF_MODE, MODE_STATIC)
 
     async def async_step_init(

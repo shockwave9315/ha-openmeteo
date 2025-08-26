@@ -131,7 +131,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         "Porywy wiatru",
         UnitOfSpeed.KILOMETERS_PER_HOUR,
         None,
-        "mdi:weather-windy",
+        "mdi:weather-windy-variant",
         lambda d: _first_hourly(d, "wind_gusts_10m"),
     ),
     "wind_speed": SensorSpec(
@@ -139,7 +139,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         "Prędkość wiatru",
         UnitOfSpeed.KILOMETERS_PER_HOUR,
         None,
-        "mdi:weather-windy-variant",
+        "mdi:weather-windy",
         lambda d: d.get("current_weather", {}).get("windspeed"),
     ),
     "dew_point": SensorSpec(
@@ -307,9 +307,12 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         self._key = key
         self._base_name = self._spec.base_name
         self._attr_unique_id = f"{entry.entry_id}_{key}"
-        suggested = f"open_meteo_{key}"
-        if coordinator.hass.states.get(f"sensor.{suggested}"):
-            suggested = f"open_meteo_2_{key}"
+        base_obj = f"open_meteo_{key}"
+        suggested = base_obj
+        i = 2
+        while coordinator.hass.states.get(f"sensor.{suggested}"):
+            suggested = f"open_meteo_{i}_{key}"
+            i += 1
         self._attr_suggested_object_id = suggested
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -328,19 +331,17 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         show_place = self._config_entry.options.get(
             CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME
         )
-        store = (
-            self.hass.data.get(DOMAIN, {})
-            .get("entries", {})
-            .get(self._config_entry.entry_id, {})
-        )
-        if show_place:
-            loc = store.get("location_name")
-            lat = store.get("lat")
-            lon = store.get("lon")
-            if loc:
-                return f"{self._base_name} — {loc}"
-            if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-                return f"{self._base_name} — {lat:.5f},{lon:.5f}"
+        if show_place and self.coordinator.location_name:
+            return f"{self._base_name} — {self.coordinator.location_name}"
+        if (
+            show_place
+            and isinstance(self.coordinator.latitude, (int, float))
+            and isinstance(self.coordinator.longitude, (int, float))
+        ):
+            return (
+                f"{self._base_name} — "
+                f"{self.coordinator.latitude:.5f},{self.coordinator.longitude:.5f}"
+            )
         return self._base_name
 
     @property
@@ -348,13 +349,8 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data:
             return None
         if self._key == "location":
-            store = (
-                self.hass.data.get(DOMAIN, {})
-                .get("entries", {})
-                .get(self._config_entry.entry_id, {})
-            )
-            lat = store.get("lat")
-            lon = store.get("lon")
+            lat = self.coordinator.latitude
+            lon = self.coordinator.longitude
             if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
                 return f"{lat:.7f}, {lon:.7f}"
             return None
@@ -394,9 +390,9 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
             .get(self._config_entry.entry_id, {})
         )
         return {
-            "location_name": store.get("location_name"),
-            "latitude": store.get("lat"),
-            "longitude": store.get("lon"),
+            "location_name": self.coordinator.location_name,
+            "latitude": self.coordinator.latitude,
+            "longitude": self.coordinator.longitude,
             "geocode_provider": store.get("geocode_provider"),
             "geocode_last_success": store.get("geocode_last_success"),
             "attribution": ATTRIBUTION,

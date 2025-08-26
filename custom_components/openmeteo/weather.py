@@ -112,8 +112,10 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         self._attr_has_entity_name = False
         self._base_name = "Open Meteo"
         suggested = "open_meteo"
-        if coordinator.hass.states.get("weather.open_meteo"):
-            suggested = "open_meteo_2"
+        i = 2
+        while coordinator.hass.states.get(f"weather.{suggested}"):
+            suggested = f"open_meteo_{i}"
+            i += 1
         self._attr_suggested_object_id = suggested
         self._attr_unique_id = f"{config_entry.entry_id}_weather"
         data = {**config_entry.data, **config_entry.options}
@@ -140,19 +142,17 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         show_place = self._config_entry.options.get(
             CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME
         )
-        store = (
-            self.hass.data.get(DOMAIN, {})
-            .get("entries", {})
-            .get(self._config_entry.entry_id, {})
-        )
-        if show_place:
-            loc = store.get("location_name")
-            lat = store.get("lat")
-            lon = store.get("lon")
-            if loc:
-                return f"{self._base_name} — {loc}"
-            if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-                return f"{self._base_name} — {lat:.5f},{lon:.5f}"
+        if show_place and self.coordinator.location_name:
+            return f"{self._base_name} — {self.coordinator.location_name}"
+        if (
+            show_place
+            and isinstance(self.coordinator.latitude, (int, float))
+            and isinstance(self.coordinator.longitude, (int, float))
+        ):
+            return (
+                f"{self._base_name} — "
+                f"{self.coordinator.latitude:.5f},{self.coordinator.longitude:.5f}"
+            )
         return self._base_name
 
     @property
@@ -392,9 +392,9 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             .get(self._config_entry.entry_id, {})
         )
         return {
-            "location_name": store.get("location_name"),
-            "latitude": store.get("lat"),
-            "longitude": store.get("lon"),
+            "location_name": self.coordinator.location_name,
+            "latitude": self.coordinator.latitude,
+            "longitude": self.coordinator.longitude,
             "geocode_provider": store.get("geocode_provider"),
             "geocode_last_success": store.get("geocode_last_success"),
         }

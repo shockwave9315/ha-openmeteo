@@ -1,3 +1,6 @@
+## 1.3.37
+- feat: stałe entity_id bez miejscowości; domyślnie w nazwach dopisek lokalizacji; migracja usuwająca miejscowości z entity_id; ikony/device_class uzupełnione
+
 ## 1.3.32
 - fix: correct override handling, prevent coords as names, stabilize tests
 

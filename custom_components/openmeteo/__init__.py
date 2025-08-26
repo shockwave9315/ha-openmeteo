@@ -7,13 +7,16 @@ from __future__ import annotations
 # 1.3.33 - Standardize entity IDs and migrate legacy unique IDs.
 # 1.3.35 - Stable entry-based IDs; dynamic names with reverse geocoding and caching.
 # 1.3.36 - add legacy sensors (precipitation_probability, sunrise, sunset, location); stable IDs; dynamic names; correct icons & device_class for all sensors.
+# 1.3.37 - stałe entity_id bez miejscowości; domyślnie w nazwach dopisek lokalizacji; migracja usuwająca miejscowości z entity_id; ikony/device_class uzupełnione.
 
 from typing import Callable
+import re
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
+from homeassistant.helpers import entity_registry as er
 
 from .const import (
     CONF_API_PROVIDER,
@@ -39,6 +42,7 @@ from .const import (
     MODE_STATIC,
     MODE_TRACK,
     PLATFORMS,
+    LEGACY_SENSOR_PREFIXES,
 )
 from .coordinator import OpenMeteoDataUpdateCoordinator, async_reverse_geocode
 
@@ -131,6 +135,67 @@ async def build_title(
     return f"{lat:.5f},{lon:.5f}"
 
 
+async def _migrate_entity_registry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Update legacy entity IDs and unique IDs."""
+    registry = er.async_get(hass)
+    try:
+        entries = list(registry.async_entries_for_config_entry(entry.entry_id))  # type: ignore[attr-defined]
+    except AttributeError:  # HA <2024.6
+        entries = [e for e in registry.entities.values() if e.config_entry_id == entry.entry_id]
+    from .sensor import SENSOR_SPECS
+
+    sensor_keys = set(SENSOR_SPECS.keys())
+    for ent in entries:
+        if ent.platform != DOMAIN:
+            continue
+        domain = ent.domain
+        object_id = ent.entity_id.split(".", 1)[1]
+        new_entity_id = ent.entity_id
+        new_unique_id = ent.unique_id
+        if domain == "sensor":
+            key = None
+            m = re.match(r"open_meteo(?:_\d+)?_([a-z_]+)(?:_.+)?", object_id)
+            if m and m.group(1) in sensor_keys:
+                key = m.group(1)
+            else:
+                for legacy, k in LEGACY_SENSOR_PREFIXES.items():
+                    if object_id.startswith(legacy + "_") or object_id == legacy:
+                        key = k
+                        break
+            if not key:
+                continue
+            base_obj = f"open_meteo_{key}"
+            suggested = base_obj
+            i = 2
+            while True:
+                other = registry.async_get(f"sensor.{suggested}")
+                if not other or other.entity_id == ent.entity_id:
+                    break
+                suggested = f"open_meteo_{i}_{key}"
+                i += 1
+            new_entity_id = f"sensor.{suggested}"
+            new_unique_id = f"{entry.entry_id}_{key}"
+        elif domain == "weather":
+            if not re.fullmatch(r"open_meteo(_\d+)?", object_id):
+                base_obj = "open_meteo"
+                suggested = base_obj
+                i = 2
+                while True:
+                    other = registry.async_get(f"weather.{suggested}")
+                    if not other or other.entity_id == ent.entity_id:
+                        break
+                    suggested = f"open_meteo_{i}"
+                    i += 1
+                new_entity_id = f"weather.{suggested}"
+            new_unique_id = f"{entry.entry_id}_weather"
+        if new_entity_id != ent.entity_id or new_unique_id != ent.unique_id:
+            registry.async_update_entity(
+                ent.entity_id,
+                new_entity_id=new_entity_id if new_entity_id != ent.entity_id else None,
+                new_unique_id=new_unique_id if new_unique_id != ent.unique_id else None,
+            )
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Open-Meteo from a config entry."""
     mode = entry.options.get(CONF_MODE, entry.data.get(CONF_MODE))
@@ -157,12 +222,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     CONF_USE_PLACE_AS_DEVICE_NAME: use_place,
                 },
             )
+    if CONF_SHOW_PLACE_NAME not in entry.options:
+        hass.config_entries.async_update_entry(
+            entry,
+            options={**entry.options, CONF_SHOW_PLACE_NAME: DEFAULT_SHOW_PLACE_NAME},
+        )
+
+    await _migrate_entity_registry(hass, entry)
+
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
     store = _entry_store(hass, entry)
     store["coordinator"] = coordinator
     store["options_snapshot"] = dict(entry.options)
 
     lat, lon, _src = await resolve_coords(hass, entry)
+    coordinator.latitude = lat
+    coordinator.longitude = lon
     title = await build_title(hass, entry, lat, lon)
     if title != entry.title:
         hass.config_entries.async_update_entry(entry, title=title)

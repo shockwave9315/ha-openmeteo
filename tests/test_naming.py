@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from pathlib import Path
 import sys
 from unittest.mock import patch
+from types import SimpleNamespace
 
 import pytest
 
@@ -15,7 +16,15 @@ A_LAT, A_LON = 50.0, 20.0
 
 class DummyCoordinator(SimpleNamespace):
     def __init__(self, hass):
-        super().__init__(hass=hass, data={}, last_update_success=True, provider="test")
+        super().__init__(
+            hass=hass,
+            data={},
+            last_update_success=True,
+            provider="test",
+            location_name="Radłów, PL",
+            latitude=A_LAT,
+            longitude=A_LON,
+        )
 
     def async_add_listener(self, cb, *_):
         return lambda: None
@@ -48,14 +57,11 @@ async def test_sensor_dynamic_name(expected_lingering_timers):
                 title="X",
             )
             coordinator = DummyCoordinator(hass)
-            hass.data.setdefault(DOMAIN, {}).setdefault("entries", {})[entry.entry_id] = {
-                "location_name": "Radłów",
-                "lat": A_LAT,
-                "lon": A_LON,
-            }
-            sensor = OpenMeteoSensor(coordinator, entry, "temperature")
+            sensor = OpenMeteoSensor(coordinator, entry, "uv_index")
             sensor.hass = hass
-            assert sensor.name == "Temperatura — Radłów"
+            sensor.entity_id = f"sensor.{sensor._attr_suggested_object_id}"
+            assert sensor.entity_id == "sensor.open_meteo_uv_index"
+            assert sensor.name == "Indeks UV — Radłów, PL"
             await hass.async_stop()
 
 
@@ -110,14 +116,11 @@ async def test_weather_name_fallback_coords():
                 return_value=None,
             ):
                 coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
+                coordinator.latitude = A_LAT
+                coordinator.longitude = A_LON
                 await coordinator.async_refresh()
             weather = OpenMeteoWeather(coordinator, entry)
             weather.hass = hass
-            hass.data.setdefault(DOMAIN, {}).setdefault("entries", {})[entry.entry_id] = {
-                "lat": A_LAT,
-                "lon": A_LON,
-                "location_name": None,
-            }
             name = weather.name
             assert name.startswith("Open Meteo — ")
             assert f"{A_LAT:.5f}" in name

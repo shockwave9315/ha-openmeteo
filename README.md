@@ -146,7 +146,7 @@ cards:
       - type: weather
         entity: weather.open_meteo_home
       - type: entity
-        entity: sensor.open_meteo_indeks_uv
+        entity: sensor.open_meteo_uv_index
         name: UV
       - type: entity
         entity: sensor.open_meteo_prawdopodobienstwo_opadow
