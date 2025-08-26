@@ -178,7 +178,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if title != entry.title:
         hass.config_entries.async_update_entry(entry, title=title)
 
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except Exception:
+        pass
     await coordinator._resubscribe_tracked_entity(entry.options.get("entity_id"))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_options_update_listener))
