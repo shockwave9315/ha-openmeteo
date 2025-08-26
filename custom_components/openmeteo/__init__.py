@@ -17,17 +17,14 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_ENTITY_ID,
-    CONF_MODE,
     CONF_TRACKED_ENTITY_ID,
-    CONF_USE_PLACE_AS_DEVICE_NAME,
-    CONF_SHOW_PLACE_NAME,
-    DEFAULT_USE_PLACE_AS_DEVICE_NAME,
-    DEFAULT_SHOW_PLACE_NAME,
     DOMAIN,
-    MODE_STATIC,
     PLATFORMS,
 )
 from .coordinator import OpenMeteoDataUpdateCoordinator
+
+
+CONFIG_ENTRY_VERSION = 2
 
 
 def _entry_store(hass: HomeAssistant, entry: ConfigEntry) -> dict:
@@ -88,26 +85,33 @@ async def resolve_coords(
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Migrate config entry options and data."""
+    """Migrate config entry to the latest version."""
+    version = getattr(entry, "version", 1)
+    if version >= CONFIG_ENTRY_VERSION:
+        return True
+
     data = dict(entry.data)
     options = dict(entry.options)
     changed = False
-    mode = options.get(CONF_MODE, data.get(CONF_MODE))
-    if mode == MODE_STATIC:
-        if options.pop(CONF_USE_PLACE_AS_DEVICE_NAME, None) is not None:
-            changed = True
-        if data.pop(CONF_USE_PLACE_AS_DEVICE_NAME, None) is not None:
-            changed = True
-    else:
-        if CONF_USE_PLACE_AS_DEVICE_NAME not in options:
-            use_place = data.pop(
-                CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
-            )
-            options[CONF_USE_PLACE_AS_DEVICE_NAME] = use_place
-            changed = True
-    if CONF_SHOW_PLACE_NAME not in options:
-        options[CONF_SHOW_PLACE_NAME] = DEFAULT_SHOW_PLACE_NAME
-        changed = True
+
+    if version < 2:
+        # Remove legacy keys and merge old aliases
+        for k in ("use_place_as_device_name",):
+            if k in data:
+                data.pop(k)
+                changed = True
+            if k in options:
+                options.pop(k)
+                changed = True
+        for old in ("track_entity", "track_entity_id"):
+            if old in options and "entity_id" not in options:
+                options["entity_id"] = options.pop(old)
+                changed = True
+            else:
+                options.pop(old, None)
+        options.setdefault("show_place_name", True)
+        entry.version = 2
+
     if changed:
         hass.config_entries.async_update_entry(entry, data=data, options=options)
     return True
@@ -118,7 +122,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
     store = _entry_store(hass, entry)
     store["coordinator"] = coordinator
-    store["options_snapshot"] = dict(entry.options)
 
     lat, lon, _src = await resolve_coords(hass, entry)
     coordinator.latitude = lat
@@ -161,11 +164,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _options_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    data = hass.data.get(DOMAIN, {}).get("entries", {}).get(entry.entry_id)
-    if data:
-        data["options_snapshot"] = dict(entry.options)
-        coord = data.get("coordinator")
-        if coord:
-            hass.async_create_task(coord.async_options_updated())
+    coord = (
+        hass.data.get(DOMAIN, {})
+        .get("entries", {})
+        .get(entry.entry_id, {})
+        .get("coordinator")
+    )
+    if coord:
+        hass.async_create_task(coord.async_options_updated())
 
 

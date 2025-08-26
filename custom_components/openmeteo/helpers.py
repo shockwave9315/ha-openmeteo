@@ -28,8 +28,8 @@ def get_place_title(hass: HomeAssistant, entry: ConfigEntry) -> str:
         override = entry.data.get(CONF_AREA_NAME_OVERRIDE)
     if override:
         return override
-    if store.get("place"):
-        return store["place"]
+    if store.get("place_name"):
+        return store["place_name"]
     lat = store.get("lat")
     lon = store.get("lon")
     if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):

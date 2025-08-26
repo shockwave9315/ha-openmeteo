@@ -277,7 +277,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         _LOGGER.debug(
             "Reverse geocode result for %s,%s: %s", latitude, longitude, place
         )
-        self.location_name = place
+        display_name = place or f"{latitude:.5f},{longitude:.5f}"
+        self.location_name = display_name
         override = self.config_entry.options.get(CONF_AREA_NAME_OVERRIDE)
         if override is None:
             override = self.config_entry.data.get(CONF_AREA_NAME_OVERRIDE)
@@ -285,9 +286,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         store["source"] = src
         store["lat"] = latitude
         store["lon"] = longitude
-        store["place_name"] = place
-        store["place"] = place
-        store["location_name"] = place
+        store["place_name"] = display_name
+        store["location_name"] = display_name
         store["geocode_provider"] = provider
         last_loc_ts = dt_util.utcnow().isoformat()
         await maybe_update_device_name(
@@ -299,14 +299,11 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass, f"openmeteo_place_updated_{self.config_entry.entry_id}"
         )
 
-        hourly_vars = list(dict.fromkeys(DEFAULT_HOURLY_VARIABLES + ["uv_index"]))
-        daily_vars = DEFAULT_DAILY_VARIABLES
         params = {
             "latitude": latitude,
             "longitude": longitude,
-            "current_weather": "true",
-            "hourly": ",".join(hourly_vars),
-            "daily": ",".join(daily_vars),
+            "hourly": ",".join(DEFAULT_HOURLY_VARIABLES),
+            "daily": ",".join(DEFAULT_DAILY_VARIABLES),
             "temperature_unit": "celsius",
             "windspeed_unit": "kmh",
             "precipitation_unit": "mm",
@@ -356,7 +353,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._last_data is None:
                 raise UpdateFailed("No data received")
             self._last_data["location"] = {"latitude": latitude, "longitude": longitude}
-            self._last_data["location_name"] = place
+            self._last_data["location_name"] = display_name
             self._last_data["last_location_update"] = last_loc_ts
             hourly = self._last_data.setdefault("hourly", {})
             hourly.setdefault("time", [])

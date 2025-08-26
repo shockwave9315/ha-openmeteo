@@ -163,28 +163,31 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     @property
     def native_temperature(self) -> float | None:
         """Return the current temperature."""
-        cw = self.coordinator.data.get("current_weather", {})
-        temp = cw.get("temperature")
+        current = self.coordinator.data.get("current", {})
+        temp = current.get("temperature_2m")
         return round(temp, 1) if isinstance(temp, (int, float)) else None
 
     @property
     def native_pressure(self) -> float | None:
         """Return the current pressure."""
-        val = self._hourly_value("pressure_msl")
+        current = self.coordinator.data.get("current", {})
+        val = current.get("pressure_msl")
+        if not isinstance(val, (int, float)):
+            val = self._hourly_value("pressure_msl")
         return round(val, 1) if isinstance(val, (int, float)) else None
 
     @property
     def native_wind_speed(self) -> float | None:
         """Return the current wind speed."""
-        cw = self.coordinator.data.get("current_weather", {})
-        ws = cw.get("windspeed")
+        current = self.coordinator.data.get("current", {})
+        ws = current.get("wind_speed_10m")
         return round(ws, 1) if isinstance(ws, (int, float)) else None
 
     @property
     def wind_bearing(self) -> float | None:
         """Return the current wind bearing."""
-        cw = self.coordinator.data.get("current_weather", {})
-        wb = cw.get("winddirection")
+        current = self.coordinator.data.get("current", {})
+        wb = current.get("wind_direction_10m")
         return round(wb, 1) if isinstance(wb, (int, float)) else None
 
     @property
@@ -211,9 +214,11 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     @property
     def condition(self) -> str | None:
         """Return the current weather condition."""
-        cw = self.coordinator.data.get("current_weather", {})
-        weather_code = cw.get("weathercode")
-        is_day = cw.get("is_day")
+        current = self.coordinator.data.get("current", {})
+        weather_code = current.get("weathercode")
+        is_day = current.get("is_day")
+        if is_day is None:
+            is_day = self._hourly_value("is_day")
         return _map_condition(weather_code, is_day) if weather_code is not None else None
     
     def _current_hour_index(self) -> int:
@@ -393,7 +398,7 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             .get(self._config_entry.entry_id, {})
         )
         return {
-            "location_name": self.coordinator.location_name,
+            "place_name": store.get("place_name"),
             "latitude": self.coordinator.latitude,
             "longitude": self.coordinator.longitude,
             "geocode_provider": store.get("geocode_provider"),

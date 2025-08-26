@@ -1,3 +1,9 @@
+## 1.3.45
+- fix(stability): no entry updates/reloads during setup; cancel timers on unload
+- feat(data): include hourly/daily in API call
+- fix(sensors): current.* mapping; hourly-now values for apparent_temperature, cloud_cover, shortwave_radiation, dew_point fallback, visibility (km), precipitation, probability, wind_gust
+- refactor: remove legacy current_weather usage
+
 ## 1.3.44
 - fix: prevent post-setup reload loops; no entry updates outside migration; defer reverse-geocoding; cancel timers on unload.
 
