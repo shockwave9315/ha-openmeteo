@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 from pathlib import Path
 import sys
 from unittest.mock import patch
@@ -56,10 +55,21 @@ async def test_sensor_dynamic_name(expected_lingering_timers):
                 options={},
                 title="X",
             )
+            from homeassistant.helpers import entity_registry as er
+
             coordinator = DummyCoordinator(hass)
-            sensor = OpenMeteoSensor(coordinator, entry, "uv_index")
+            suggested = "open_meteo_uv_index"
+            registry = er.async_get(hass)
+            registry.async_get_or_create(
+                domain="sensor",
+                platform=DOMAIN,
+                unique_id=f"{entry.entry_id}_uv_index",
+                suggested_object_id=suggested,
+                config_entry=entry,
+            )
+            sensor = OpenMeteoSensor(coordinator, entry, "uv_index", suggested)
             sensor.hass = hass
-            sensor.entity_id = f"sensor.{sensor._attr_suggested_object_id}"
+            sensor.entity_id = f"sensor.{suggested}"
             assert sensor.entity_id == "sensor.open_meteo_uv_index"
             assert sensor.name == "Indeks UV — Radłów, PL"
             await hass.async_stop()
@@ -119,10 +129,19 @@ async def test_weather_name_fallback_coords():
                 coordinator.latitude = A_LAT
                 coordinator.longitude = A_LON
                 await coordinator.async_refresh()
-            weather = OpenMeteoWeather(coordinator, entry)
+            from homeassistant.helpers import entity_registry as er
+
+            registry = er.async_get(hass)
+            registry.async_get_or_create(
+                domain="weather",
+                platform=DOMAIN,
+                unique_id=f"{entry.entry_id}_weather",
+                suggested_object_id="open_meteo",
+                config_entry=entry,
+            )
+            weather = OpenMeteoWeather(coordinator, entry, "open_meteo")
             weather.hass = hass
             name = weather.name
-            assert name.startswith("Open Meteo — ")
-            assert f"{A_LAT:.5f}" in name
+            assert name == "Open Meteo"
             await hass.async_stop()
 

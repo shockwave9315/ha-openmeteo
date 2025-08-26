@@ -31,6 +31,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers import entity_registry as er
 from datetime import datetime
 from homeassistant.util import dt as dt_util
 
@@ -58,7 +59,29 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator = hass.data[DOMAIN]["entries"][config_entry.entry_id]["coordinator"]
-    async_add_entities([OpenMeteoWeather(coordinator, config_entry)])
+    registry = er.async_get(hass)
+
+    def ensure_weather_object_id(config_entry: ConfigEntry) -> str:
+        base = "open_meteo"
+        suggested = base
+        i = 2
+        while registry.async_get(f"weather.{suggested}"):
+            suggested = f"open_meteo_{i}"
+            i += 1
+        if not registry.async_get_entity_id(
+            "weather", DOMAIN, f"{config_entry.entry_id}_weather"
+        ):
+            registry.async_get_or_create(
+                domain="weather",
+                platform=DOMAIN,
+                unique_id=f"{config_entry.entry_id}_weather",
+                suggested_object_id=suggested,
+                config_entry=config_entry,
+            )
+        return suggested
+
+    suggested = ensure_weather_object_id(config_entry)
+    async_add_entities([OpenMeteoWeather(coordinator, config_entry, suggested)])
 
 
 def _map_condition(weather_code: int | None, is_day: int | None = 1) -> str | None:
@@ -91,19 +114,17 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
 
     def __init__(
-        self, coordinator: OpenMeteoDataUpdateCoordinator, config_entry: ConfigEntry
+        self,
+        coordinator: OpenMeteoDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        suggested_object_id: str,
     ) -> None:
         """Initialize the weather entity."""
         super().__init__(coordinator)
         self._config_entry = config_entry
         self._attr_has_entity_name = False
         self._base_name = "Open Meteo"
-        suggested = "open_meteo"
-        i = 2
-        while coordinator.hass.states.get(f"weather.{suggested}"):
-            suggested = f"open_meteo_{i}"
-            i += 1
-        self._attr_suggested_object_id = suggested
+        self._attr_suggested_object_id = suggested_object_id
         self._attr_unique_id = f"{config_entry.entry_id}_weather"
         data = {**config_entry.data, **config_entry.options}
         self._attr_device_info = DeviceInfo(
@@ -131,15 +152,6 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         )
         if show_place and self.coordinator.location_name:
             return f"{self._base_name} — {self.coordinator.location_name}"
-        if (
-            show_place
-            and isinstance(self.coordinator.latitude, (int, float))
-            and isinstance(self.coordinator.longitude, (int, float))
-        ):
-            return (
-                f"{self._base_name} — "
-                f"{self.coordinator.latitude:.5f},{self.coordinator.longitude:.5f}"
-            )
         return self._base_name
 
     @property
