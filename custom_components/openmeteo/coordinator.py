@@ -18,25 +18,12 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_AREA_NAME_OVERRIDE,
-    CONF_ENTITY_ID,
-    CONF_LATITUDE,
-    CONF_LONGITUDE,
-    CONF_MODE,
-    CONF_TRACKED_ENTITY_ID,
     CONF_UPDATE_INTERVAL,
     DEFAULT_DAILY_VARIABLES,
     DEFAULT_HOURLY_VARIABLES,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
-    MODE_TRACK,
     URL,
-    CONF_GEOCODE_INTERVAL_MIN,
-    CONF_GEOCODE_MIN_DISTANCE_M,
-    CONF_GEOCODER_PROVIDER,
-    DEFAULT_GEOCODE_INTERVAL_MIN,
-    DEFAULT_GEOCODE_MIN_DISTANCE_M,
-    DEFAULT_GEOCODER_PROVIDER,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,6 +32,9 @@ _LOGGER = logging.getLogger(__name__)
 _GEOCODE_CACHE: dict[tuple[float, float], str] = {}
 _GEOCODE_LOCK = asyncio.Lock()
 _LAST_GEOCODE: float = 0.0
+_GEOCODE_INTERVAL_MIN = 120
+_GEOCODE_MIN_DISTANCE_M = 500
+_GEOCODER_PROVIDER = "osm_nominatim"
 
 
 async def async_reverse_geocode(
@@ -146,10 +136,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hass, _LOGGER, name="Open-Meteo", update_interval=timedelta(seconds=interval)
         )
         self.config_entry = entry
-        override = entry.options.get(CONF_AREA_NAME_OVERRIDE)
-        if override is None:
-            override = entry.data.get(CONF_AREA_NAME_OVERRIDE)
-        self.location_name: str | None = override
+        self.location_name: str | None = None
         self.latitude: float | None = None
         self.longitude: float | None = None
         self.show_place_name: bool = bool(entry.options.get("show_place_name", True))
@@ -188,10 +175,10 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         dev_reg = dr.async_get(self.hass)
         device = dev_reg.async_get_device({(DOMAIN, self.config_entry.entry_id)})
         if device:
-            new_name = self.location_name or f"{self.latitude:.5f},{self.longitude:.5f}"
+            name = self.location_name or f"{self.latitude:.5f},{self.longitude:.5f}"
             if not self.show_place_name:
-                new_name = "Open-Meteo"
-            dev_reg.async_update_device(device.id, name=new_name)
+                name = "Open-Meteo"
+            dev_reg.async_update_device(device.id, name=name)
         await self.async_request_refresh()
 
     async def _resubscribe_tracked_entity(self, entity_id: str | None) -> None:
@@ -225,14 +212,12 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass, self.config_entry
         )
 
-        opts = self.config_entry.options
-        show_place = bool(opts.get("show_place_name", True))
-        self.show_place_name = show_place
-        provider = opts.get(CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER)
-        interval = int(opts.get(CONF_GEOCODE_INTERVAL_MIN, DEFAULT_GEOCODE_INTERVAL_MIN))
-        min_dist = int(
-            opts.get(CONF_GEOCODE_MIN_DISTANCE_M, DEFAULT_GEOCODE_MIN_DISTANCE_M)
+        self.show_place_name = bool(
+            self.config_entry.options.get("show_place_name", True)
         )
+        provider = _GEOCODER_PROVIDER
+        interval = _GEOCODE_INTERVAL_MIN
+        min_dist = _GEOCODE_MIN_DISTANCE_M
 
         store = (
             self.hass.data.setdefault(DOMAIN, {})
@@ -244,8 +229,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         last_lon = store.get("geocode_lon")
         now = dt_util.utcnow()
         delta = (now - last_time).total_seconds() / 60 if last_time else interval + 1
-        need_geocode = show_place and (last_time is None or delta >= interval)
-        if show_place and not need_geocode and isinstance(last_lat, (int, float)) and isinstance(last_lon, (int, float)):
+        need_geocode = self.show_place_name and (last_time is None or delta >= interval)
+        if self.show_place_name and not need_geocode and isinstance(last_lat, (int, float)) and isinstance(last_lon, (int, float)):
             # check distance
             try:
                 from math import radians, sin, cos, sqrt, atan2
@@ -264,7 +249,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 pass
 
         place = None
-        if show_place and (need_geocode or store.get("location_name") is None):
+        if self.show_place_name and (need_geocode or store.get("location_name") is None):
             try:
                 async with asyncio.timeout(10):
                     place = await async_reverse_geocode(
@@ -292,15 +277,14 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         store["lon"] = longitude
         store["place_name"] = display_name
         store["location_name"] = display_name
-        store["geocode_provider"] = provider
         last_loc_ts = dt_util.utcnow().isoformat()
         dev_reg = dr.async_get(self.hass)
         device = dev_reg.async_get_device({(DOMAIN, self.config_entry.entry_id)})
         if device:
-            new_name = self.location_name or f"{self.latitude:.5f},{self.longitude:.5f}"
+            name = self.location_name or f"{self.latitude:.5f},{self.longitude:.5f}"
             if not self.show_place_name:
-                new_name = "Open-Meteo"
-            dev_reg.async_update_device(device.id, name=new_name)
+                name = "Open-Meteo"
+            dev_reg.async_update_device(device.id, name=name)
         async_dispatcher_send(
             self.hass, f"openmeteo_place_updated_{self.config_entry.entry_id}"
         )

@@ -28,6 +28,7 @@ CONF_LONGITUDE = "longitude"
 CONF_MODE = "mode"
 MODE_STATIC = "static"
 MODE_TRACK = "track"
+MODE_DELEGATED = "delegated"
 
 CONF_UPDATE_INTERVAL = "update_interval"
 DEFAULT_UPDATE_INTERVAL = 60
@@ -46,29 +47,36 @@ DEFAULT_SHOW_PLACE_NAME = True
 
 def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> vol.Schema:
     """Build a schema for config/option flows."""
-    data: dict[Any, Any]
-    if mode == MODE_TRACK:
+    data: dict[Any, Any] = {}
+
+    if mode == MODE_STATIC:
+        data.update(
+            {
+                vol.Required(
+                    CONF_LATITUDE,
+                    default=defaults.get(CONF_LATITUDE, hass.config.latitude),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_LONGITUDE,
+                    default=defaults.get(CONF_LONGITUDE, hass.config.longitude),
+                ): vol.Coerce(float),
+            }
+        )
+    elif mode in (MODE_TRACK, MODE_DELEGATED):
         entity_field = _entity_selector_or_str()
-        data = {
-            vol.Optional(
-                CONF_ENTITY_ID, default=defaults.get(CONF_ENTITY_ID)
-            ): entity_field,
-            vol.Optional(
-                CONF_MIN_TRACK_INTERVAL,
-                default=defaults.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL),
-            ): int,
-        }
-    else:
-        data = {
-            vol.Required(
-                CONF_LATITUDE,
-                default=defaults.get(CONF_LATITUDE, hass.config.latitude),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_LONGITUDE,
-                default=defaults.get(CONF_LONGITUDE, hass.config.longitude),
-            ): vol.Coerce(float),
-        }
+        data.update(
+            {
+                vol.Required(
+                    CONF_ENTITY_ID, default=defaults.get(CONF_ENTITY_ID)
+                ): entity_field,
+                vol.Optional(
+                    CONF_MIN_TRACK_INTERVAL,
+                    default=defaults.get(
+                        CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL
+                    ),
+                ): int,
+            }
+        )
 
     data.update(
         {
@@ -111,7 +119,11 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_mode_details()
 
         schema = vol.Schema(
-            {vol.Required(CONF_MODE, default=self._mode): vol.In([MODE_STATIC, MODE_TRACK])}
+            {
+                vol.Required(CONF_MODE, default=self._mode): vol.In(
+                    [MODE_STATIC, MODE_TRACK, MODE_DELEGATED]
+                )
+            }
         )
         return self.async_show_form(step_id="user", data_schema=schema)
 
@@ -123,7 +135,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         defaults = user_input or {}
 
         if user_input is not None:
-            if self._mode == MODE_TRACK:
+            if self._mode in (MODE_TRACK, MODE_DELEGATED):
                 entity = user_input.get(CONF_ENTITY_ID)
                 if not entity:
                     errors[CONF_ENTITY_ID] = "required"
@@ -158,30 +170,30 @@ class OpenMeteoOptionsFlowHandler(config_entries.OptionsFlow):
         schema = vol.Schema(
             {
                 vol.Optional(
-                    "entity_id", default=defaults_or_opts.get("entity_id")
+                    CONF_ENTITY_ID, default=defaults_or_opts.get(CONF_ENTITY_ID)
                 ): entity_field,
                 vol.Optional(
-                    "min_track_interval",
+                    CONF_MIN_TRACK_INTERVAL,
                     default=defaults_or_opts.get(
-                        "min_track_interval", DEFAULT_MIN_TRACK_INTERVAL
+                        CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL
                     ),
                 ): int,
                 vol.Optional(
-                    "update_interval",
-                    default=defaults_or_opts.get("update_interval", DEFAULT_UPDATE_INTERVAL),
+                    CONF_UPDATE_INTERVAL,
+                    default=defaults_or_opts.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
                 ): int,
                 vol.Optional(
-                    "units", default=defaults_or_opts.get("units", DEFAULT_UNITS)
+                    CONF_UNITS, default=defaults_or_opts.get(CONF_UNITS, DEFAULT_UNITS)
                 ): vol.In(["metric", "imperial"]),
                 vol.Optional(
-                    "use_place_as_device_name",
+                    CONF_USE_PLACE_AS_DEVICE_NAME,
                     default=defaults_or_opts.get(
-                        "use_place_as_device_name", DEFAULT_USE_PLACE_AS_DEVICE_NAME
+                        CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
                     ),
                 ): bool,
                 vol.Optional(
-                    "show_place_name",
-                    default=defaults_or_opts.get("show_place_name", DEFAULT_SHOW_PLACE_NAME),
+                    CONF_SHOW_PLACE_NAME,
+                    default=defaults_or_opts.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME),
                 ): bool,
             }
         )

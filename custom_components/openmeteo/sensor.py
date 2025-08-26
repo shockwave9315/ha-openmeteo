@@ -293,18 +293,17 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         self._base_name = self._spec.base_name
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_suggested_object_id = suggested_object_id
-        show_place_name = getattr(coordinator, "show_place_name", True)
-        place = getattr(coordinator, "location_name", None)
+        name = getattr(coordinator, "location_name", None)
         lat = getattr(coordinator, "latitude", None)
         lon = getattr(coordinator, "longitude", None)
-        shown = place or (
-            f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
-        )
-        device_name = shown if show_place_name and shown else "Open-Meteo"
+        if not name and isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+            name = f"{lat:.5f},{lon:.5f}"
+        if not getattr(coordinator, "show_place_name", True):
+            name = "Open-Meteo"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             manufacturer="Open-Meteo",
-            name=device_name,
+            name=name,
         )
         self._attr_icon = self._spec.icon
         if self._spec.state_class is not None:
@@ -346,15 +345,13 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     def name(self) -> str:
         base = self._base_name
         coord = self.coordinator
-        show_place_name = getattr(coord, "show_place_name", True)
+        show = getattr(coord, "show_place_name", True)
         place = getattr(coord, "location_name", None)
         lat, lon = getattr(coord, "latitude", None), getattr(coord, "longitude", None)
         shown = place or (
             f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
         )
-        if show_place_name and shown:
-            return f"{base} — {shown}"
-        return base
+        return f"{base} — {shown}" if (show and shown) else base
 
     @property
     def native_unit_of_measurement(self) -> str | None:
