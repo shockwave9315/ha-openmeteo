@@ -1,3 +1,8 @@
+## 1.3.48
+- fix(sensor): guard coordinator.show_place_name with getattr to prevent AttributeError in tests
+- feat: dynamic friendly_name update based on current place_name (reverse geocode), entity_id remains unchanged
+- chore: keep device name logic consistent with show_place_name option
+
 ## 1.3.47
 - fix(options): correct OptionsFlow return (no `options=` arg); resolves "Unknown error occurred" when saving Options
 - fix(data): include `hourly` and `daily` parameters in API request (UV, apparent temperature, visibility, wind gusts, POP, sunrise/sunset)

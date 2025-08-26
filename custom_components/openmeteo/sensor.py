@@ -19,7 +19,7 @@ from homeassistant.const import (
     UnitOfTemperature,
     UnitOfPrecipitationDepth,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -30,8 +30,6 @@ from homeassistant.util import dt as dt_util
 from .const import (
     ATTRIBUTION,
     DOMAIN,
-    CONF_SHOW_PLACE_NAME,
-    DEFAULT_SHOW_PLACE_NAME,
 )
 from .coordinator import OpenMeteoDataUpdateCoordinator
 
@@ -295,33 +293,41 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         self._base_name = self._spec.base_name
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_suggested_object_id = suggested_object_id
-        place = coordinator.location_name
-        lat, lon = coordinator.latitude, coordinator.longitude
+        show_place_name = getattr(coordinator, "show_place_name", True)
+        place = getattr(coordinator, "location_name", None)
+        lat = getattr(coordinator, "latitude", None)
+        lon = getattr(coordinator, "longitude", None)
         shown = place or (
             f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
         )
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             manufacturer="Open-Meteo",
-            name=
-                f"Open-Meteo — {shown}"
-                if shown and coordinator.show_place_name
-                else "Open-Meteo",
+            name=f"Open-Meteo — {shown}" if shown and show_place_name else "Open-Meteo",
         )
+        if shown and show_place_name:
+            self._attr_name = f"{self._base_name} — {shown}"
+        else:
+            self._attr_name = self._base_name
         self._attr_icon = self._spec.icon
         if self._spec.state_class is not None:
             self._attr_state_class = self._spec.state_class
         else:
             self._attr_state_class = None
 
-    @property
-    def name(self) -> str:
-        show_place = self._config_entry.options.get(
-            CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME
+    async def async_update(self) -> None:
+        await super().async_update()
+        show_place_name = getattr(self.coordinator, "show_place_name", True)
+        place = getattr(self.coordinator, "location_name", None)
+        lat = getattr(self.coordinator, "latitude", None)
+        lon = getattr(self.coordinator, "longitude", None)
+        shown = place or (
+            f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
         )
-        if show_place and self.coordinator.location_name:
-            return f"{self._base_name} — {self.coordinator.location_name}"
-        return self._base_name
+        if shown and show_place_name:
+            self._attr_name = f"{self._base_name} — {shown}"
+        else:
+            self._attr_name = self._base_name
 
     @property
     def native_value(self) -> Any:
@@ -377,8 +383,8 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
             "attribution": ATTRIBUTION,
         }
 
-    @callback
-    def _handle_place_update(self) -> None:
+    async def _handle_place_update(self) -> None:
+        await self.async_update()
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:
@@ -387,5 +393,5 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         self.async_on_remove(
             async_dispatcher_connect(self.hass, signal, self._handle_place_update)
         )
-        self._handle_place_update()
+        await self._handle_place_update()
 

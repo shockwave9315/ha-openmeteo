@@ -46,8 +46,6 @@ from .const import (
     MODE_STATIC,
     MODE_TRACK,
     DEFAULT_MIN_TRACK_INTERVAL,
-    CONF_SHOW_PLACE_NAME,
-    DEFAULT_SHOW_PLACE_NAME,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -120,21 +118,26 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         super().__init__(coordinator)
         self._config_entry = config_entry
         self._attr_has_entity_name = False
-        self._base_name = "Open Meteo"
+        self._base_name = "Open-Meteo"
         self._attr_suggested_object_id = suggested_object_id
         self._attr_unique_id = f"{config_entry.entry_id}_weather"
         data = {**config_entry.data, **config_entry.options}
-        place = coordinator.location_name
-        lat, lon = coordinator.latitude, coordinator.longitude
+        show_place_name = getattr(coordinator, "show_place_name", True)
+        place = getattr(coordinator, "location_name", None)
+        lat = getattr(coordinator, "latitude", None)
+        lon = getattr(coordinator, "longitude", None)
         shown = place or (
             f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
         )
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
             manufacturer="Open-Meteo",
-            name=
-                f"Open-Meteo — {shown}" if shown and coordinator.show_place_name else "Open-Meteo",
+            name=f"Open-Meteo — {shown}" if shown and show_place_name else "Open-Meteo",
         )
+        if shown and show_place_name:
+            self._attr_name = f"Open-Meteo — {shown}"
+        else:
+            self._attr_name = "Open-Meteo"
         self._attr_icon = "mdi:weather-partly-cloudy"
         mode = data.get(CONF_MODE)
         if not mode:
@@ -149,19 +152,19 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         )
         self._provider = coordinator.provider
 
-    @property
-    def name(self) -> str:
-        show_place = self._config_entry.options.get(
-            CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME
+    async def async_update(self) -> None:
+        await super().async_update()
+        show_place_name = getattr(self.coordinator, "show_place_name", True)
+        place = getattr(self.coordinator, "location_name", None)
+        lat = getattr(self.coordinator, "latitude", None)
+        lon = getattr(self.coordinator, "longitude", None)
+        shown = place or (
+            f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
         )
-        if show_place:
-            if self.coordinator.location_name:
-                return f"{self._base_name} — {self.coordinator.location_name}"
-            lat = self.coordinator.latitude
-            lon = self.coordinator.longitude
-            if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-                return f"{self._base_name} — {lat:.5f},{lon:.5f}"
-        return self._base_name
+        if shown and show_place_name:
+            self._attr_name = f"Open-Meteo — {shown}"
+        else:
+            self._attr_name = "Open-Meteo"
 
     @property
     def available(self) -> bool:
@@ -342,13 +345,17 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_state()
 
+    async def _handle_place_update(self) -> None:
+        await self.async_update()
+        self.async_write_ha_state()
+
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         signal = f"openmeteo_place_updated_{self._config_entry.entry_id}"
         self.async_on_remove(
-            async_dispatcher_connect(self.hass, signal, self.async_write_ha_state)
+            async_dispatcher_connect(self.hass, signal, self._handle_place_update)
         )
-        self.async_write_ha_state()
+        await self._handle_place_update()
         store = (
             self.hass.data.setdefault(DOMAIN, {})
             .setdefault("entries", {})
