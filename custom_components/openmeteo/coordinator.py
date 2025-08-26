@@ -143,6 +143,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if override is None:
             override = entry.data.get(CONF_AREA_NAME_OVERRIDE)
         self.location_name: str | None = override
+        self.latitude: float | None = None
+        self.longitude: float | None = None
         self.provider: str = entry.options.get("api_provider", DEFAULT_API_PROVIDER)
         self._last_data: dict[str, Any] | None = None
         self._tracked_entity_id: str | None = None
@@ -169,6 +171,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         latitude, longitude, _ = await resolve_coords(
             self.hass, self.config_entry
         )
+        self.latitude = latitude
+        self.longitude = longitude
         show_place = opts.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME)
         provider = opts.get(CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER)
         place = (
