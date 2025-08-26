@@ -1,3 +1,8 @@
+## 1.3.51
+- fix(flow): poprawny import selektorów (moduł `homeassistant.helpers.selector as sel`); zamiana `selector.EntitySelector` na bezpieczny helper; brak crasha przy dodawaniu kolejnego wpisu
+- fix(options): ekran Opcji otwiera się i zapisuje ustawienia (data → entry.options); `entity_id` ma fallback do `str`, jeśli selektory nie są dostępne
+- chore: zachowano wcześniejsze poprawki (bez prefiksów, hourly/daily, brak api_provider, bez async_reload)
+
 ## 1.3.50
 - fix: guard OptionsFlow and remove leftover references to removed fields; HA no longer crashes on startup
 - fix(options): Options screen opens and saves correctly (data → entry.options)

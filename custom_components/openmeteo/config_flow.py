@@ -8,7 +8,17 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.selector import selector
+from homeassistant.helpers import selector as sel
+
+
+def _entity_selector_or_str():
+    try:
+        return sel.EntitySelector(
+            sel.EntitySelectorConfig(domain=["device_tracker", "person"], multiple=False)
+        )
+    except Exception:
+        return str
+
 
 # Local constant definitions to avoid importing integration modules at import time
 DOMAIN = "openmeteo"
@@ -44,12 +54,11 @@ DEFAULT_GEOCODER_PROVIDER = "osm_nominatim"
 def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> vol.Schema:
     """Build a schema for config/option flows."""
     if mode == MODE_TRACK:
+        entity_field = _entity_selector_or_str()
         data: dict[Any, Any] = {
-            vol.Required(
+            vol.Optional(
                 CONF_ENTITY_ID, default=defaults.get(CONF_ENTITY_ID, None)
-            ): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["device_tracker", "person"])
-            ),
+            ): entity_field,
             vol.Optional(
                 CONF_MIN_TRACK_INTERVAL,
                 default=defaults.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL),
@@ -68,11 +77,11 @@ def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> v
         }
 
     common: dict[Any, Any] = {
-        vol.Required(
+        vol.Optional(
             CONF_UPDATE_INTERVAL,
             default=defaults.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
         ): vol.All(vol.Coerce(int), vol.Range(min=60)),
-        vol.Required(
+        vol.Optional(
             CONF_UNITS, default=defaults.get(CONF_UNITS, DEFAULT_UNITS)
         ): vol.In(["metric", "imperial"]),
     }
@@ -183,27 +192,30 @@ class OpenMeteoOptionsFlowHandler(config_entries.OptionsFlow):
             return await self.async_step_save(user_input)
 
         opts = dict(self.config_entry.options)
+        entity_field = _entity_selector_or_str()
         schema = vol.Schema(
             {
-                vol.Optional("entity_id", default=opts.get("entity_id")): str,
+                vol.Optional("entity_id", default=opts.get("entity_id")): entity_field,
                 vol.Optional(
                     "min_track_interval",
-                    default=opts.get("min_track_interval", 15),
+                    default=opts.get("min_track_interval", DEFAULT_MIN_TRACK_INTERVAL),
                 ): int,
                 vol.Optional(
                     "update_interval",
-                    default=opts.get("update_interval", 60),
+                    default=opts.get("update_interval", DEFAULT_UPDATE_INTERVAL),
                 ): int,
                 vol.Optional(
-                    "units", default=opts.get("units", "metric")
+                    "units", default=opts.get("units", DEFAULT_UNITS)
                 ): vol.In(["metric", "imperial"]),
                 vol.Optional(
                     "use_place_as_device_name",
-                    default=opts.get("use_place_as_device_name", False),
+                    default=opts.get(
+                        "use_place_as_device_name", DEFAULT_USE_PLACE_AS_DEVICE_NAME
+                    ),
                 ): bool,
                 vol.Optional(
                     "show_place_name",
-                    default=opts.get("show_place_name", True),
+                    default=opts.get("show_place_name", DEFAULT_SHOW_PLACE_NAME),
                 ): bool,
             }
         )
@@ -214,7 +226,9 @@ class OpenMeteoOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_create_entry(title="", data=new_options)
 
 
-async def async_get_options_flow(config_entry):
+async def async_get_options_flow(
+    config_entry: config_entries.ConfigEntry,
+):
     return OpenMeteoOptionsFlowHandler(config_entry)
 
 
