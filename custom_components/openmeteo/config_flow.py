@@ -10,6 +10,25 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import selector as sel
 
+from .const import (
+    DOMAIN,
+    CONF_MODE,
+    MODE_STATIC,
+    MODE_TRACK,
+    MODE_DELEGATED,
+    CONF_LATITUDE,
+    CONF_LONGITUDE,
+    CONF_ENTITY_ID,
+    CONF_MIN_TRACK_INTERVAL,
+    CONF_UPDATE_INTERVAL,
+    CONF_UNITS,
+    CONF_USE_PLACE_AS_DEVICE_NAME,
+    CONF_SHOW_PLACE_NAME,
+    DEFAULT_MIN_TRACK_INTERVAL,
+    DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_UNITS,
+)
+
 
 def _entity_selector_or_str():
     try:
@@ -18,31 +37,6 @@ def _entity_selector_or_str():
         )
     except Exception:
         return str
-
-
-# Local constant definitions to avoid importing integration modules at import time
-DOMAIN = "openmeteo"
-
-CONF_LATITUDE = "latitude"
-CONF_LONGITUDE = "longitude"
-CONF_MODE = "mode"
-MODE_STATIC = "static"
-MODE_TRACK = "track"
-MODE_DELEGATED = "delegated"
-
-CONF_UPDATE_INTERVAL = "update_interval"
-DEFAULT_UPDATE_INTERVAL = 60
-CONF_UNITS = "units"
-DEFAULT_UNITS = "metric"
-
-CONF_ENTITY_ID = "entity_id"
-CONF_MIN_TRACK_INTERVAL = "min_track_interval"
-DEFAULT_MIN_TRACK_INTERVAL = 15
-
-CONF_USE_PLACE_AS_DEVICE_NAME = "use_place_as_device_name"
-DEFAULT_USE_PLACE_AS_DEVICE_NAME = False
-CONF_SHOW_PLACE_NAME = "show_place_name"
-DEFAULT_SHOW_PLACE_NAME = True
 
 
 def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> vol.Schema:
@@ -89,13 +83,11 @@ def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> v
             ): vol.In(["metric", "imperial"]),
             vol.Optional(
                 CONF_USE_PLACE_AS_DEVICE_NAME,
-                default=defaults.get(
-                    CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
-                ),
+                default=defaults.get(CONF_USE_PLACE_AS_DEVICE_NAME, False),
             ): bool,
             vol.Optional(
                 CONF_SHOW_PLACE_NAME,
-                default=defaults.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME),
+                default=defaults.get(CONF_SHOW_PLACE_NAME, True),
             ): bool,
         }
     )
@@ -187,13 +179,11 @@ class OpenMeteoOptionsFlowHandler(config_entries.OptionsFlow):
                 ): vol.In(["metric", "imperial"]),
                 vol.Optional(
                     CONF_USE_PLACE_AS_DEVICE_NAME,
-                    default=defaults_or_opts.get(
-                        CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
-                    ),
+                    default=defaults_or_opts.get(CONF_USE_PLACE_AS_DEVICE_NAME, False),
                 ): bool,
                 vol.Optional(
                     CONF_SHOW_PLACE_NAME,
-                    default=defaults_or_opts.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME),
+                    default=defaults_or_opts.get(CONF_SHOW_PLACE_NAME, True),
                 ): bool,
             }
         )
