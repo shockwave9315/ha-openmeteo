@@ -1,3 +1,7 @@
+## 1.3.41
+- feat: remove global extra sensor option; extra sensors disabled by default
+- fix: non-blocking options listener and network timeouts
+
 ## 1.3.39
 - fix: pre-register entities to enforce object IDs; remove coordinate fallback in names
 

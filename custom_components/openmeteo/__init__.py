@@ -28,7 +28,6 @@ from .const import (
     CONF_AREA_NAME_OVERRIDE,
     CONF_SHOW_PLACE_NAME,
     CONF_GEOCODER_PROVIDER,
-    CONF_EXTRA_SENSORS,
     DEFAULT_API_PROVIDER,
     DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_UNITS,
@@ -162,8 +161,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     option_updates: dict[str, Any] = {}
     if CONF_SHOW_PLACE_NAME not in entry.options:
         option_updates[CONF_SHOW_PLACE_NAME] = DEFAULT_SHOW_PLACE_NAME
-    if CONF_EXTRA_SENSORS not in entry.options:
-        option_updates[CONF_EXTRA_SENSORS] = DEFAULT_EXTRA_SENSORS
     if option_updates:
         hass.config_entries.async_update_entry(
             entry, options={**entry.options, **option_updates}
@@ -216,16 +213,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def _options_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     data = hass.data.get(DOMAIN, {}).get("entries", {}).get(entry.entry_id)
     if data:
-        prev = data.get("options_snapshot", {})
-        if prev.get(CONF_EXTRA_SENSORS) != entry.options.get(CONF_EXTRA_SENSORS):
-            hass.async_create_task(
-                hass.config_entries.async_reload(entry.entry_id)
-            )
-            return
         data["options_snapshot"] = dict(entry.options)
         coord = data.get("coordinator")
         if coord:
-            await coord.async_options_updated()
+            hass.async_create_task(coord.async_options_updated())
             hass.async_create_task(coord.async_request_refresh())
             return
     hass.async_create_task(hass.config_entries.async_reload(entry.entry_id))

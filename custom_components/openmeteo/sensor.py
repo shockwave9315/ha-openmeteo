@@ -32,8 +32,6 @@ from .const import (
     DOMAIN,
     CONF_SHOW_PLACE_NAME,
     DEFAULT_SHOW_PLACE_NAME,
-    CONF_EXTRA_SENSORS,
-    DEFAULT_EXTRA_SENSORS,
 )
 from .coordinator import OpenMeteoDataUpdateCoordinator
 
@@ -256,10 +254,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up Open-Meteo sensors."""
     coordinator = hass.data[DOMAIN]["entries"][entry.entry_id]["coordinator"]
-    opts = entry.options or {}
-    keys = list(BASE_SENSOR_KEYS)
-    if bool(opts.get(CONF_EXTRA_SENSORS, DEFAULT_EXTRA_SENSORS)):
-        keys += EXTRA_SENSOR_KEYS
+    keys = BASE_SENSOR_KEYS + EXTRA_SENSOR_KEYS
 
     registry = er.async_get(hass)
 
