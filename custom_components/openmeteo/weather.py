@@ -147,7 +147,6 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         self._min_track_interval = int(
             data.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL)
         )
-        self._provider = coordinator.provider
 
     async def async_update(self) -> None:
         await super().async_update()
