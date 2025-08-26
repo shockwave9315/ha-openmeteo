@@ -1,3 +1,9 @@
+## 1.3.52
+- fix(flow): poprawiono create_entry (bez options=), dodano re-eksport OptionsFlow w __init__, bezpieczne selektory
+- feat(names): dynamiczne friendly_name dla wszystkich sensorów i encji pogodowej (aktualna miejscowość; entity_id bez zmian)
+- feat(device): device name w Device Registry synchronizuje się z bieżącą lokalizacją (reverse geocode); brak prefiksu
+- chore: brak api_provider, brak async_reload, parametry hourly/daily bez zmian
+
 ## 1.3.51
 - fix(flow): poprawny import selektorów (moduł `homeassistant.helpers.selector as sel`); zamiana `selector.EntitySelector` na bezpieczny helper; brak crasha przy dodawaniu kolejnego wpisu
 - fix(options): ekran Opcji otwiera się i zapisuje ustawienia (data → entry.options); `entity_id` ma fallback do `str`, jeśli selektory nie są dostępne

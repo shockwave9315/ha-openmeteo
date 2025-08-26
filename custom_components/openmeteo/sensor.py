@@ -306,29 +306,11 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
             manufacturer="Open-Meteo",
             name=device_name,
         )
-        if shown and show_place_name:
-            self._attr_name = f"{self._base_name} — {shown}"
-        else:
-            self._attr_name = self._base_name
         self._attr_icon = self._spec.icon
         if self._spec.state_class is not None:
             self._attr_state_class = self._spec.state_class
         else:
             self._attr_state_class = None
-
-    async def async_update(self) -> None:
-        await super().async_update()
-        show_place_name = getattr(self.coordinator, "show_place_name", True)
-        place = getattr(self.coordinator, "location_name", None)
-        lat = getattr(self.coordinator, "latitude", None)
-        lon = getattr(self.coordinator, "longitude", None)
-        shown = place or (
-            f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
-        )
-        if shown and show_place_name:
-            self._attr_name = f"{self._base_name} — {shown}"
-        else:
-            self._attr_name = self._base_name
 
     @property
     def native_value(self) -> Any:
@@ -361,6 +343,20 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         return round(val, 2) if isinstance(val, (int, float)) else val
 
     @property
+    def name(self) -> str:
+        base = self._base_name
+        coord = self.coordinator
+        show_place_name = getattr(coord, "show_place_name", True)
+        place = getattr(coord, "location_name", None)
+        lat, lon = getattr(coord, "latitude", None), getattr(coord, "longitude", None)
+        shown = place or (
+            f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
+        )
+        if show_place_name and shown:
+            return f"{base} — {shown}"
+        return base
+
+    @property
     def native_unit_of_measurement(self) -> str | None:
         return self._spec.unit
 
@@ -385,7 +381,19 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         }
 
     async def _handle_place_update(self) -> None:
-        await self.async_update()
+        coord = self.coordinator
+        show_place_name = getattr(coord, "show_place_name", True)
+        place = getattr(coord, "location_name", None)
+        lat, lon = getattr(coord, "latitude", None), getattr(coord, "longitude", None)
+        shown = place or (
+            f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
+        )
+        device_name = shown if (show_place_name and shown) else "Open-Meteo"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._config_entry.entry_id)},
+            manufacturer="Open-Meteo",
+            name=device_name,
+        )
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:

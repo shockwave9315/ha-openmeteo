@@ -185,17 +185,13 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             interval = 60
         self.update_interval = timedelta(seconds=interval)
         self.show_place_name = bool(opts.get("show_place_name", True))
-        display_name = self.location_name
-        if not display_name:
-            lat = getattr(self, "latitude", None)
-            lon = getattr(self, "longitude", None)
-            if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-                display_name = f"{lat:.5f},{lon:.5f}"
-        name = display_name if (self.show_place_name and display_name) else "Open-Meteo"
         dev_reg = dr.async_get(self.hass)
         device = dev_reg.async_get_device({(DOMAIN, self.config_entry.entry_id)})
         if device:
-            dev_reg.async_update_device(device.id, name=name)
+            new_name = self.location_name or f"{self.latitude:.5f},{self.longitude:.5f}"
+            if not self.show_place_name:
+                new_name = "Open-Meteo"
+            dev_reg.async_update_device(device.id, name=new_name)
         await self.async_request_refresh()
 
     async def _resubscribe_tracked_entity(self, entity_id: str | None) -> None:
@@ -301,10 +297,10 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         dev_reg = dr.async_get(self.hass)
         device = dev_reg.async_get_device({(DOMAIN, self.config_entry.entry_id)})
         if device:
-            name = (
-                display_name if self.show_place_name and display_name else "Open-Meteo"
-            )
-            dev_reg.async_update_device(device.id, name=name)
+            new_name = self.location_name or f"{self.latitude:.5f},{self.longitude:.5f}"
+            if not self.show_place_name:
+                new_name = "Open-Meteo"
+            dev_reg.async_update_device(device.id, name=new_name)
         async_dispatcher_send(
             self.hass, f"openmeteo_place_updated_{self.config_entry.entry_id}"
         )
