@@ -1,3 +1,8 @@
+## 1.3.49
+- fix(options): w pełni działający OptionsFlow (edycja i zapis ustawień bez błędów)
+- fix(names): usunięto prefiks „Open-Meteo — ” — urządzenie i encja pogodowa pokazują samą miejscowość (lub lat,lon)
+- chore: zachowano stabilność (brak reloadów; update_entry tylko w migracji); hourly/daily pozostają w zapytaniach; sensory bez zmian
+
 ## 1.3.48
 - fix(sensor): guard coordinator.show_place_name with getattr to prevent AttributeError in tests
 - feat: dynamic friendly_name update based on current place_name (reverse geocode), entity_id remains unchanged

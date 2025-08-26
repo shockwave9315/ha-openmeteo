@@ -142,7 +142,7 @@ async def test_weather_name_fallback_coords():
             weather = OpenMeteoWeather(coordinator, entry, "open_meteo")
             weather.hass = hass
             name = weather.name
-            assert name == "Open-Meteo — 50.00000,20.00000"
+            assert name == "50.00000,20.00000"
             await hass.async_block_till_done()
             await hass.async_stop()
 
