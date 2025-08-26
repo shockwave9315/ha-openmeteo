@@ -118,7 +118,6 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         super().__init__(coordinator)
         self._config_entry = config_entry
         self._attr_has_entity_name = False
-        self._base_name = "Open-Meteo"
         self._attr_suggested_object_id = suggested_object_id
         self._attr_unique_id = f"{config_entry.entry_id}_weather"
         data = {**config_entry.data, **config_entry.options}
@@ -129,15 +128,13 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         shown = place or (
             f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
         )
+        device_name = shown if show_place_name and shown else "Open-Meteo"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
             manufacturer="Open-Meteo",
-            name=f"Open-Meteo — {shown}" if shown and show_place_name else "Open-Meteo",
+            name=device_name,
         )
-        if shown and show_place_name:
-            self._attr_name = f"Open-Meteo — {shown}"
-        else:
-            self._attr_name = "Open-Meteo"
+        self._attr_name = device_name
         self._attr_icon = "mdi:weather-partly-cloudy"
         mode = data.get(CONF_MODE)
         if not mode:
@@ -162,7 +159,7 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
         )
         if shown and show_place_name:
-            self._attr_name = f"Open-Meteo — {shown}"
+            self._attr_name = shown
         else:
             self._attr_name = "Open-Meteo"
 

@@ -300,10 +300,11 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         shown = place or (
             f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
         )
+        device_name = shown if show_place_name and shown else "Open-Meteo"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             manufacturer="Open-Meteo",
-            name=f"Open-Meteo — {shown}" if shown and show_place_name else "Open-Meteo",
+            name=device_name,
         )
         if shown and show_place_name:
             self._attr_name = f"{self._base_name} — {shown}"
