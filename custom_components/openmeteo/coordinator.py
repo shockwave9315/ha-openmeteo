@@ -76,6 +76,7 @@ async def async_reverse_geocode(
     if not url:
         return None
 
+    js: dict[str, Any] | None = None
     async with _GEOCODE_LOCK:
         import time
 
@@ -84,12 +85,21 @@ async def async_reverse_geocode(
         if wait > 0:
             await asyncio.sleep(wait)
         try:
-            async with session.get(url, headers=headers, timeout=10) as resp:
+            async with session.get(
+                url, headers=headers, timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
                 if resp.status != 200:
+                    _LOGGER.debug("Geocode HTTP status %s", resp.status)
                     return None
                 js = await resp.json()
+        except Exception as err:  # pragma: no cover - network errors
+            _LOGGER.debug("Geocode request failed: %s", err)
+            return None
         finally:
             _LAST_GEOCODE = time.monotonic()
+
+    if js is None:
+        return None
 
     name: str | None = None
     try:
