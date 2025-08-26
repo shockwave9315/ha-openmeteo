@@ -30,7 +30,7 @@ MODE_STATIC = "static"
 MODE_TRACK = "track"
 
 CONF_UPDATE_INTERVAL = "update_interval"
-DEFAULT_UPDATE_INTERVAL = 600
+DEFAULT_UPDATE_INTERVAL = 60
 CONF_UNITS = "units"
 DEFAULT_UNITS = "metric"
 
@@ -39,80 +39,58 @@ CONF_MIN_TRACK_INTERVAL = "min_track_interval"
 DEFAULT_MIN_TRACK_INTERVAL = 15
 
 CONF_USE_PLACE_AS_DEVICE_NAME = "use_place_as_device_name"
-DEFAULT_USE_PLACE_AS_DEVICE_NAME = True
+DEFAULT_USE_PLACE_AS_DEVICE_NAME = False
 CONF_SHOW_PLACE_NAME = "show_place_name"
 DEFAULT_SHOW_PLACE_NAME = True
-CONF_AREA_NAME_OVERRIDE = "area_name_override"
-CONF_GEOCODE_INTERVAL_MIN = "geocode_interval_min"
-DEFAULT_GEOCODE_INTERVAL_MIN = 120
-CONF_GEOCODE_MIN_DISTANCE_M = "geocode_min_distance_m"
-DEFAULT_GEOCODE_MIN_DISTANCE_M = 500
-CONF_GEOCODER_PROVIDER = "geocoder_provider"
-DEFAULT_GEOCODER_PROVIDER = "osm_nominatim"
 
 
 def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> vol.Schema:
     """Build a schema for config/option flows."""
+    data: dict[Any, Any]
     if mode == MODE_TRACK:
         entity_field = _entity_selector_or_str()
-        data: dict[Any, Any] = {
+        data = {
             vol.Optional(
-                CONF_ENTITY_ID, default=defaults.get(CONF_ENTITY_ID, None)
+                CONF_ENTITY_ID, default=defaults.get(CONF_ENTITY_ID)
             ): entity_field,
             vol.Optional(
                 CONF_MIN_TRACK_INTERVAL,
                 default=defaults.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL),
-            ): vol.All(vol.Coerce(int), vol.Range(min=1)),
+            ): int,
         }
     else:
         data = {
             vol.Required(
                 CONF_LATITUDE,
                 default=defaults.get(CONF_LATITUDE, hass.config.latitude),
-            ): vol.All(vol.Coerce(float), vol.Range(min=-90, max=90)),
+            ): vol.Coerce(float),
             vol.Required(
                 CONF_LONGITUDE,
                 default=defaults.get(CONF_LONGITUDE, hass.config.longitude),
-            ): vol.All(vol.Coerce(float), vol.Range(min=-180, max=180)),
+            ): vol.Coerce(float),
         }
 
-    common: dict[Any, Any] = {
-        vol.Optional(
-            CONF_UPDATE_INTERVAL,
-            default=defaults.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
-        ): vol.All(vol.Coerce(int), vol.Range(min=60)),
-        vol.Optional(
-            CONF_UNITS, default=defaults.get(CONF_UNITS, DEFAULT_UNITS)
-        ): vol.In(["metric", "imperial"]),
-    }
-
-    # opcje nieblokujące setupu
-    common[vol.Optional(
-        CONF_USE_PLACE_AS_DEVICE_NAME,
-        default=defaults.get(CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME),
-    )] = bool
-    common[vol.Optional(
-        CONF_SHOW_PLACE_NAME,
-        default=defaults.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME),
-    )] = bool
-    common[vol.Optional(
-        CONF_AREA_NAME_OVERRIDE,
-        default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
-    )] = str
-    common[vol.Optional(
-        CONF_GEOCODE_INTERVAL_MIN,
-        default=defaults.get(CONF_GEOCODE_INTERVAL_MIN, DEFAULT_GEOCODE_INTERVAL_MIN),
-    )] = vol.All(vol.Coerce(int), vol.Range(min=0))
-    common[vol.Optional(
-        CONF_GEOCODE_MIN_DISTANCE_M,
-        default=defaults.get(CONF_GEOCODE_MIN_DISTANCE_M, DEFAULT_GEOCODE_MIN_DISTANCE_M),
-    )] = vol.All(vol.Coerce(int), vol.Range(min=0))
-    common[vol.Optional(
-        CONF_GEOCODER_PROVIDER,
-        default=defaults.get(CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER),
-    )] = vol.In(["osm_nominatim", "photon", "none"])
-
-    data.update(common)
+    data.update(
+        {
+            vol.Optional(
+                CONF_UPDATE_INTERVAL,
+                default=defaults.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+            ): int,
+            vol.Optional(
+                CONF_UNITS, default=defaults.get(CONF_UNITS, DEFAULT_UNITS)
+            ): vol.In(["metric", "imperial"]),
+            vol.Optional(
+                CONF_USE_PLACE_AS_DEVICE_NAME,
+                default=defaults.get(
+                    CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
+                ),
+            ): bool,
+            vol.Optional(
+                CONF_SHOW_PLACE_NAME,
+                default=defaults.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME),
+            ): bool,
+        }
+    )
     return vol.Schema(data)
 
 
@@ -157,23 +135,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if not errors:
                 data = {**user_input, CONF_MODE: self._mode}
-                # część pól jako options (nieblokujące)
-                options: dict[str, Any] = {}
-                if self._mode != MODE_STATIC:
-                    use_place = data.pop(CONF_USE_PLACE_AS_DEVICE_NAME, True)
-                    options[CONF_USE_PLACE_AS_DEVICE_NAME] = bool(use_place)
-                options[CONF_SHOW_PLACE_NAME] = bool(
-                    data.pop(CONF_SHOW_PLACE_NAME, True)
-                )
-                for opt_key in (
-                    CONF_AREA_NAME_OVERRIDE,
-                    CONF_GEOCODE_INTERVAL_MIN,
-                    CONF_GEOCODE_MIN_DISTANCE_M,
-                    CONF_GEOCODER_PROVIDER,
-                ):
-                    if opt_key in data:
-                        options[opt_key] = data.pop(opt_key)
-                return self.async_create_entry(title="", data=data, options=options)
+                return self.async_create_entry(title="", data=data)
 
         schema = _build_schema(self.hass, self._mode, defaults)
         return self.async_show_form(
@@ -191,31 +153,35 @@ class OpenMeteoOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             return await self.async_step_save(user_input)
 
-        opts = dict(self.config_entry.options)
+        defaults_or_opts = {**self.config_entry.data, **self.config_entry.options}
         entity_field = _entity_selector_or_str()
         schema = vol.Schema(
             {
-                vol.Optional("entity_id", default=opts.get("entity_id")): entity_field,
+                vol.Optional(
+                    "entity_id", default=defaults_or_opts.get("entity_id")
+                ): entity_field,
                 vol.Optional(
                     "min_track_interval",
-                    default=opts.get("min_track_interval", DEFAULT_MIN_TRACK_INTERVAL),
+                    default=defaults_or_opts.get(
+                        "min_track_interval", DEFAULT_MIN_TRACK_INTERVAL
+                    ),
                 ): int,
                 vol.Optional(
                     "update_interval",
-                    default=opts.get("update_interval", DEFAULT_UPDATE_INTERVAL),
+                    default=defaults_or_opts.get("update_interval", DEFAULT_UPDATE_INTERVAL),
                 ): int,
                 vol.Optional(
-                    "units", default=opts.get("units", DEFAULT_UNITS)
+                    "units", default=defaults_or_opts.get("units", DEFAULT_UNITS)
                 ): vol.In(["metric", "imperial"]),
                 vol.Optional(
                     "use_place_as_device_name",
-                    default=opts.get(
+                    default=defaults_or_opts.get(
                         "use_place_as_device_name", DEFAULT_USE_PLACE_AS_DEVICE_NAME
                     ),
                 ): bool,
                 vol.Optional(
                     "show_place_name",
-                    default=opts.get("show_place_name", DEFAULT_SHOW_PLACE_NAME),
+                    default=defaults_or_opts.get("show_place_name", DEFAULT_SHOW_PLACE_NAME),
                 ): bool,
             }
         )
@@ -224,11 +190,5 @@ class OpenMeteoOptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_save(self, user_input):
         new_options = {**dict(self.config_entry.options), **(user_input or {})}
         return self.async_create_entry(title="", data=new_options)
-
-
-async def async_get_options_flow(
-    config_entry: config_entries.ConfigEntry,
-):
-    return OpenMeteoOptionsFlowHandler(config_entry)
 
 

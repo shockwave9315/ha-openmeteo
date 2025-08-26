@@ -134,7 +134,6 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             manufacturer="Open-Meteo",
             name=device_name,
         )
-        self._attr_name = device_name
         self._attr_icon = "mdi:weather-partly-cloudy"
         mode = data.get(CONF_MODE)
         if not mode:
@@ -147,20 +146,6 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         self._min_track_interval = int(
             data.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL)
         )
-
-    async def async_update(self) -> None:
-        await super().async_update()
-        show_place_name = getattr(self.coordinator, "show_place_name", True)
-        place = getattr(self.coordinator, "location_name", None)
-        lat = getattr(self.coordinator, "latitude", None)
-        lon = getattr(self.coordinator, "longitude", None)
-        shown = place or (
-            f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
-        )
-        if shown and show_place_name:
-            self._attr_name = shown
-        else:
-            self._attr_name = "Open-Meteo"
 
     @property
     def available(self) -> bool:
@@ -342,7 +327,19 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         self.async_write_ha_state()
 
     async def _handle_place_update(self) -> None:
-        await self.async_update()
+        coord = self.coordinator
+        show_place_name = getattr(coord, "show_place_name", True)
+        place = getattr(coord, "location_name", None)
+        lat, lon = getattr(coord, "latitude", None), getattr(coord, "longitude", None)
+        shown = place or (
+            f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
+        )
+        device_name = shown if (show_place_name and shown) else "Open-Meteo"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._config_entry.entry_id)},
+            manufacturer="Open-Meteo",
+            name=device_name,
+        )
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:
@@ -385,6 +382,17 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             tz = dt_util.get_time_zone(self.hass.config.time_zone) or dt_util.UTC
             dt = dt.replace(tzinfo=tz)
         return dt_util.as_utc(dt)
+
+    @property
+    def name(self) -> str:
+        coord = self.coordinator
+        show_place_name = getattr(coord, "show_place_name", True)
+        place = getattr(coord, "location_name", None)
+        lat, lon = getattr(coord, "latitude", None), getattr(coord, "longitude", None)
+        shown = place or (
+            f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
+        )
+        return shown if (show_place_name and shown) else "Open-Meteo"
 
     @property
     def sunset(self) -> datetime | None:
