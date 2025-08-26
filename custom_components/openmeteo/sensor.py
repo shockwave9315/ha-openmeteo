@@ -36,15 +36,25 @@ from .const import (
 from .coordinator import OpenMeteoDataUpdateCoordinator
 
 
-def _first_hourly(data: dict[str, Any], key: str) -> Any:
-    arr = data.get("hourly", {}).get(key)
-    if isinstance(arr, list) and arr:
-        return arr[0]
+def _hourly_now_value(data: dict[str, Any], key: str) -> Any:
+    hourly = data.get("hourly") or {}
+    times = hourly.get("time") or []
+    values = hourly.get(key) or []
+    if not times or not values:
+        return None
+    tz = dt_util.get_time_zone(data.get("timezone")) or dt_util.UTC
+    now = dt_util.now(tz).replace(minute=0, second=0, microsecond=0)
+    for t_str, val in zip(times, values):
+        dt = dt_util.parse_datetime(t_str)
+        if dt and dt.tzinfo is None:
+            dt = dt.replace(tzinfo=tz)
+        if dt == now:
+            return val
     return None
 
 
 def _visibility_km(data: dict[str, Any]) -> Any:
-    v = _first_hourly(data, "visibility")
+    v = _hourly_now_value(data, "visibility")
     return v / 1000 if isinstance(v, (int, float)) else None
 
 
@@ -104,7 +114,8 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         UnitOfPressure.HPA,
         SensorDeviceClass.PRESSURE,
         "mdi:gauge",
-        lambda d: _first_hourly(d, "pressure_msl"),
+        lambda d: d.get("current", {}).get("pressure_msl")
+        or _hourly_now_value(d, "pressure_msl"),
     ),
     "uv_index": SensorSpec(
         "uv_index",
@@ -120,7 +131,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         DEGREE,
         None,
         "mdi:compass",
-        lambda d: d.get("current_weather", {}).get("winddirection"),
+        lambda d: d.get("current", {}).get("wind_direction_10m"),
     ),
     "wind_gust": SensorSpec(
         "wind_gust",
@@ -128,7 +139,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         UnitOfSpeed.KILOMETERS_PER_HOUR,
         None,
         "mdi:weather-windy",
-        lambda d: _first_hourly(d, "wind_gusts_10m"),
+        lambda d: _hourly_now_value(d, "wind_gusts_10m"),
     ),
     "wind_speed": SensorSpec(
         "wind_speed",
@@ -136,7 +147,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         UnitOfSpeed.KILOMETERS_PER_HOUR,
         None,
         "mdi:weather-windy-variant",
-        lambda d: d.get("current_weather", {}).get("windspeed"),
+        lambda d: d.get("current", {}).get("wind_speed_10m"),
     ),
     "dew_point": SensorSpec(
         "dew_point",
@@ -145,7 +156,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         SensorDeviceClass.TEMPERATURE,
         "mdi:water-percent",
         lambda d: d.get("current", {}).get("dewpoint_2m")
-        or _first_hourly(d, "dewpoint_2m"),
+        or _hourly_now_value(d, "dewpoint_2m"),
     ),
     "precipitation": SensorSpec(
         "precipitation",
@@ -153,7 +164,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         UnitOfPrecipitationDepth.MILLIMETERS,
         SensorDeviceClass.PRECIPITATION,
         "mdi:weather-rainy",
-        lambda d: _first_hourly(d, "precipitation"),
+        lambda d: _hourly_now_value(d, "precipitation"),
     ),
     "precipitation_probability": SensorSpec(
         "precipitation_probability",
@@ -161,7 +172,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         PERCENTAGE,
         None,
         "mdi:weather-pouring",
-        lambda d: _first_hourly(d, "precipitation_probability"),
+        lambda d: _hourly_now_value(d, "precipitation_probability"),
     ),
     "temperature": SensorSpec(
         "temperature",
@@ -169,7 +180,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         UnitOfTemperature.CELSIUS,
         SensorDeviceClass.TEMPERATURE,
         "mdi:thermometer",
-        lambda d: d.get("current_weather", {}).get("temperature"),
+        lambda d: d.get("current", {}).get("temperature_2m"),
     ),
     "apparent_temperature": SensorSpec(
         "apparent_temperature",
@@ -177,7 +188,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         UnitOfTemperature.CELSIUS,
         SensorDeviceClass.TEMPERATURE,
         "mdi:thermometer-lines",
-        lambda d: _first_hourly(d, "apparent_temperature"),
+        lambda d: _hourly_now_value(d, "apparent_temperature"),
     ),
     "visibility": SensorSpec(
         "visibility",
@@ -193,7 +204,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         PERCENTAGE,
         SensorDeviceClass.HUMIDITY,
         "mdi:water-percent",
-        lambda d: _first_hourly(d, "relative_humidity_2m"),
+        lambda d: _hourly_now_value(d, "relative_humidity_2m"),
     ),
     "sunrise": SensorSpec(
         "sunrise",
@@ -228,7 +239,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         PERCENTAGE,
         None,
         "mdi:weather-cloudy",
-        lambda d: _first_hourly(d, "cloud_cover"),
+        lambda d: _hourly_now_value(d, "cloud_cover"),
     ),
     "solar_radiation": SensorSpec(
         "solar_radiation",
@@ -236,7 +247,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         "W/m²",
         None,
         "mdi:weather-sunny",
-        lambda d: _first_hourly(d, "shortwave_radiation"),
+        lambda d: _hourly_now_value(d, "shortwave_radiation"),
     ),
     "snow_depth": SensorSpec(
         "snow_depth",
@@ -244,7 +255,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         "cm",
         None,
         "mdi:snowflake",
-        lambda d: _first_hourly(d, "snow_depth"),
+        lambda d: _hourly_now_value(d, "snow_depth"),
     ),
 }
 
@@ -377,7 +388,7 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
             .get(self._config_entry.entry_id, {})
         )
         return {
-            "location_name": self.coordinator.location_name,
+            "place_name": store.get("place_name"),
             "latitude": self.coordinator.latitude,
             "longitude": self.coordinator.longitude,
             "geocode_provider": store.get("geocode_provider"),
