@@ -99,6 +99,8 @@ DEFAULT_HOURLY_VARIABLES = [
     "is_day",
     "apparent_temperature",
     "uv_index",
+    "shortwave_radiation",
+    "snow_depth",
 ]
 
 # API
