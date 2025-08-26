@@ -1,3 +1,8 @@
+## 1.3.54
+- fix(flow): pełny wybór trybu i komplet wspólnych pól w kreatorze oraz w Opcjach (stałe z const, bez `options=`)
+- chore(names): utrzymano dynamiczne friendly_name bez prefiksu "Open-Meteo"
+- chore: brak api_provider, brak async_reload, parametry hourly/daily bez zmian
+
 ## 1.3.52
 - fix(flow): poprawiono create_entry (bez options=), dodano re-eksport OptionsFlow w __init__, bezpieczne selektory
 - feat(names): dynamiczne friendly_name dla wszystkich sensorów i encji pogodowej (aktualna miejscowość; entity_id bez zmian)
