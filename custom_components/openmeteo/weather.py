@@ -60,27 +60,24 @@ async def async_setup_entry(
 ) -> None:
     coordinator = hass.data[DOMAIN]["entries"][config_entry.entry_id]["coordinator"]
     registry = er.async_get(hass)
-
-    def ensure_weather_object_id(config_entry: ConfigEntry) -> str:
+    unique_id = f"{config_entry.entry_id}_weather"
+    existing = registry.async_get_entity_id("weather", DOMAIN, unique_id)
+    if existing:
+        suggested = existing.split(".")[1]
+    else:
         base = "open_meteo"
         suggested = base
         i = 2
         while registry.async_get(f"weather.{suggested}"):
             suggested = f"open_meteo_{i}"
             i += 1
-        if not registry.async_get_entity_id(
-            "weather", DOMAIN, f"{config_entry.entry_id}_weather"
-        ):
-            registry.async_get_or_create(
-                domain="weather",
-                platform=DOMAIN,
-                unique_id=f"{config_entry.entry_id}_weather",
-                suggested_object_id=suggested,
-                config_entry=config_entry,
-            )
-        return suggested
-
-    suggested = ensure_weather_object_id(config_entry)
+        registry.async_get_or_create(
+            domain="weather",
+            platform=DOMAIN,
+            unique_id=unique_id,
+            suggested_object_id=suggested,
+            config_entry=config_entry,
+        )
     async_add_entities([OpenMeteoWeather(coordinator, config_entry, suggested)])
 
 
@@ -150,8 +147,13 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         show_place = self._config_entry.options.get(
             CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME
         )
-        if show_place and self.coordinator.location_name:
-            return f"{self._base_name} — {self.coordinator.location_name}"
+        if show_place:
+            if self.coordinator.location_name:
+                return f"{self._base_name} — {self.coordinator.location_name}"
+            lat = self.coordinator.latitude
+            lon = self.coordinator.longitude
+            if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+                return f"{self._base_name} — {lat:.5f},{lon:.5f}"
         return self._base_name
 
     @property

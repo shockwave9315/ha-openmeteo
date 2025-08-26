@@ -37,22 +37,6 @@ def get_place_title(hass: HomeAssistant, entry: ConfigEntry) -> str:
     return entry.title
 
 
-async def maybe_update_entry_title(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    lat: float,
-    lon: float,
-    place: str | None,
-) -> None:
-    """Update config entry title if needed."""
-    override = entry.options.get(CONF_AREA_NAME_OVERRIDE)
-    if override is None:
-        override = entry.data.get(CONF_AREA_NAME_OVERRIDE)
-    new_title = override or place or f"{lat:.5f},{lon:.5f}"
-    if new_title != entry.title:
-        hass.config_entries.async_update_entry(entry, title=new_title)
-
-
 def _get_device(hass: HomeAssistant, entry: ConfigEntry) -> dr.DeviceEntry | None:
     """Return device registry entry for this config entry."""
     dev_reg = dr.async_get(hass)
