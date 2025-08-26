@@ -8,7 +8,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers import selector
 
 from .const import (
@@ -177,25 +177,19 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="mode_details", data_schema=schema, errors=errors
         )
 
-    @staticmethod
-    @callback
-    def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
-    ) -> "OpenMeteoOptionsFlow":
-        return OpenMeteoOptionsFlow(config_entry)
 
-
-class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
+class OpenMeteoOptionsFlowHandler(config_entries.OptionsFlow):
     """Options flow allowing to tweak settings after setup."""
 
-    def __init__(self, entry: config_entries.ConfigEntry) -> None:
-        self._entry = entry
-        self._mode = entry.data.get(CONF_MODE, MODE_STATIC)
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        self.config_entry = config_entry
+        self._mode = config_entry.options.get(
+            CONF_MODE, config_entry.data.get(CONF_MODE, MODE_STATIC)
+        )
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
-        """Choose mode for the options flow."""
         if user_input is not None:
             self._mode = user_input[CONF_MODE]
             return await self.async_step_mode_details()
@@ -207,11 +201,8 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
     async def async_step_mode_details(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
-        """Second step: gather fields for the selected mode."""
         errors: dict[str, str] = {}
-
-        # defaults = połączenie data + options
-        data_all = {**self._entry.data, **self._entry.options}
+        data_all = {**self.config_entry.data, **self.config_entry.options}
         defaults = user_input or data_all
 
         if user_input is not None:
@@ -223,40 +214,25 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     errors[CONF_LATITUDE] = "required"
                 if not user_input.get(CONF_LONGITUDE):
                     errors[CONF_LONGITUDE] = "required"
-
             if not errors:
-                # Podział: część do data, reszta do options
-                new_data = dict(self._entry.data)
-                new_data[CONF_MODE] = self._mode
+                new_options = {
+                    **dict(self.config_entry.options),
+                    **user_input,
+                    CONF_MODE: self._mode,
+                }
                 if self._mode == MODE_TRACK:
-                    new_data[CONF_ENTITY_ID] = user_input[CONF_ENTITY_ID]
-                    new_data[CONF_MIN_TRACK_INTERVAL] = int(
-                        user_input.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL)
-                    )
-                    new_data.pop(CONF_LATITUDE, None)
-                    new_data.pop(CONF_LONGITUDE, None)
+                    new_options.pop(CONF_LATITUDE, None)
+                    new_options.pop(CONF_LONGITUDE, None)
                 else:
-                    new_data[CONF_LATITUDE] = float(user_input[CONF_LATITUDE])
-                    new_data[CONF_LONGITUDE] = float(user_input[CONF_LONGITUDE])
-                    new_data.pop(CONF_ENTITY_ID, None)
-                    new_data.pop(CONF_MIN_TRACK_INTERVAL, None)
-
-                new_options = dict(self._entry.options)
-                for k in (
-                    CONF_UPDATE_INTERVAL,
-                    CONF_UNITS,
-                    CONF_API_PROVIDER,
-                    CONF_USE_PLACE_AS_DEVICE_NAME,
-                    CONF_SHOW_PLACE_NAME,
-                    CONF_AREA_NAME_OVERRIDE,
-                    CONF_GEOCODE_INTERVAL_MIN,
-                    CONF_GEOCODE_MIN_DISTANCE_M,
-                    CONF_GEOCODER_PROVIDER,
-                ):
-                    if k in user_input:
-                        new_options[k] = user_input[k]
-
-                return self.async_create_entry(title="", data=new_data, options=new_options)
+                    new_options.pop(CONF_ENTITY_ID, None)
+                    new_options.pop(CONF_MIN_TRACK_INTERVAL, None)
+                return self.async_create_entry(title="", data=new_options)
 
         schema = _build_schema(self.hass, self._mode, defaults)
         return self.async_show_form(step_id="mode_details", data_schema=schema, errors=errors)
+
+
+async def async_get_options_flow(config_entry: config_entries.ConfigEntry):
+    return OpenMeteoOptionsFlowHandler(config_entry)
+
+

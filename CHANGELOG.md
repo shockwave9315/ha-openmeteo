@@ -1,3 +1,9 @@
+## 1.3.47
+- fix(options): correct OptionsFlow return (no `options=` arg); resolves "Unknown error occurred" when saving Options
+- fix(data): include `hourly` and `daily` parameters in API request (UV, apparent temperature, visibility, wind gusts, POP, sunrise/sunset)
+- feat(device): auto device name "Open-Meteo — {place}" (or "lat,lon") with live update after reverse geocoding
+- chore: keep extra sensors removed; no reloads during setup
+
 ## 1.3.46
 - fix: remove extra sensors (cloud_cover, solar_radiation, snow_depth) to prevent startup crashes
 - chore: trim hourly request to only required variables
