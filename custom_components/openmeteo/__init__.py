@@ -9,7 +9,7 @@ from __future__ import annotations
 # 1.3.36 - add legacy sensors (precipitation_probability, sunrise, sunset, location); stable IDs; dynamic names; correct icons & device_class for all sensors.
 # 1.3.37 - stałe entity_id bez miejscowości; domyślnie w nazwach dopisek lokalizacji; ikony i device_class uzupełnione.
 
-from typing import Callable
+from typing import Callable, Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
@@ -158,10 +158,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     CONF_USE_PLACE_AS_DEVICE_NAME: use_place,
                 },
             )
+    # Ensure required options exist to avoid None values during setup
+    option_updates: dict[str, Any] = {}
     if CONF_SHOW_PLACE_NAME not in entry.options:
+        option_updates[CONF_SHOW_PLACE_NAME] = DEFAULT_SHOW_PLACE_NAME
+    if CONF_EXTRA_SENSORS not in entry.options:
+        option_updates[CONF_EXTRA_SENSORS] = DEFAULT_EXTRA_SENSORS
+    if option_updates:
         hass.config_entries.async_update_entry(
-            entry,
-            options={**entry.options, CONF_SHOW_PLACE_NAME: DEFAULT_SHOW_PLACE_NAME},
+            entry, options={**entry.options, **option_updates}
         )
 
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
@@ -213,13 +218,15 @@ async def _options_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> N
     if data:
         prev = data.get("options_snapshot", {})
         if prev.get(CONF_EXTRA_SENSORS) != entry.options.get(CONF_EXTRA_SENSORS):
-            await hass.config_entries.async_reload(entry.entry_id)
+            hass.async_create_task(
+                hass.config_entries.async_reload(entry.entry_id)
+            )
             return
         data["options_snapshot"] = dict(entry.options)
         coord = data.get("coordinator")
         if coord:
             await coord.async_options_updated()
-            await coord.async_request_refresh()
+            hass.async_create_task(coord.async_request_refresh())
             return
-    await hass.config_entries.async_reload(entry.entry_id)
+    hass.async_create_task(hass.config_entries.async_reload(entry.entry_id))
 

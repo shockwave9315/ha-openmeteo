@@ -258,7 +258,7 @@ async def async_setup_entry(
     coordinator = hass.data[DOMAIN]["entries"][entry.entry_id]["coordinator"]
     opts = entry.options or {}
     keys = list(BASE_SENSOR_KEYS)
-    if opts.get(CONF_EXTRA_SENSORS, DEFAULT_EXTRA_SENSORS):
+    if bool(opts.get(CONF_EXTRA_SENSORS, DEFAULT_EXTRA_SENSORS)):
         keys += EXTRA_SENSOR_KEYS
 
     registry = er.async_get(hass)

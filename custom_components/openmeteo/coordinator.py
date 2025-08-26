@@ -359,7 +359,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         URL,
                         params=params,
                         headers=headers,
-                        timeout=aiohttp.ClientTimeout(total=20),
+                        timeout=aiohttp.ClientTimeout(total=5),
                     ) as resp:
                         if resp.status >= 400:
                             text = await resp.text()

@@ -153,6 +153,9 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     use_place = data.pop(CONF_USE_PLACE_AS_DEVICE_NAME, True)
                     options[CONF_USE_PLACE_AS_DEVICE_NAME] = use_place
                 options[CONF_SHOW_PLACE_NAME] = True
+                options[CONF_EXTRA_SENSORS] = bool(
+                    user_input.get(CONF_EXTRA_SENSORS, DEFAULT_EXTRA_SENSORS)
+                )
                 return self.async_create_entry(title="", data=data, options=options)
 
         schema = _build_schema(self.hass, self._mode, defaults)
@@ -180,6 +183,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
         if self._options.get(CONF_ENTITY_ID) == "":
             self._options[CONF_ENTITY_ID] = None
         self._options.setdefault(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME)
+        self._options.setdefault(CONF_EXTRA_SENSORS, DEFAULT_EXTRA_SENSORS)
         self._mode = eff.get(CONF_MODE, MODE_STATIC)
 
     async def async_step_init(
@@ -230,6 +234,9 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     new_options.pop(CONF_USE_PLACE_AS_DEVICE_NAME, None)
                 new_options.update(user_input)
                 new_options[CONF_MODE] = self._mode
+                new_options[CONF_EXTRA_SENSORS] = bool(
+                    new_options.get(CONF_EXTRA_SENSORS, DEFAULT_EXTRA_SENSORS)
+                )
                 return self.async_create_entry(title="", data=new_options)
 
         if self._mode == MODE_TRACK:
@@ -301,8 +308,8 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     ): vol.In(["osm_nominatim", "photon", "none"]),
                     vol.Optional(
                         CONF_EXTRA_SENSORS,
-                        default=defaults.get(
-                            CONF_EXTRA_SENSORS, DEFAULT_EXTRA_SENSORS
+                        default=bool(
+                            defaults.get(CONF_EXTRA_SENSORS, DEFAULT_EXTRA_SENSORS)
                         ),
                     ): bool,
                 }
@@ -369,8 +376,8 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     ): vol.In(["osm_nominatim", "photon", "none"]),
                     vol.Optional(
                         CONF_EXTRA_SENSORS,
-                        default=defaults.get(
-                            CONF_EXTRA_SENSORS, DEFAULT_EXTRA_SENSORS
+                        default=bool(
+                            defaults.get(CONF_EXTRA_SENSORS, DEFAULT_EXTRA_SENSORS)
                         ),
                     ): bool,
                 }
