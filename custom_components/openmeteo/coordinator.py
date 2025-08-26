@@ -320,7 +320,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "wind_direction_10m",
                 "wind_gusts_10m",
                 "weathercode",
-                "cloud_cover",
                 "precipitation",
                 "visibility",
                 "uv_index",
@@ -358,8 +357,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hourly = self._last_data.setdefault("hourly", {})
             hourly.setdefault("time", [])
             hourly.setdefault("uv_index", [])
-            hourly.setdefault("shortwave_radiation", [])
-            hourly.setdefault("snow_depth", [])
             return self._last_data
         except UpdateFailed:
             if self._last_data is not None:
