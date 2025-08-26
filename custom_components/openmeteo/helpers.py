@@ -6,13 +6,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
-from .const import (
-    DOMAIN,
-    CONF_MODE,
-    MODE_STATIC,
-    CONF_USE_PLACE_AS_DEVICE_NAME,
-    CONF_AREA_NAME_OVERRIDE,
-)
+from .const import DOMAIN, CONF_MODE, MODE_STATIC, CONF_USE_PLACE_AS_DEVICE_NAME
 import re
 
 
@@ -23,11 +17,6 @@ def get_place_title(hass: HomeAssistant, entry: ConfigEntry) -> str:
         .get("entries", {})
         .get(entry.entry_id, {})
     )
-    override = entry.options.get(CONF_AREA_NAME_OVERRIDE)
-    if override is None:
-        override = entry.data.get(CONF_AREA_NAME_OVERRIDE)
-    if override:
-        return override
     if store.get("place_name"):
         return store["place_name"]
     lat = store.get("lat")

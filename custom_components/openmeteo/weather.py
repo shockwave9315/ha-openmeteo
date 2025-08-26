@@ -121,18 +121,17 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         self._attr_suggested_object_id = suggested_object_id
         self._attr_unique_id = f"{config_entry.entry_id}_weather"
         data = {**config_entry.data, **config_entry.options}
-        show_place_name = getattr(coordinator, "show_place_name", True)
-        place = getattr(coordinator, "location_name", None)
+        name = getattr(coordinator, "location_name", None)
         lat = getattr(coordinator, "latitude", None)
         lon = getattr(coordinator, "longitude", None)
-        shown = place or (
-            f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
-        )
-        device_name = shown if show_place_name and shown else "Open-Meteo"
+        if not name and isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+            name = f"{lat:.5f},{lon:.5f}"
+        if not getattr(coordinator, "show_place_name", True):
+            name = "Open-Meteo"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
             manufacturer="Open-Meteo",
-            name=device_name,
+            name=name,
         )
         self._attr_icon = "mdi:weather-partly-cloudy"
         mode = data.get(CONF_MODE)
@@ -386,13 +385,13 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     @property
     def name(self) -> str:
         coord = self.coordinator
-        show_place_name = getattr(coord, "show_place_name", True)
+        show = getattr(coord, "show_place_name", True)
         place = getattr(coord, "location_name", None)
         lat, lon = getattr(coord, "latitude", None), getattr(coord, "longitude", None)
         shown = place or (
             f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
         )
-        return shown if (show_place_name and shown) else "Open-Meteo"
+        return shown if (show and shown) else "Open-Meteo"
 
     @property
     def sunset(self) -> datetime | None:
