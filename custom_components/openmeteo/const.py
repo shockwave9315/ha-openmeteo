@@ -72,32 +72,27 @@ DEFAULT_GEOCODE_MIN_DISTANCE_M = 500
 DEFAULT_GEOCODER_PROVIDER = "osm_nominatim"
 
 DEFAULT_DAILY_VARIABLES = [
-    "temperature_2m_max",
-    "temperature_2m_min",
-    "weathercode",
-    "precipitation_sum",
-    "wind_speed_10m_max",
-    "wind_direction_10m_dominant",
     "sunrise",
     "sunset",
+    "temperature_2m_max",
+    "temperature_2m_min",
 ]
 
 DEFAULT_HOURLY_VARIABLES = [
     "temperature_2m",
     "relative_humidity_2m",
     "dewpoint_2m",
+    "apparent_temperature",
+    "pressure_msl",
+    "visibility",
     "precipitation",
-    "snowfall",
     "precipitation_probability",
-    "weathercode",
     "wind_speed_10m",
     "wind_direction_10m",
     "wind_gusts_10m",
-    "pressure_msl",
-    "visibility",
-    "is_day",
-    "apparent_temperature",
     "uv_index",
+    "weathercode",
+    "is_day",
 ]
 
 # API

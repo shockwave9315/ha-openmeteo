@@ -124,9 +124,16 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         self._attr_suggested_object_id = suggested_object_id
         self._attr_unique_id = f"{config_entry.entry_id}_weather"
         data = {**config_entry.data, **config_entry.options}
+        place = coordinator.location_name
+        lat, lon = coordinator.latitude, coordinator.longitude
+        shown = place or (
+            f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
+        )
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
             manufacturer="Open-Meteo",
+            name=
+                f"Open-Meteo — {shown}" if shown and coordinator.show_place_name else "Open-Meteo",
         )
         self._attr_icon = "mdi:weather-partly-cloudy"
         mode = data.get(CONF_MODE)

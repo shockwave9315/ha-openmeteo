@@ -11,6 +11,7 @@ from typing import Any
 import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -40,7 +41,6 @@ from .const import (
     DEFAULT_GEOCODE_MIN_DISTANCE_M,
     DEFAULT_GEOCODER_PROVIDER,
 )
-from .helpers import maybe_update_device_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -156,6 +156,9 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.latitude: float | None = None
         self.longitude: float | None = None
         self.provider: str = entry.options.get("api_provider", DEFAULT_API_PROVIDER)
+        self.show_place_name: bool = entry.options.get(
+            CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME
+        )
         self._last_data: dict[str, Any] | None = None
         self._tracked_entity_id: str | None = None
         self._unsub_entity: callable | None = None
@@ -223,6 +226,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         opts = self.config_entry.options
         show_place = opts.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME)
+        self.show_place_name = show_place
         provider = opts.get(CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER)
         interval = int(opts.get(CONF_GEOCODE_INTERVAL_MIN, DEFAULT_GEOCODE_INTERVAL_MIN))
         min_dist = int(
@@ -279,9 +283,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         display_name = place or f"{latitude:.5f},{longitude:.5f}"
         self.location_name = display_name
-        override = self.config_entry.options.get(CONF_AREA_NAME_OVERRIDE)
-        if override is None:
-            override = self.config_entry.data.get(CONF_AREA_NAME_OVERRIDE)
+        self.latitude = latitude
+        self.longitude = longitude
         store["coords"] = (latitude, longitude)
         store["source"] = src
         store["lat"] = latitude
@@ -290,11 +293,13 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         store["location_name"] = display_name
         store["geocode_provider"] = provider
         last_loc_ts = dt_util.utcnow().isoformat()
-        await maybe_update_device_name(
-            self.hass,
-            self.config_entry,
-            override or place,
-        )
+        dev_reg = dr.async_get(self.hass)
+        device = dev_reg.async_get_device({(DOMAIN, self.config_entry.entry_id)})
+        if device:
+            name = (
+                f"Open-Meteo — {display_name}" if self.show_place_name else "Open-Meteo"
+            )
+            dev_reg.async_update_device(device.id, name=name)
         async_dispatcher_send(
             self.hass, f"openmeteo_place_updated_{self.config_entry.entry_id}"
         )
