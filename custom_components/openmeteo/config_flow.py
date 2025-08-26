@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-License-Identifier: Apache-2.0
 """Config and options flows for Open-Meteo."""
 from __future__ import annotations
 
@@ -13,29 +12,33 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 
 from .const import (
-    CONF_AREA_NAME_OVERRIDE,
-    CONF_ENTITY_ID,
-    CONF_MIN_TRACK_INTERVAL,
-    CONF_MODE,
-    CONF_UNITS,
-    CONF_UPDATE_INTERVAL,
-    DEFAULT_MIN_TRACK_INTERVAL,
-    DEFAULT_UNITS,
-    DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    # modes
+    CONF_MODE,
     MODE_STATIC,
     MODE_TRACK,
+    # base config
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_UPDATE_INTERVAL,
+    CONF_UNITS,
+    DEFAULT_UNITS,
     CONF_API_PROVIDER,
     DEFAULT_API_PROVIDER,
+    # tracking
+    CONF_ENTITY_ID,
+    CONF_MIN_TRACK_INTERVAL,
+    DEFAULT_MIN_TRACK_INTERVAL,
+    # naming / geocode
     CONF_USE_PLACE_AS_DEVICE_NAME,
     DEFAULT_USE_PLACE_AS_DEVICE_NAME,
     CONF_SHOW_PLACE_NAME,
-    CONF_GEOCODE_INTERVAL_MIN,
-    CONF_GEOCODE_MIN_DISTANCE_M,
-    CONF_GEOCODER_PROVIDER,
     DEFAULT_SHOW_PLACE_NAME,
+    CONF_AREA_NAME_OVERRIDE,
+    CONF_GEOCODE_INTERVAL_MIN,
     DEFAULT_GEOCODE_INTERVAL_MIN,
+    CONF_GEOCODE_MIN_DISTANCE_M,
     DEFAULT_GEOCODE_MIN_DISTANCE_M,
+    CONF_GEOCODER_PROVIDER,
     DEFAULT_GEOCODER_PROVIDER,
 )
 
@@ -51,9 +54,7 @@ def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> v
             ),
             vol.Optional(
                 CONF_MIN_TRACK_INTERVAL,
-                default=defaults.get(
-                    CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL
-                ),
+                default=defaults.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL),
             ): vol.All(vol.Coerce(int), vol.Range(min=1)),
         }
     else:
@@ -81,22 +82,33 @@ def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> v
             default=defaults.get(CONF_API_PROVIDER, DEFAULT_API_PROVIDER),
         ): vol.In(["open_meteo"]),
     }
-    if mode != MODE_STATIC:
-        common[
-            vol.Optional(
-                CONF_USE_PLACE_AS_DEVICE_NAME,
-                default=defaults.get(
-                    CONF_USE_PLACE_AS_DEVICE_NAME,
-                    DEFAULT_USE_PLACE_AS_DEVICE_NAME,
-                ),
-            )
-        ] = bool
-    common[
-        vol.Optional(
-            CONF_AREA_NAME_OVERRIDE,
-            default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
-        )
-    ] = str
+
+    # opcje nieblokujące setupu
+    common[vol.Optional(
+        CONF_USE_PLACE_AS_DEVICE_NAME,
+        default=defaults.get(CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME),
+    )] = bool
+    common[vol.Optional(
+        CONF_SHOW_PLACE_NAME,
+        default=defaults.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME),
+    )] = bool
+    common[vol.Optional(
+        CONF_AREA_NAME_OVERRIDE,
+        default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
+    )] = str
+    common[vol.Optional(
+        CONF_GEOCODE_INTERVAL_MIN,
+        default=defaults.get(CONF_GEOCODE_INTERVAL_MIN, DEFAULT_GEOCODE_INTERVAL_MIN),
+    )] = vol.All(vol.Coerce(int), vol.Range(min=0))
+    common[vol.Optional(
+        CONF_GEOCODE_MIN_DISTANCE_M,
+        default=defaults.get(CONF_GEOCODE_MIN_DISTANCE_M, DEFAULT_GEOCODE_MIN_DISTANCE_M),
+    )] = vol.All(vol.Coerce(int), vol.Range(min=0))
+    common[vol.Optional(
+        CONF_GEOCODER_PROVIDER,
+        default=defaults.get(CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER),
+    )] = vol.In(["osm_nominatim", "photon", "none"])
+
     data.update(common)
     return vol.Schema(data)
 
@@ -134,23 +146,30 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 entity = user_input.get(CONF_ENTITY_ID)
                 if not entity:
                     errors[CONF_ENTITY_ID] = "required"
-                else:
-                    state = self.hass.states.get(entity)
-                    if not state or "latitude" not in state.attributes or "longitude" not in state.attributes:
-                        errors[CONF_ENTITY_ID] = "invalid_entity"
             else:
                 if not user_input.get(CONF_LATITUDE):
                     errors[CONF_LATITUDE] = "required"
                 if not user_input.get(CONF_LONGITUDE):
                     errors[CONF_LONGITUDE] = "required"
 
-                if not errors:
+            if not errors:
                 data = {**user_input, CONF_MODE: self._mode}
+                # część pól jako options (nieblokujące)
                 options: dict[str, Any] = {}
                 if self._mode != MODE_STATIC:
                     use_place = data.pop(CONF_USE_PLACE_AS_DEVICE_NAME, True)
-                    options[CONF_USE_PLACE_AS_DEVICE_NAME] = use_place
-                options[CONF_SHOW_PLACE_NAME] = True
+                    options[CONF_USE_PLACE_AS_DEVICE_NAME] = bool(use_place)
+                options[CONF_SHOW_PLACE_NAME] = bool(
+                    data.pop(CONF_SHOW_PLACE_NAME, True)
+                )
+                for opt_key in (
+                    CONF_AREA_NAME_OVERRIDE,
+                    CONF_GEOCODE_INTERVAL_MIN,
+                    CONF_GEOCODE_MIN_DISTANCE_M,
+                    CONF_GEOCODER_PROVIDER,
+                ):
+                    if opt_key in data:
+                        options[opt_key] = data.pop(opt_key)
                 return self.async_create_entry(title="", data=data, options=options)
 
         schema = _build_schema(self.hass, self._mode, defaults)
@@ -162,7 +181,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
-    ) -> OpenMeteoOptionsFlow:
+    ) -> "OpenMeteoOptionsFlow":
         return OpenMeteoOptionsFlow(config_entry)
 
 
@@ -171,29 +190,17 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, entry: config_entries.ConfigEntry) -> None:
         self._entry = entry
-        # Copy options so we can safely mutate defaults
-        self._options: dict[str, Any] = dict(entry.options)
-        eff = {**entry.data, **entry.options}
-        # Migrate old configs that stored an empty string for the entity
-        if self._options.get(CONF_ENTITY_ID) == "":
-            self._options[CONF_ENTITY_ID] = None
-        self._options.setdefault(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME)
-        self._mode = eff.get(CONF_MODE, MODE_STATIC)
+        self._mode = entry.data.get(CONF_MODE, MODE_STATIC)
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
-        """First step: choose tracking mode."""
-
+        """Choose mode for the options flow."""
         if user_input is not None:
             self._mode = user_input[CONF_MODE]
             return await self.async_step_mode_details()
         schema = vol.Schema(
-            {
-                vol.Required(CONF_MODE, default=self._mode): vol.In(
-                    [MODE_STATIC, MODE_TRACK]
-                )
-            }
+            {vol.Required(CONF_MODE, default=self._mode): vol.In([MODE_STATIC, MODE_TRACK])}
         )
         return self.async_show_form(step_id="init", data_schema=schema)
 
@@ -203,9 +210,9 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
         """Second step: gather fields for the selected mode."""
         errors: dict[str, str] = {}
 
-        data = {**self._entry.data, **self._entry.options}
-        defaults = user_input or data
-
+        # defaults = połączenie data + options
+        data_all = {**self._entry.data, **self._entry.options}
+        defaults = user_input or data_all
 
         if user_input is not None:
             if self._mode == MODE_TRACK:
@@ -217,153 +224,39 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                 if not user_input.get(CONF_LONGITUDE):
                     errors[CONF_LONGITUDE] = "required"
 
-                if not errors:
-                new_options: dict[str, Any] = {**self._entry.options}
+            if not errors:
+                # Podział: część do data, reszta do options
+                new_data = dict(self._entry.data)
+                new_data[CONF_MODE] = self._mode
                 if self._mode == MODE_TRACK:
-                    new_options.pop(CONF_LATITUDE, None)
-                    new_options.pop(CONF_LONGITUDE, None)
+                    new_data[CONF_ENTITY_ID] = user_input[CONF_ENTITY_ID]
+                    new_data[CONF_MIN_TRACK_INTERVAL] = int(
+                        user_input.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL)
+                    )
+                    new_data.pop(CONF_LATITUDE, None)
+                    new_data.pop(CONF_LONGITUDE, None)
                 else:
-                    new_options.pop(CONF_ENTITY_ID, None)
-                    new_options.pop(CONF_MIN_TRACK_INTERVAL, None)
-                    new_options.pop(CONF_USE_PLACE_AS_DEVICE_NAME, None)
-                new_options.update(user_input)
-                new_options[CONF_MODE] = self._mode
-                new_options.pop("extra_sensors", None)
-                return self.async_create_entry(title="", data=new_options)
+                    new_data[CONF_LATITUDE] = float(user_input[CONF_LATITUDE])
+                    new_data[CONF_LONGITUDE] = float(user_input[CONF_LONGITUDE])
+                    new_data.pop(CONF_ENTITY_ID, None)
+                    new_data.pop(CONF_MIN_TRACK_INTERVAL, None)
 
-        if self._mode == MODE_TRACK:
-            schema = vol.Schema(
-                {
-                    vol.Required(
-                        CONF_ENTITY_ID,
-                        default=defaults.get(CONF_ENTITY_ID, None),
-                    ): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain=["device_tracker", "person"])
-                    ),
-                    vol.Optional(
-                        CONF_MIN_TRACK_INTERVAL,
-                        default=defaults.get(
-                            CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1)),
-                    vol.Required(
-                        CONF_UPDATE_INTERVAL,
-                        default=defaults.get(
-                            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=60)),
-                    vol.Required(
-                        CONF_UNITS, default=defaults.get(CONF_UNITS, DEFAULT_UNITS)
-                    ): vol.In(["metric", "imperial"]),
-                    vol.Required(
-                        CONF_API_PROVIDER,
-                        default=defaults.get(
-                            CONF_API_PROVIDER, DEFAULT_API_PROVIDER
-                        ),
-                    ): vol.In(["open_meteo"]),
-                    vol.Optional(
-                        CONF_USE_PLACE_AS_DEVICE_NAME,
-                        default=defaults.get(
-                            CONF_USE_PLACE_AS_DEVICE_NAME,
-                            DEFAULT_USE_PLACE_AS_DEVICE_NAME,
-                        ),
-                    ): bool,
-                    vol.Optional(
-                        CONF_AREA_NAME_OVERRIDE,
-                        default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
-                    ): str,
-                    vol.Optional(
-                        CONF_SHOW_PLACE_NAME,
-                        default=defaults.get(
-                            CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME
-                        ),
-                    ): bool,
-                    vol.Optional(
-                        CONF_GEOCODE_INTERVAL_MIN,
-                        default=defaults.get(
-                            CONF_GEOCODE_INTERVAL_MIN,
-                            DEFAULT_GEOCODE_INTERVAL_MIN,
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1)),
-                    vol.Optional(
-                        CONF_GEOCODE_MIN_DISTANCE_M,
-                        default=defaults.get(
-                            CONF_GEOCODE_MIN_DISTANCE_M,
-                            DEFAULT_GEOCODE_MIN_DISTANCE_M,
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=0)),
-                    vol.Optional(
-                        CONF_GEOCODER_PROVIDER,
-                        default=defaults.get(
-                            CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER
-                        ),
-                    ): vol.In(["osm_nominatim", "photon", "none"]),
-                }
-            )
-        else:
-            schema = vol.Schema(
-                {
-                    vol.Required(
-                        CONF_LATITUDE,
-                        default=defaults.get(
-                            CONF_LATITUDE, self.hass.config.latitude
-                        ),
-                    ): vol.All(vol.Coerce(float), vol.Range(min=-90, max=90)),
-                    vol.Required(
-                        CONF_LONGITUDE,
-                        default=defaults.get(
-                            CONF_LONGITUDE, self.hass.config.longitude
-                        ),
-                    ): vol.All(vol.Coerce(float), vol.Range(min=-180, max=180)),
-                    vol.Required(
-                        CONF_UPDATE_INTERVAL,
-                        default=defaults.get(
-                            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=60)),
-                    vol.Required(
-                        CONF_UNITS, default=defaults.get(CONF_UNITS, DEFAULT_UNITS)
-                    ): vol.In(["metric", "imperial"]),
-                    vol.Required(
-                        CONF_API_PROVIDER,
-                        default=defaults.get(
-                            CONF_API_PROVIDER, DEFAULT_API_PROVIDER
-                        ),
-                    ): vol.In(["open_meteo"]),
-                    vol.Optional(
-                        CONF_AREA_NAME_OVERRIDE,
-                        default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
-                    ): str,
-                    vol.Optional(
-                        CONF_SHOW_PLACE_NAME,
-                        default=defaults.get(
-                            CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME
-                        ),
-                    ): bool,
-                    vol.Optional(
-                        CONF_GEOCODE_INTERVAL_MIN,
-                        default=defaults.get(
-                            CONF_GEOCODE_INTERVAL_MIN,
-                            DEFAULT_GEOCODE_INTERVAL_MIN,
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1)),
-                    vol.Optional(
-                        CONF_GEOCODE_MIN_DISTANCE_M,
-                        default=defaults.get(
-                            CONF_GEOCODE_MIN_DISTANCE_M,
-                            DEFAULT_GEOCODE_MIN_DISTANCE_M,
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=0)),
-                    vol.Optional(
-                        CONF_GEOCODER_PROVIDER,
-                        default=defaults.get(
-                            CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER
-                        ),
-                    ): vol.In(["osm_nominatim", "photon", "none"]),
-                }
-            )
+                new_options = dict(self._entry.options)
+                for k in (
+                    CONF_UPDATE_INTERVAL,
+                    CONF_UNITS,
+                    CONF_API_PROVIDER,
+                    CONF_USE_PLACE_AS_DEVICE_NAME,
+                    CONF_SHOW_PLACE_NAME,
+                    CONF_AREA_NAME_OVERRIDE,
+                    CONF_GEOCODE_INTERVAL_MIN,
+                    CONF_GEOCODE_MIN_DISTANCE_M,
+                    CONF_GEOCODER_PROVIDER,
+                ):
+                    if k in user_input:
+                        new_options[k] = user_input[k]
 
-        return self.async_show_form(
-            step_id="mode_details", data_schema=schema, errors=errors
-        )
+                return self.async_create_entry(title="", data=new_data, options=new_options)
 
+        schema = _build_schema(self.hass, self._mode, defaults)
+        return self.async_show_form(step_id="mode_details", data_schema=schema, errors=errors)
