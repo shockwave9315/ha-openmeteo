@@ -7,40 +7,38 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import selector
+from homeassistant.helpers.selector import selector
 
-from .const import (
-    DOMAIN,
-    # modes
-    CONF_MODE,
-    MODE_STATIC,
-    MODE_TRACK,
-    # base config
-    CONF_UPDATE_INTERVAL,
-    DEFAULT_UPDATE_INTERVAL,
-    CONF_UNITS,
-    DEFAULT_UNITS,
-    CONF_API_PROVIDER,
-    DEFAULT_API_PROVIDER,
-    # tracking
-    CONF_ENTITY_ID,
-    CONF_MIN_TRACK_INTERVAL,
-    DEFAULT_MIN_TRACK_INTERVAL,
-    # naming / geocode
-    CONF_USE_PLACE_AS_DEVICE_NAME,
-    DEFAULT_USE_PLACE_AS_DEVICE_NAME,
-    CONF_SHOW_PLACE_NAME,
-    DEFAULT_SHOW_PLACE_NAME,
-    CONF_AREA_NAME_OVERRIDE,
-    CONF_GEOCODE_INTERVAL_MIN,
-    DEFAULT_GEOCODE_INTERVAL_MIN,
-    CONF_GEOCODE_MIN_DISTANCE_M,
-    DEFAULT_GEOCODE_MIN_DISTANCE_M,
-    CONF_GEOCODER_PROVIDER,
-    DEFAULT_GEOCODER_PROVIDER,
-)
+# Local constant definitions to avoid importing integration modules at import time
+DOMAIN = "openmeteo"
+
+CONF_LATITUDE = "latitude"
+CONF_LONGITUDE = "longitude"
+CONF_MODE = "mode"
+MODE_STATIC = "static"
+MODE_TRACK = "track"
+
+CONF_UPDATE_INTERVAL = "update_interval"
+DEFAULT_UPDATE_INTERVAL = 600
+CONF_UNITS = "units"
+DEFAULT_UNITS = "metric"
+
+CONF_ENTITY_ID = "entity_id"
+CONF_MIN_TRACK_INTERVAL = "min_track_interval"
+DEFAULT_MIN_TRACK_INTERVAL = 15
+
+CONF_USE_PLACE_AS_DEVICE_NAME = "use_place_as_device_name"
+DEFAULT_USE_PLACE_AS_DEVICE_NAME = True
+CONF_SHOW_PLACE_NAME = "show_place_name"
+DEFAULT_SHOW_PLACE_NAME = True
+CONF_AREA_NAME_OVERRIDE = "area_name_override"
+CONF_GEOCODE_INTERVAL_MIN = "geocode_interval_min"
+DEFAULT_GEOCODE_INTERVAL_MIN = 120
+CONF_GEOCODE_MIN_DISTANCE_M = "geocode_min_distance_m"
+DEFAULT_GEOCODE_MIN_DISTANCE_M = 500
+CONF_GEOCODER_PROVIDER = "geocoder_provider"
+DEFAULT_GEOCODER_PROVIDER = "osm_nominatim"
 
 
 def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> vol.Schema:
@@ -77,10 +75,6 @@ def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> v
         vol.Required(
             CONF_UNITS, default=defaults.get(CONF_UNITS, DEFAULT_UNITS)
         ): vol.In(["metric", "imperial"]),
-        vol.Required(
-            CONF_API_PROVIDER,
-            default=defaults.get(CONF_API_PROVIDER, DEFAULT_API_PROVIDER),
-        ): vol.In(["open_meteo"]),
     }
 
     # opcje nieblokujące setupu
@@ -184,52 +178,43 @@ class OpenMeteoOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self.config_entry = config_entry
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
+    async def async_step_init(self, user_input=None):
         if user_input is not None:
             return await self.async_step_save(user_input)
+
         opts = dict(self.config_entry.options)
         schema = vol.Schema(
             {
+                vol.Optional("entity_id", default=opts.get("entity_id")): str,
                 vol.Optional(
-                    CONF_ENTITY_ID, default=opts.get(CONF_ENTITY_ID)
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["device_tracker", "person"])
-                ),
+                    "min_track_interval",
+                    default=opts.get("min_track_interval", 15),
+                ): int,
                 vol.Optional(
-                    CONF_MIN_TRACK_INTERVAL,
-                    default=opts.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL),
-                ): vol.All(vol.Coerce(int), vol.Range(min=1)),
+                    "update_interval",
+                    default=opts.get("update_interval", 60),
+                ): int,
                 vol.Optional(
-                    CONF_UPDATE_INTERVAL,
-                    default=opts.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
-                ): vol.All(vol.Coerce(int), vol.Range(min=60)),
-                vol.Optional(
-                    CONF_UNITS, default=opts.get(CONF_UNITS, DEFAULT_UNITS)
+                    "units", default=opts.get("units", "metric")
                 ): vol.In(["metric", "imperial"]),
                 vol.Optional(
-                    CONF_USE_PLACE_AS_DEVICE_NAME,
-                    default=opts.get(
-                        CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
-                    ),
+                    "use_place_as_device_name",
+                    default=opts.get("use_place_as_device_name", False),
                 ): bool,
                 vol.Optional(
-                    CONF_SHOW_PLACE_NAME,
-                    default=opts.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME),
+                    "show_place_name",
+                    default=opts.get("show_place_name", True),
                 ): bool,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
 
-    async def async_step_save(
-        self, user_input: dict[str, Any] | None
-    ) -> config_entries.FlowResult:
+    async def async_step_save(self, user_input):
         new_options = {**dict(self.config_entry.options), **(user_input or {})}
         return self.async_create_entry(title="", data=new_options)
 
 
-async def async_get_options_flow(config_entry: config_entries.ConfigEntry):
+async def async_get_options_flow(config_entry):
     return OpenMeteoOptionsFlowHandler(config_entry)
 
 

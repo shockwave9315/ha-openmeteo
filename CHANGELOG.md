@@ -1,3 +1,8 @@
+## 1.3.50
+- fix: guard OptionsFlow and remove leftover references to removed fields; HA no longer crashes on startup
+- fix(options): Options screen opens and saves correctly (data → entry.options)
+- chore: keep no-prefix names; hourly/daily requests intact; no reloads during setup
+
 ## 1.3.49
 - fix(options): w pełni działający OptionsFlow (edycja i zapis ustawień bez błędów)
 - fix(names): usunięto prefiks „Open-Meteo — ” — urządzenie i encja pogodowa pokazują samą miejscowość (lub lat,lon)

@@ -25,18 +25,15 @@ from .const import (
     CONF_MODE,
     CONF_TRACKED_ENTITY_ID,
     CONF_UPDATE_INTERVAL,
-    DEFAULT_API_PROVIDER,
     DEFAULT_DAILY_VARIABLES,
     DEFAULT_HOURLY_VARIABLES,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     MODE_TRACK,
     URL,
-    CONF_SHOW_PLACE_NAME,
     CONF_GEOCODE_INTERVAL_MIN,
     CONF_GEOCODE_MIN_DISTANCE_M,
     CONF_GEOCODER_PROVIDER,
-    DEFAULT_SHOW_PLACE_NAME,
     DEFAULT_GEOCODE_INTERVAL_MIN,
     DEFAULT_GEOCODE_MIN_DISTANCE_M,
     DEFAULT_GEOCODER_PROVIDER,
@@ -155,10 +152,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.location_name: str | None = override
         self.latitude: float | None = None
         self.longitude: float | None = None
-        self.provider: str = entry.options.get("api_provider", DEFAULT_API_PROVIDER)
-        self.show_place_name: bool = entry.options.get(
-            CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME
-        )
+        self.show_place_name: bool = bool(entry.options.get("show_place_name", True))
         self._last_data: dict[str, Any] | None = None
         self._tracked_entity_id: str | None = None
         self._unsub_entity: callable | None = None
@@ -190,21 +184,18 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if interval < 60:
             interval = 60
         self.update_interval = timedelta(seconds=interval)
-        self.provider = opts.get("api_provider", DEFAULT_API_PROVIDER)
-        self.show_place_name = opts.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME)
+        self.show_place_name = bool(opts.get("show_place_name", True))
         display_name = self.location_name
         if not display_name:
             lat = getattr(self, "latitude", None)
             lon = getattr(self, "longitude", None)
             if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
                 display_name = f"{lat:.5f},{lon:.5f}"
-        device_name = (
-            display_name if self.show_place_name and display_name else "Open-Meteo"
-        )
+        name = display_name if (self.show_place_name and display_name) else "Open-Meteo"
         dev_reg = dr.async_get(self.hass)
         device = dev_reg.async_get_device({(DOMAIN, self.config_entry.entry_id)})
         if device:
-            dev_reg.async_update_device(device.id, name=device_name)
+            dev_reg.async_update_device(device.id, name=name)
         await self.async_request_refresh()
 
     async def _resubscribe_tracked_entity(self, entity_id: str | None) -> None:
@@ -239,7 +230,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         opts = self.config_entry.options
-        show_place = opts.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME)
+        show_place = bool(opts.get("show_place_name", True))
         self.show_place_name = show_place
         provider = opts.get(CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER)
         interval = int(opts.get(CONF_GEOCODE_INTERVAL_MIN, DEFAULT_GEOCODE_INTERVAL_MIN))
@@ -310,10 +301,10 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         dev_reg = dr.async_get(self.hass)
         device = dev_reg.async_get_device({(DOMAIN, self.config_entry.entry_id)})
         if device:
-            device_name = (
+            name = (
                 display_name if self.show_place_name and display_name else "Open-Meteo"
             )
-            dev_reg.async_update_device(device.id, name=device_name)
+            dev_reg.async_update_device(device.id, name=name)
         async_dispatcher_send(
             self.hass, f"openmeteo_place_updated_{self.config_entry.entry_id}"
         )
