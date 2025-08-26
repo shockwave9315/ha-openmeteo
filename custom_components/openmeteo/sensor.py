@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from dataclasses import dataclass
 from typing import Any, Callable, Mapping
-import re
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -26,7 +24,6 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.entity_registry import RegistryEntry
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -131,7 +128,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         "Porywy wiatru",
         UnitOfSpeed.KILOMETERS_PER_HOUR,
         None,
-        "mdi:weather-windy-variant",
+        "mdi:weather-windy",
         lambda d: _first_hourly(d, "wind_gusts_10m"),
     ),
     "wind_speed": SensorSpec(
@@ -139,7 +136,7 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         "Prędkość wiatru",
         UnitOfSpeed.KILOMETERS_PER_HOUR,
         None,
-        "mdi:weather-windy",
+        "mdi:weather-windy-variant",
         lambda d: d.get("current_weather", {}).get("windspeed"),
     ),
     "dew_point": SensorSpec(
@@ -264,30 +261,6 @@ async def async_setup_entry(
         keys += EXTRA_SENSOR_KEYS
     entities = [OpenMeteoSensor(coordinator, entry, key) for key in keys]
     async_add_entities(entities)
-
-
-async def async_migrate_entry(hass: HomeAssistant, entry: RegistryEntry) -> dict | None:
-    """Migrate legacy unique IDs."""
-    if not (
-        re.search(r"\d{1,3}[._-]\d+\D+\d{1,3}[._-]\d+", entry.unique_id)
-        or entry.unique_id.endswith("_none")
-        or entry.unique_id.endswith("-none")
-    ):
-        return None
-
-    key = None
-    for k, spec in SENSOR_SPECS.items():
-        if entry.unique_id.endswith(k) or entry.original_name.startswith(spec.base_name):
-            key = k
-            break
-    if not key and entry.entity_id:
-        for k in SENSOR_SPECS:
-            if entry.entity_id.endswith(f"_{k}"):
-                key = k
-                break
-    if not key:
-        return None
-    return {"new_unique_id": f"{entry.config_entry_id}_{key}"}
 
 
 class OpenMeteoSensor(CoordinatorEntity, SensorEntity):

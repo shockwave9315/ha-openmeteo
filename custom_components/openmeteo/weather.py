@@ -31,10 +31,8 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.entity_registry import RegistryEntry
 from datetime import datetime
 from homeassistant.util import dt as dt_util
-import re
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
 from .const import (
@@ -61,17 +59,6 @@ async def async_setup_entry(
 ) -> None:
     coordinator = hass.data[DOMAIN]["entries"][config_entry.entry_id]["coordinator"]
     async_add_entities([OpenMeteoWeather(coordinator, config_entry)])
-
-
-async def async_migrate_entry(
-    hass: HomeAssistant, entry: RegistryEntry
-) -> dict | None:
-    """Migrate old entity unique IDs."""
-    if re.match(r".*\d{1,3}\.\d+[_,-]\d{1,3}\.\d+.*", entry.unique_id) or entry.unique_id.endswith("_none") or entry.unique_id.endswith("-none"):
-        return {"new_unique_id": f"{entry.config_entry_id}_weather"}
-    if entry.unique_id.endswith("-weather"):
-        return {"new_unique_id": entry.unique_id.replace("-weather", "_weather")}
-    return None
 
 
 def _map_condition(weather_code: int | None, is_day: int | None = 1) -> str | None:

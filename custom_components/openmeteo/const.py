@@ -110,28 +110,6 @@ API_URL = URL  # alias dla starszych importów
 # Platforms
 PLATFORMS = ["weather", "sensor"]
 
-# Legacy sensor entity ID prefixes mapped to current keys
-LEGACY_SENSOR_PREFIXES = {
-    "cisnienie": "pressure",
-    "indeks_uv": "uv_index",
-    "kierunek_wiatru": "wind_direction",
-    "porywy_wiatru": "wind_gust",
-    "predkosc_wiatru": "wind_speed",
-    "punkt_rosy": "dew_point",
-    "suma_opadow": "precipitation",
-    "prawdopodobienstwo_opadow": "precipitation_probability",
-    "temperatura": "temperature",
-    "temperatura_odczuwalna": "apparent_temperature",
-    "widzialnosc": "visibility",
-    "wilgotnosc": "humidity",
-    "wschod_slonca": "sunrise",
-    "zachod_slonca": "sunset",
-    "lokalizacja": "location",
-    "zachmurzenie": "cloud_cover",
-    "promieniowanie_sloneczne": "solar_radiation",
-    "pokrywa_sniezna": "snow_depth",
-}
-
 # Weather code → HA condition mapping
 CONDITION_MAP = {
     0: ATTR_CONDITION_SUNNY,  # Clear sky
