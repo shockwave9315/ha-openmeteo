@@ -24,6 +24,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -259,7 +260,39 @@ async def async_setup_entry(
     keys = list(BASE_SENSOR_KEYS)
     if opts.get(CONF_EXTRA_SENSORS, DEFAULT_EXTRA_SENSORS):
         keys += EXTRA_SENSOR_KEYS
-    entities = [OpenMeteoSensor(coordinator, entry, key) for key in keys]
+
+    registry = er.async_get(hass)
+
+    def ensure_sensor_object_id(config_entry: ConfigEntry, key: str) -> str:
+        base = f"open_meteo_{key}"
+        suggested = base
+        i = 2
+        while registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{config_entry.entry_id}_{key}"
+        ) or registry.async_get(f"sensor.{suggested}"):
+            suggested = f"open_meteo_{i}_{key}"
+            i += 1
+        if not registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{config_entry.entry_id}_{key}"
+        ):
+            registry.async_get_or_create(
+                domain="sensor",
+                platform=DOMAIN,
+                unique_id=f"{config_entry.entry_id}_{key}",
+                suggested_object_id=suggested,
+                config_entry=config_entry,
+            )
+        return suggested
+
+    entities = [
+        OpenMeteoSensor(
+            coordinator,
+            entry,
+            key,
+            ensure_sensor_object_id(entry, key),
+        )
+        for key in keys
+    ]
     async_add_entities(entities)
 
 
@@ -273,6 +306,7 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         coordinator: OpenMeteoDataUpdateCoordinator,
         entry: ConfigEntry,
         key: str,
+        suggested_object_id: str,
     ) -> None:
         super().__init__(coordinator)
         self._config_entry = entry
@@ -280,13 +314,7 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         self._key = key
         self._base_name = self._spec.base_name
         self._attr_unique_id = f"{entry.entry_id}_{key}"
-        base_obj = f"open_meteo_{key}"
-        suggested = base_obj
-        i = 2
-        while coordinator.hass.states.get(f"sensor.{suggested}"):
-            suggested = f"open_meteo_{i}_{key}"
-            i += 1
-        self._attr_suggested_object_id = suggested
+        self._attr_suggested_object_id = suggested_object_id
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             manufacturer="Open-Meteo",
@@ -306,15 +334,6 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         )
         if show_place and self.coordinator.location_name:
             return f"{self._base_name} — {self.coordinator.location_name}"
-        if (
-            show_place
-            and isinstance(self.coordinator.latitude, (int, float))
-            and isinstance(self.coordinator.longitude, (int, float))
-        ):
-            return (
-                f"{self._base_name} — "
-                f"{self.coordinator.latitude:.5f},{self.coordinator.longitude:.5f}"
-            )
         return self._base_name
 
     @property

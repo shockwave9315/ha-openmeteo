@@ -1,3 +1,6 @@
+## 1.3.39
+- fix: pre-register entities to enforce object IDs; remove coordinate fallback in names
+
 ## 1.3.37
 - feat: stałe entity_id bez miejscowości; domyślnie w nazwach dopisek lokalizacji; poprawione ikony i device_class; usunięto kod migracji
 
