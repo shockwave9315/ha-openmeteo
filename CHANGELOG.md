@@ -1,3 +1,6 @@
+## 1.3.44
+- fix: prevent post-setup reload loops; no entry updates outside migration; defer reverse-geocoding; cancel timers on unload.
+
 ## 1.3.41
 - feat: remove global extra sensor option; extra sensors disabled by default
 - fix: non-blocking options listener and network timeouts

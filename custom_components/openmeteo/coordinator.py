@@ -40,7 +40,7 @@ from .const import (
     DEFAULT_GEOCODE_MIN_DISTANCE_M,
     DEFAULT_GEOCODER_PROVIDER,
 )
-from .helpers import maybe_update_device_name, maybe_update_entry_title
+from .helpers import maybe_update_device_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -160,15 +160,18 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._tracked_entity_id: str | None = None
         self._unsub_entity: callable | None = None
 
-    async def async_shutdown(self) -> None:
-        """Cancel subscriptions and shut down."""
+    async def async_unload(self) -> None:
+        """Cancel subscriptions and listeners."""
         if self._unsub_entity:
             self._unsub_entity()
             self._unsub_entity = None
+        if self._unsub_refresh:
+            self._unsub_refresh()
+            self._unsub_refresh = None
         await super().async_shutdown()
 
     async def async_options_updated(self) -> None:
-        """Call when ConfigEntry options changed."""
+        """Apply updated ConfigEntry options."""
         opts = self.config_entry.options or {}
         entity_id = (
             opts.get("entity_id")
@@ -176,50 +179,16 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             or opts.get("track_entity_id")
         )
         await self._resubscribe_tracked_entity(entity_id)
-        from . import resolve_coords
-
-        latitude, longitude, _ = await resolve_coords(
-            self.hass, self.config_entry
-        )
-        self.latitude = latitude
-        self.longitude = longitude
-        show_place = opts.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME)
-        provider = opts.get(CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER)
-        place = (
-            await async_reverse_geocode(self.hass, latitude, longitude, provider)
-            if show_place
-            else None
-        )
-        _LOGGER.debug(
-            "Reverse geocode result for %s,%s: %s", latitude, longitude, place
-        )
-        self.location_name = place
-        override = self.config_entry.options.get(CONF_AREA_NAME_OVERRIDE)
-        if override is None:
-            override = self.config_entry.data.get(CONF_AREA_NAME_OVERRIDE)
-        store = (
-            self.hass.data.setdefault(DOMAIN, {})
-            .setdefault("entries", {})
-            .setdefault(self.config_entry.entry_id, {})
-        )
-        store["lat"] = latitude
-        store["lon"] = longitude
-        store["place"] = place
-        store["location_name"] = place
-        store["geocode_provider"] = provider
-        if place:
-            store["geocode_last_success"] = dt_util.utcnow().isoformat()
-        await maybe_update_entry_title(
-            self.hass, self.config_entry, latitude, longitude, place
-        )
-        await maybe_update_device_name(
-            self.hass,
-            self.config_entry,
-            override or place,
-        )
-        async_dispatcher_send(
-            self.hass, f"openmeteo_place_updated_{self.config_entry.entry_id}"
-        )
+        interval = opts.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+        try:
+            interval = int(interval)
+        except (TypeError, ValueError):
+            interval = DEFAULT_UPDATE_INTERVAL
+        if interval < 60:
+            interval = 60
+        self.update_interval = timedelta(seconds=interval)
+        self.provider = opts.get("api_provider", DEFAULT_API_PROVIDER)
+        await self.async_request_refresh()
 
     async def _resubscribe_tracked_entity(self, entity_id: str | None) -> None:
         if self._unsub_entity:
@@ -291,7 +260,13 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         place = None
         if show_place and (need_geocode or store.get("location_name") is None):
-            place = await async_reverse_geocode(self.hass, latitude, longitude, provider)
+            try:
+                async with asyncio.timeout(10):
+                    place = await async_reverse_geocode(
+                        self.hass, latitude, longitude, provider
+                    )
+            except asyncio.TimeoutError:
+                place = None
             store["geocode_last"] = now
             if place:
                 store["geocode_lat"] = latitude
@@ -315,9 +290,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         store["location_name"] = place
         store["geocode_provider"] = provider
         last_loc_ts = dt_util.utcnow().isoformat()
-        await maybe_update_entry_title(
-            self.hass, self.config_entry, latitude, longitude, place
-        )
         await maybe_update_device_name(
             self.hass,
             self.config_entry,

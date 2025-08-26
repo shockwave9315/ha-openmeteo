@@ -14,33 +14,20 @@ from typing import Callable, Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
 from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_API_PROVIDER,
     CONF_ENTITY_ID,
-    CONF_MIN_TRACK_INTERVAL,
     CONF_MODE,
     CONF_TRACKED_ENTITY_ID,
-    CONF_UNITS,
-    CONF_UPDATE_INTERVAL,
     CONF_USE_PLACE_AS_DEVICE_NAME,
-    CONF_AREA_NAME_OVERRIDE,
     CONF_SHOW_PLACE_NAME,
-    CONF_GEOCODER_PROVIDER,
-    DEFAULT_API_PROVIDER,
-    DEFAULT_MIN_TRACK_INTERVAL,
-    DEFAULT_UNITS,
-    DEFAULT_UPDATE_INTERVAL,
     DEFAULT_USE_PLACE_AS_DEVICE_NAME,
     DEFAULT_SHOW_PLACE_NAME,
-    DEFAULT_GEOCODER_PROVIDER,
     DOMAIN,
     MODE_STATIC,
-    MODE_TRACK,
     PLATFORMS,
 )
-from .coordinator import OpenMeteoDataUpdateCoordinator, async_reverse_geocode
+from .coordinator import OpenMeteoDataUpdateCoordinator
 
 
 def _entry_store(hass: HomeAssistant, entry: ConfigEntry) -> dict:
@@ -100,72 +87,34 @@ async def resolve_coords(
     return lat, lon, src
 
 
-async def build_title(
-    hass: HomeAssistant, entry: ConfigEntry, lat: float, lon: float
-) -> str:
-    """Build a title for the entry based on coordinates."""
-    override = entry.options.get(CONF_AREA_NAME_OVERRIDE)
-    if override is None:
-        override = entry.data.get(CONF_AREA_NAME_OVERRIDE)
-    show_place = entry.options.get(
-        CONF_SHOW_PLACE_NAME, entry.data.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME)
-    )
-    provider = entry.options.get(CONF_GEOCODER_PROVIDER, DEFAULT_GEOCODER_PROVIDER)
-    store = _entry_store(hass, entry)
-    if override:
-        store["place_name"] = override
-        store["place"] = override
-        return override
-    if show_place:
-        name = await async_reverse_geocode(hass, lat, lon, provider)
-        if name:
-            store["place_name"] = name
-            store["place"] = name
-            store["location_name"] = name
-            store["geocode_provider"] = provider
-            store["geocode_last_success"] = dt_util.utcnow().isoformat()
-            return name
-    store["place_name"] = None
-    store["place"] = None
-    store["location_name"] = None
-    return f"{lat:.5f},{lon:.5f}"
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate config entry options and data."""
+    data = dict(entry.data)
+    options = dict(entry.options)
+    changed = False
+    mode = options.get(CONF_MODE, data.get(CONF_MODE))
+    if mode == MODE_STATIC:
+        if options.pop(CONF_USE_PLACE_AS_DEVICE_NAME, None) is not None:
+            changed = True
+        if data.pop(CONF_USE_PLACE_AS_DEVICE_NAME, None) is not None:
+            changed = True
+    else:
+        if CONF_USE_PLACE_AS_DEVICE_NAME not in options:
+            use_place = data.pop(
+                CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
+            )
+            options[CONF_USE_PLACE_AS_DEVICE_NAME] = use_place
+            changed = True
+    if CONF_SHOW_PLACE_NAME not in options:
+        options[CONF_SHOW_PLACE_NAME] = DEFAULT_SHOW_PLACE_NAME
+        changed = True
+    if changed:
+        hass.config_entries.async_update_entry(entry, data=data, options=options)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Open-Meteo from a config entry."""
-    mode = entry.options.get(CONF_MODE, entry.data.get(CONF_MODE))
-    if mode == MODE_STATIC:
-        data = dict(entry.data)
-        opts = dict(entry.options)
-        changed = False
-        if opts.pop(CONF_USE_PLACE_AS_DEVICE_NAME, None) is not None:
-            changed = True
-        if data.pop(CONF_USE_PLACE_AS_DEVICE_NAME, None) is not None:
-            changed = True
-        if changed:
-            hass.config_entries.async_update_entry(entry, data=data, options=opts)
-    else:
-        if CONF_USE_PLACE_AS_DEVICE_NAME not in entry.options:
-            use_place = entry.data.pop(
-                CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
-            )
-            hass.config_entries.async_update_entry(
-                entry,
-                data=entry.data,
-                options={
-                    **entry.options,
-                    CONF_USE_PLACE_AS_DEVICE_NAME: use_place,
-                },
-            )
-    # Ensure required options exist to avoid None values during setup
-    option_updates: dict[str, Any] = {}
-    if CONF_SHOW_PLACE_NAME not in entry.options:
-        option_updates[CONF_SHOW_PLACE_NAME] = DEFAULT_SHOW_PLACE_NAME
-    if option_updates:
-        hass.config_entries.async_update_entry(
-            entry, options={**entry.options, **option_updates}
-        )
-
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
     store = _entry_store(hass, entry)
     store["coordinator"] = coordinator
@@ -174,9 +123,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     lat, lon, _src = await resolve_coords(hass, entry)
     coordinator.latitude = lat
     coordinator.longitude = lon
-    title = await build_title(hass, entry, lat, lon)
-    if title != entry.title:
-        hass.config_entries.async_update_entry(entry, title=title)
 
     try:
         await coordinator.async_config_entry_first_refresh()
@@ -197,11 +143,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception:
             pass
     store["unsubs"] = []
+    for task in store.get("tasks", []):
+        task.cancel()
+    store["tasks"] = []
     coordinator = store.get("coordinator")
     if coordinator:
-        coordinator._unsub_entity = None
-        coordinator._unsub_refresh = None
-        await coordinator.async_shutdown()
+        await coordinator.async_unload()
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         domain_data = hass.data.get(DOMAIN, {})
@@ -220,7 +167,5 @@ async def _options_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> N
         coord = data.get("coordinator")
         if coord:
             hass.async_create_task(coord.async_options_updated())
-            hass.async_create_task(coord.async_request_refresh())
-            return
-    hass.async_create_task(hass.config_entries.async_reload(entry.entry_id))
+
 

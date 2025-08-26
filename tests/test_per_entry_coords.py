@@ -8,7 +8,9 @@ sys.path.insert(0, str(ROOT))
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
-from custom_components.openmeteo import resolve_coords, build_title, DOMAIN
+from custom_components.openmeteo import resolve_coords, DOMAIN
+from custom_components.openmeteo import coordinator as om_coord
+from custom_components.openmeteo.helpers import get_place_title
 from custom_components.openmeteo.const import (
     CONF_LATITUDE,
     CONF_LONGITUDE,
@@ -60,14 +62,11 @@ async def test_per_entry_coords_and_title():
             with patch(
                 "custom_components.openmeteo.coordinator.async_reverse_geocode",
                 side_effect=fake_geocode,
-            ), patch(
-                "custom_components.openmeteo.async_reverse_geocode",
-                side_effect=fake_geocode,
             ):
                 lat_a, lon_a, _ = await resolve_coords(hass, entry_a)
-                title_a = await build_title(hass, entry_a, lat_a, lon_a)
+                title_a = await om_coord.async_reverse_geocode(hass, lat_a, lon_a, "osm_nominatim")
                 lat_b, lon_b, _ = await resolve_coords(hass, entry_b)
-                title_b = await build_title(hass, entry_b, lat_b, lon_b)
+                title_b = await om_coord.async_reverse_geocode(hass, lat_b, lon_b, "osm_nominatim")
 
             assert (lat_a, lon_a) == (A_LAT, A_LON)
             assert (lat_b, lon_b) == (B_LAT, B_LON)
@@ -83,12 +82,9 @@ async def test_per_entry_coords_and_title():
             with patch(
                 "custom_components.openmeteo.coordinator.async_reverse_geocode",
                 side_effect=fake_geocode,
-            ), patch(
-                "custom_components.openmeteo.async_reverse_geocode",
-                side_effect=fake_geocode,
             ):
                 lat_b2, lon_b2, _ = await resolve_coords(hass, entry_b)
-                title_b2 = await build_title(hass, entry_b, lat_b2, lon_b2)
+                title_b2 = await om_coord.async_reverse_geocode(hass, lat_b2, lon_b2, "osm_nominatim")
 
             assert (lat_b2, lon_b2) == (B_LAT, B_LON)
             assert title_b2 == title_b
@@ -113,12 +109,8 @@ async def test_build_title_fallback():
             )
             entry.add_to_hass(hass)
 
-            with patch(
-                "custom_components.openmeteo.async_reverse_geocode",
-                return_value=None,
-            ):
-                title = await build_title(hass, entry, A_LAT, A_LON)
-
+            await resolve_coords(hass, entry)
+            title = get_place_title(hass, entry)
             assert title == f"{A_LAT:.5f},{A_LON:.5f}"
 
             assert await hass.config_entries.async_unload(entry.entry_id)
