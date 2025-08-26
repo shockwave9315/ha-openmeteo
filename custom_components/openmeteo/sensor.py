@@ -104,8 +104,6 @@ BASE_SENSOR_KEYS = [
     "location",
 ]
 
-EXTRA_SENSOR_KEYS = ["cloud_cover", "solar_radiation", "snow_depth"]
-
 
 SENSOR_SPECS: dict[str, SensorSpec] = {
     "pressure": SensorSpec(
@@ -233,30 +231,6 @@ SENSOR_SPECS: dict[str, SensorSpec] = {
         None,
         state_class=None,
     ),
-    "cloud_cover": SensorSpec(
-        "cloud_cover",
-        "Zachmurzenie",
-        PERCENTAGE,
-        None,
-        "mdi:weather-cloudy",
-        lambda d: _hourly_now_value(d, "cloud_cover"),
-    ),
-    "solar_radiation": SensorSpec(
-        "solar_radiation",
-        "Promieniowanie słoneczne",
-        "W/m²",
-        None,
-        "mdi:weather-sunny",
-        lambda d: _hourly_now_value(d, "shortwave_radiation"),
-    ),
-    "snow_depth": SensorSpec(
-        "snow_depth",
-        "Pokrywa śnieżna",
-        "cm",
-        None,
-        "mdi:snowflake",
-        lambda d: _hourly_now_value(d, "snow_depth"),
-    ),
 }
 
 
@@ -265,7 +239,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up Open-Meteo sensors."""
     coordinator = hass.data[DOMAIN]["entries"][entry.entry_id]["coordinator"]
-    keys = BASE_SENSOR_KEYS + EXTRA_SENSOR_KEYS
+    keys = BASE_SENSOR_KEYS
 
     registry = er.async_get(hass)
 
@@ -330,8 +304,6 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
             self._attr_state_class = self._spec.state_class
         else:
             self._attr_state_class = None
-        if key in EXTRA_SENSOR_KEYS:
-            self._attr_entity_registry_enabled_default = False
 
     @property
     def name(self) -> str:

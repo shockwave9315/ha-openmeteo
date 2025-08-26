@@ -95,12 +95,9 @@ DEFAULT_HOURLY_VARIABLES = [
     "wind_gusts_10m",
     "pressure_msl",
     "visibility",
-    "cloud_cover",
     "is_day",
     "apparent_temperature",
     "uv_index",
-    "shortwave_radiation",
-    "snow_depth",
 ]
 
 # API

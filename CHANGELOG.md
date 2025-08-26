@@ -1,3 +1,8 @@
+## 1.3.46
+- fix: remove extra sensors (cloud_cover, solar_radiation, snow_depth) to prevent startup crashes
+- chore: trim hourly request to only required variables
+- keep: improved mappings for classic sensors (current.* + hourly-now)
+
 ## 1.3.45
 - fix(stability): no entry updates/reloads during setup; cancel timers on unload
 - feat(data): include hourly/daily in API call
