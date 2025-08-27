@@ -174,12 +174,10 @@ async def _options_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> N
         hass.async_create_task(coord.async_options_updated())
 
 
-from .config_flow import (
-    OpenMeteoOptionsFlowHandler as _OM_OptionsFlowHandler,
-)
+from .config_flow import OpenMeteoOptionsFlowHandler as _OM_OptionsFlowHandler
 
 
-async def async_get_options_flow(config_entry: ConfigEntry):
+async def async_get_options_flow(config_entry):
     return _OM_OptionsFlowHandler(config_entry)
 
 
