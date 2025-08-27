@@ -32,7 +32,6 @@ CONF_SHOW_PLACE_NAME = "show_place_name"
 
 MODE_STATIC = "static"
 MODE_TRACK = "track"
-MODE_DELEGATED = "delegated"
 
 DEFAULT_UPDATE_INTERVAL = 60
 DEFAULT_MIN_TRACK_INTERVAL = 15
@@ -45,23 +44,29 @@ DEFAULT_DAILY_VARIABLES = [
     "sunset",
     "temperature_2m_max",
     "temperature_2m_min",
+    "weathercode",
+    "precipitation_sum",
+    "precipitation_probability_max",
+    "wind_speed_10m_max",
+    "wind_direction_10m_dominant",
 ]
 
 DEFAULT_HOURLY_VARIABLES = [
     "temperature_2m",
     "relative_humidity_2m",
     "dewpoint_2m",
-    "apparent_temperature",
-    "pressure_msl",
-    "visibility",
     "precipitation",
+    "snowfall",
     "precipitation_probability",
+    "weathercode",
     "wind_speed_10m",
     "wind_direction_10m",
     "wind_gusts_10m",
-    "uv_index",
-    "weathercode",
+    "pressure_msl",
+    "visibility",
     "is_day",
+    "apparent_temperature",
+    "uv_index",
 ]
 
 URL = "https://api.open-meteo.com/v1/forecast"

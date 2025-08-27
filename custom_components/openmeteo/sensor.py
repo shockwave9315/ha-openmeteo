@@ -344,10 +344,10 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     @property
     def name(self) -> str:
         base = self._base_name
-        coord = self.coordinator
-        show = getattr(coord, "show_place_name", True)
-        place = getattr(coord, "location_name", None)
-        lat, lon = getattr(coord, "latitude", None), getattr(coord, "longitude", None)
+        c = self.coordinator
+        show = getattr(c, "show_place_name", True)
+        place = getattr(c, "location_name", None)
+        lat, lon = getattr(c, "latitude", None), getattr(c, "longitude", None)
         shown = place or (
             f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
         )

@@ -133,7 +133,6 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             manufacturer="Open-Meteo",
             name=name,
         )
-        self._attr_icon = "mdi:weather-partly-cloudy"
         mode = data.get(CONF_MODE)
         if not mode:
             mode = (
@@ -145,6 +144,17 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         self._min_track_interval = int(
             data.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL)
         )
+
+    @property
+    def name(self) -> str:
+        c = self.coordinator
+        show = getattr(c, "show_place_name", True)
+        place = getattr(c, "location_name", None)
+        lat, lon = getattr(c, "latitude", None), getattr(c, "longitude", None)
+        shown = place or (
+            f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
+        )
+        return shown if (show and shown) else "Open-Meteo"
 
     @property
     def available(self) -> bool:

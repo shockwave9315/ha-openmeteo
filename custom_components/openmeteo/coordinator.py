@@ -176,7 +176,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         device = dev_reg.async_get_device({(DOMAIN, self.config_entry.entry_id)})
         if device:
             name = self.location_name or f"{self.latitude:.5f},{self.longitude:.5f}"
-            if not self.show_place_name:
+            if not getattr(self, "show_place_name", True):
                 name = "Open-Meteo"
             dev_reg.async_update_device(device.id, name=name)
         await self.async_request_refresh()
@@ -282,7 +282,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         device = dev_reg.async_get_device({(DOMAIN, self.config_entry.entry_id)})
         if device:
             name = self.location_name or f"{self.latitude:.5f},{self.longitude:.5f}"
-            if not self.show_place_name:
+            if not getattr(self, "show_place_name", True):
                 name = "Open-Meteo"
             dev_reg.async_update_device(device.id, name=name)
         async_dispatcher_send(
