@@ -51,12 +51,16 @@ def _schema_common(defaults: Dict[str, Any]) -> vol.Schema:
     )
 
 
-def _schema_static(defaults: Dict[str, Any]) -> vol.Schema:
+def _schema_static(hass: HomeAssistant, defaults: Dict[str, Any]) -> vol.Schema:
     """Pola dla trybu STATIC."""
     base = vol.Schema(
         {
-            vol.Required(CONF_LATITUDE, default=defaults.get(CONF_LATITUDE, 0.0)): float,
-            vol.Required(CONF_LONGITUDE, default=defaults.get(CONF_LONGITUDE, 0.0)): float,
+            vol.Required(
+                CONF_LATITUDE, default=defaults.get(CONF_LATITUDE, hass.config.latitude)
+            ): float,
+            vol.Required(
+                CONF_LONGITUDE, default=defaults.get(CONF_LONGITUDE, hass.config.longitude)
+            ): float,
         }
     )
     return base.extend(_schema_common(defaults).schema)
@@ -96,11 +100,11 @@ def _schema_track(defaults: Dict[str, Any]) -> vol.Schema:
 
 def _build_schema(hass: HomeAssistant, mode: str, defaults: Dict[str, Any]) -> vol.Schema:
     if mode == MODE_STATIC:
-        return _schema_static(defaults)
+        return _schema_static(hass, defaults)
     if mode == MODE_TRACK:
         return _schema_track(defaults)
     # Defensive: nie wspieramy innych trybów
-    return _schema_static(defaults)
+    return _schema_static(hass, defaults)
 
 
 class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -160,6 +164,14 @@ class OpenMeteoOptionsFlowHandler(config_entries.OptionsFlow):
             return opts.get(key, data.get(key, default))
 
         schema_dict: dict = {
+            vol.Optional(
+                CONF_LATITUDE,
+                default=_get(CONF_LATITUDE, self.hass.config.latitude),
+            ): float,
+            vol.Optional(
+                CONF_LONGITUDE,
+                default=_get(CONF_LONGITUDE, self.hass.config.longitude),
+            ): float,
             vol.Optional(
                 CONF_MIN_TRACK_INTERVAL,
                 default=_get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL),
