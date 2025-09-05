@@ -139,9 +139,19 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         )
         self._provider = coordinator.provider
 
+    
     @property
     def name(self) -> str:
-        """Return the display name of the weather entity (location)."""
+        """Return the display name of the weather entity (location).
+
+        Order of preference:
+        1) user-defined device name,
+        2) reverse-geocoded place name (from coordinator.data["location_name"]),
+        3) device name,
+        4) entry title,
+        5) fallback.
+        This matches tests that expect Radłów even before device rename has propagated.
+        """
         try:
             dev = dr.async_get(self.hass).async_get_device(
                 identifiers={(DOMAIN, self._config_entry.entry_id)}
@@ -149,8 +159,8 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             if dev:
                 return (
                     dev.name_by_user
-                    or dev.name
                     or (self.coordinator.data or {}).get("location_name")
+                    or dev.name
                     or self._config_entry.title
                     or getattr(self, "_attr_name", None)
                     or "Open-Meteo"
