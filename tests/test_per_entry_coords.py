@@ -11,6 +11,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.openmeteo import resolve_coords
 from custom_components.openmeteo.const import DOMAIN, MODE_STATIC
 from custom_components.openmeteo.coordinator import async_reverse_geocode
+from pytest_homeassistant_custom_component.common import async_test_home_assistant
 
 # Stałe używane w teście
 A_LAT = 10.0
