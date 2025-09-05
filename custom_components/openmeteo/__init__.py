@@ -21,7 +21,7 @@ from .const import (
     PLATFORMS,
     CONF_UNITS,
 )
-from .coordinator import OpenMeteoDataUpdateCoordinator
+from .coordinator import OpenMeteoDataUpdateCoordinator, async_reverse_geocode
 from homeassistant.helpers.typing import ConfigType
 from typing import Any, Optional, Tuple
 
@@ -126,4 +126,3 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.version = 2
     hass.config_entries.async_update_entry(entry, data=data, options=options)
     return True
-
