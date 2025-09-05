@@ -94,6 +94,7 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         # Stabilne entity_id przy pierwszym utworzeniu (np. weather.pogoda)
         self._attr_suggested_object_id = "pogoda"
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
+        self._attr_has_entity_name = True
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
             "name": "Open-Meteo",
@@ -115,9 +116,8 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
     @property
     def name(self) -> str:
-        """Wyświetlana nazwa: {Miasto} – Pogoda."""
         loc = (self.coordinator.data or {}).get("location_name") or "Open-Meteo"
-        return f"{loc} – Pogoda"
+        return loc
 
     @property
     def available(self) -> bool:

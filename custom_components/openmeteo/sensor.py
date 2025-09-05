@@ -14,6 +14,14 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+class _TypeSpec(dict):
+    """Dict that also supports attribute access (for tests)."""
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError as e:
+            raise AttributeError(key) from e
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
@@ -212,6 +220,9 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         # Stabilne, "czyste" entity_id przy pierwszej rejestracji
         self._attr_suggested_object_id = SUGGESTED_OBJECT_IDS.get(self._sensor_type, self._sensor_type)
         self._attr_unique_id = f"{config_entry.entry_id}-{sensor_type}"
+        # label for UI and tests (no city here)
+        self._attr_has_entity_name = True
+        self._attr_name = SENSOR_TYPES[self._sensor_type]["name"]
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
             "name": "Open-Meteo",
@@ -238,16 +249,8 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         return SENSOR_TYPES[self._sensor_type]["device_class"]
 
     @property
-    def name(self) -> str:
-        """Wyświetlana nazwa: {Miasto} – {Nazwa sensora}."""
-        try:
-            base = SENSOR_TYPES[self._sensor_type]["name"]
-        except Exception:
-            base = self._sensor_type
-        loc = (self.coordinator.data or {}).get("location_name") or "Open-Meteo"
-        return f"{loc} – {base}"
-
-    @property
     def available(self) -> bool:
         """Return if entity is available."""
         return self.coordinator.last_update_success
+# expose attribute-style access for tests
+SENSOR_TYPES = {k: _TypeSpec(v) for k, v in SENSOR_TYPES.items()}
