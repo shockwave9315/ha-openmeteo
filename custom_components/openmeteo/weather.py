@@ -31,6 +31,7 @@ from datetime import datetime
 from homeassistant.util import dt as dt_util
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
+from .helpers import maybe_update_device_name
 from .const import (
     CONDITION_MAP,
     DOMAIN,
@@ -83,6 +84,25 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         _attr_supported_features |= WeatherEntityFeature.HOURLY_PRECIPITATION
     except AttributeError:
         pass
+        
+    def _update_device_name(self) -> None:
+        """Update the device name based on location."""
+        if not hasattr(self, 'hass') or not hasattr(self, '_config_entry'):
+            return
+        loc = (self.coordinator.data or {}).get("location_name")
+        self.hass.async_create_task(
+            maybe_update_device_name(self.hass, self._config_entry, loc)
+        )
+        
+    async def async_added_to_hass(self) -> None:
+        """When entity is added to hass."""
+        await super().async_added_to_hass()
+        self._update_device_name()
+        
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self._update_device_name()
+        self.async_write_ha_state()
 
 
     def __init__(
