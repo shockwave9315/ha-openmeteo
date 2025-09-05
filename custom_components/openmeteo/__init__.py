@@ -22,6 +22,59 @@ from .const import (
     CONF_UNITS,
 )
 from .coordinator import OpenMeteoDataUpdateCoordinator
+from homeassistant.helpers.typing import ConfigType
+from typing import Any, Optional, Tuple
+
+
+def resolve_coords(hass: HomeAssistant, config: ConfigType) -> Tuple[float, float]:
+    """Resolve coordinates from the configuration.
+    
+    Args:
+        hass: Home Assistant instance
+        config: Configuration dictionary
+        
+    Returns:
+        Tuple of (latitude, longitude)
+    """
+    if config.get(CONF_MODE) == MODE_TRACK and CONF_TRACKED_ENTITY_ID in config:
+        # Get coordinates from tracked entity
+        state = hass.states.get(config[CONF_TRACKED_ENTITY_ID])
+        if state is None:
+            raise ValueError(f"Entity {config[CONF_TRACKED_ENTITY_ID]} not found")
+        
+        try:
+            latitude = float(state.attributes.get("latitude"))
+            longitude = float(state.attributes.get("longitude"))
+            if latitude is None or longitude is None:
+                raise ValueError("Entity does not have latitude/longitude attributes")
+            return (latitude, longitude)
+        except (TypeError, ValueError) as err:
+            raise ValueError(f"Could not get coordinates from entity {config[CONF_TRACKED_ENTITY_ID]}: {err}")
+    else:
+        # Get coordinates from static configuration
+        try:
+            latitude = float(config[CONF_LATITUDE])
+            longitude = float(config[CONF_LONGITUDE])
+            return (latitude, longitude)
+        except (KeyError, ValueError) as err:
+            raise ValueError(f"Invalid coordinates in configuration: {err}")
+
+
+def build_title(hass: HomeAssistant, config: ConfigType) -> str:
+    """Build a title for the integration based on the configuration.
+    
+    Args:
+        hass: Home Assistant instance
+        config: Configuration dictionary
+        
+    Returns:
+        A string title for the integration
+    """
+    try:
+        lat, lon = resolve_coords(hass, config)
+        return f"{lat:.4f}, {lon:.4f}"
+    except ValueError:
+        return "Open-Meteo"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

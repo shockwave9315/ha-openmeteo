@@ -20,6 +20,25 @@ from homeassistant.util import dt as dt_util
 from .coordinator import OpenMeteoDataUpdateCoordinator
 from .const import DOMAIN
 
+# Sugerowane ID pod entity_id (PL, bez miasta w nazwie encji)
+SUGGESTED_OBJECT_IDS: dict[str, str] = {
+    "temperature": "temperatura",
+    "apparent_temperature": "temperatura_odczuwalna",
+    "humidity": "wilgotnosc",
+    "dew_point": "punkt_rosy",
+    "pressure": "cisnienie",
+    "uv_index": "uv_index",
+    "precipitation_probability": "prawdopodobienstwo_opadow",
+    "precipitation_total": "suma_opadow",
+    "wind_speed": "predkosc_wiatru",
+    "wind_gust": "porywy_wiatru",
+    "wind_bearing": "kierunek_wiatru",
+    "visibility": "widzialnosc",
+    "sunrise": "wschod_slonca",
+    "sunset": "zachod_slonca",
+    "location": "lokalizacja",
+}
+
 
 
 
@@ -189,7 +208,9 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         self._sensor_type = sensor_type
-        self._attr_name = f"{config_entry.data.get('name', 'Open-Meteo')} {SENSOR_TYPES[sensor_type]['name']}"
+        self._config_entry = config_entry
+        # Stabilne, "czyste" entity_id przy pierwszej rejestracji
+        self._attr_suggested_object_id = SUGGESTED_OBJECT_IDS.get(self._sensor_type, self._sensor_type)
         self._attr_unique_id = f"{config_entry.entry_id}-{sensor_type}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
@@ -217,5 +238,16 @@ class OpenMeteoSensor(CoordinatorEntity, SensorEntity):
         return SENSOR_TYPES[self._sensor_type]["device_class"]
 
     @property
+    def name(self) -> str:
+        """Wyświetlana nazwa: {Miasto} – {Nazwa sensora}."""
+        try:
+            base = SENSOR_TYPES[self._sensor_type]["name"]
+        except Exception:
+            base = self._sensor_type
+        loc = (self.coordinator.data or {}).get("location_name") or "Open-Meteo"
+        return f"{loc} – {base}"
+
+    @property
     def available(self) -> bool:
+        """Return if entity is available."""
         return self.coordinator.last_update_success

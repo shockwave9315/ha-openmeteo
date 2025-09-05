@@ -91,7 +91,8 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         """Initialize the weather entity."""
         super().__init__(coordinator)
         self._config_entry = config_entry
-        self._attr_name = config_entry.data.get("name", "Open-Meteo")
+        # Stabilne entity_id przy pierwszym utworzeniu (np. weather.pogoda)
+        self._attr_suggested_object_id = "pogoda"
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
@@ -113,8 +114,17 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         self._provider = coordinator.provider
 
     @property
+    def name(self) -> str:
+        """Wyświetlana nazwa: {Miasto} – Pogoda."""
+        loc = (self.coordinator.data or {}).get("location_name") or "Open-Meteo"
+        return f"{loc} – Pogoda"
+
+    @property
     def available(self) -> bool:
-        return bool(self.coordinator.data) and getattr(self.coordinator, "last_update_success", True)
+        """Return if entity is available."""
+        if not self.coordinator.data:
+            return False
+        return self.coordinator.last_update_success
 
     @property
     def native_temperature(self) -> float | None:
