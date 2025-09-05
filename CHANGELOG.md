@@ -1,3 +1,6 @@
+## 1.3.56
+- fix(flow): entity selector without default; Options/gear available again
+
 ## 1.3.54
 - fix(flow): pełny wybór trybu i komplet wspólnych pól w kreatorze oraz w Opcjach (stałe z const, bez `options=`)
 - chore(names): utrzymano dynamiczne friendly_name bez prefiksu "Open-Meteo"

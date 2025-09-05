@@ -64,12 +64,33 @@ def _schema_static(defaults: Dict[str, Any]) -> vol.Schema:
 
 def _schema_track(defaults: Dict[str, Any]) -> vol.Schema:
     """Pola dla trybu TRACK."""
-    base = vol.Schema(
-        {
-            vol.Required(CONF_ENTITY_ID, default=defaults.get(CONF_ENTITY_ID)): _entity_selector_or_str(),
-            vol.Optional(CONF_MIN_TRACK_INTERVAL, default=defaults.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL)): int,
-        }
-    )
+    # Entity selector nie akceptuje pustych domyślnych wartości,
+    # więc podajemy domyślny `CONF_ENTITY_ID` tylko gdy istnieje.
+    entity_id = defaults.get(CONF_ENTITY_ID)
+    if entity_id:
+        base = vol.Schema(
+            {
+                vol.Required(CONF_ENTITY_ID, default=entity_id): _entity_selector_or_str(),
+                vol.Optional(
+                    CONF_MIN_TRACK_INTERVAL,
+                    default=defaults.get(
+                        CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL
+                    ),
+                ): int,
+            }
+        )
+    else:
+        base = vol.Schema(
+            {
+                vol.Required(CONF_ENTITY_ID): _entity_selector_or_str(),
+                vol.Optional(
+                    CONF_MIN_TRACK_INTERVAL,
+                    default=defaults.get(
+                        CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL
+                    ),
+                ): int,
+            }
+        )
     return base.extend(_schema_common(defaults).schema)
 
 
@@ -116,8 +137,8 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if not user_input.get(CONF_ENTITY_ID):
                     return self.async_show_form(step_id="mode_details", data_schema=_build_schema(self.hass, mode, user_input), errors={"base": "entity_required"})
             data = {**user_input, CONF_MODE: mode}
-            # UWAGA: NIE używamy options= w create_entry
-            return self.async_create_entry(title="", data=data)
+            # Zawsze twórz wpis z pustymi opcjami, aby udostępnić ekran edycji.
+            return self.async_create_entry(title="", data=data, options={})
 
         return self.async_show_form(step_id="mode_details", data_schema=_build_schema(self.hass, mode, defaults))
 
@@ -138,16 +159,33 @@ class OpenMeteoOptionsFlowHandler(config_entries.OptionsFlow):
         def _get(key: str, default: Any = None) -> Any:
             return opts.get(key, data.get(key, default))
 
-        schema = vol.Schema(
-            {
-                vol.Optional(CONF_ENTITY_ID, default=_get(CONF_ENTITY_ID)): _entity_selector_or_str(),
-                vol.Optional(CONF_MIN_TRACK_INTERVAL, default=_get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL)): int,
-                vol.Optional(CONF_UPDATE_INTERVAL, default=_get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)): int,
-                vol.Optional(CONF_UNITS, default=_get(CONF_UNITS, DEFAULT_UNITS)): vol.In(["metric", "imperial"]),
-                vol.Optional(CONF_USE_PLACE_AS_DEVICE_NAME, default=_get(CONF_USE_PLACE_AS_DEVICE_NAME, False)): bool,
-                vol.Optional(CONF_SHOW_PLACE_NAME, default=_get(CONF_SHOW_PLACE_NAME, True)): bool,
-            }
-        )
+        schema_dict: dict = {
+            vol.Optional(
+                CONF_MIN_TRACK_INTERVAL,
+                default=_get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL),
+            ): int,
+            vol.Optional(
+                CONF_UPDATE_INTERVAL,
+                default=_get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+            ): int,
+            vol.Optional(
+                CONF_UNITS, default=_get(CONF_UNITS, DEFAULT_UNITS)
+            ): vol.In(["metric", "imperial"]),
+            vol.Optional(
+                CONF_USE_PLACE_AS_DEVICE_NAME,
+                default=_get(CONF_USE_PLACE_AS_DEVICE_NAME, False),
+            ): bool,
+            vol.Optional(
+                CONF_SHOW_PLACE_NAME, default=_get(CONF_SHOW_PLACE_NAME, True)
+            ): bool,
+        }
+        ent_id = _get(CONF_ENTITY_ID)
+        if ent_id:
+            schema_dict[vol.Optional(CONF_ENTITY_ID, default=ent_id)] = _entity_selector_or_str()
+        else:
+            schema_dict[vol.Optional(CONF_ENTITY_ID)] = _entity_selector_or_str()
+
+        schema = vol.Schema(schema_dict)
         return self.async_show_form(step_id="init", data_schema=schema)
 
     async def async_step_save(self, user_input: Dict[str, Any]) -> FlowResult:
