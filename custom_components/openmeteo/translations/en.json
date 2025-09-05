@@ -14,8 +14,7 @@
           "update_interval": "Update interval (s)",
           "units": "Units",
           "api_provider": "API provider",
-          "area_name_override": "Area name override",
-          "use_place_as_device_name": "Use place as device name"
+          "area_name_override": "Area name override"
         }
       }
     },
@@ -38,8 +37,7 @@
           "update_interval": "Update interval (s)",
           "units": "Units",
           "api_provider": "API provider",
-          "area_name_override": "Area name override",
-          "use_place_as_device_name": "Use place as device name"
+          "area_name_override": "Area name override"
         }
       }
     },
@@ -48,6 +46,5 @@
       "missing_entity": "Tracking entity is required",
       "invalid_entity": "Entity has no GPS coordinates"
     }
-  },
-  "uv_index": { "name": "UV Index" }
+  }
 }

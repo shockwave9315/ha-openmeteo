@@ -40,8 +40,6 @@ CONF_UNITS = "units"
 CONF_API_PROVIDER = "api_provider"
 CONF_API_KEY = "api_key"
 CONF_AREA_NAME_OVERRIDE = "area_name_override"
-CONF_UV_INDEX = "uv_index"
-CONF_USE_PLACE_AS_DEVICE_NAME = "use_place_as_device_name"
 
 # Modes
 MODE_STATIC = "static"
@@ -61,7 +59,6 @@ DEFAULT_UPDATE_INTERVAL = DEFAULT_SCAN_INTERVAL
 DEFAULT_MIN_TRACK_INTERVAL = 15  # minutes
 DEFAULT_UNITS = "metric"
 DEFAULT_API_PROVIDER = "open_meteo"
-DEFAULT_USE_PLACE_AS_DEVICE_NAME = True
 
 DEFAULT_DAILY_VARIABLES = [
     "temperature_2m_max",
@@ -72,6 +69,8 @@ DEFAULT_DAILY_VARIABLES = [
     "wind_direction_10m_dominant",
     "sunrise",
     "sunset",
+    "uv_index_max",
+    "uv_index_clear_sky_max",
 ]
 
 DEFAULT_HOURLY_VARIABLES = [

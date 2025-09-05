@@ -27,8 +27,6 @@ from .const import (
     MODE_TRACK,
     CONF_API_PROVIDER,
     DEFAULT_API_PROVIDER,
-    CONF_USE_PLACE_AS_DEVICE_NAME,
-    DEFAULT_USE_PLACE_AS_DEVICE_NAME,
 )
 
 
@@ -60,36 +58,25 @@ def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> v
             ): vol.All(vol.Coerce(float), vol.Range(min=-180, max=180)),
         }
 
-    common: dict[Any, Any] = {
-        vol.Required(
-            CONF_UPDATE_INTERVAL,
-            default=defaults.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
-        ): vol.All(vol.Coerce(int), vol.Range(min=60)),
-        vol.Required(
-            CONF_UNITS, default=defaults.get(CONF_UNITS, DEFAULT_UNITS)
-        ): vol.In(["metric", "imperial"]),
-        vol.Required(
-            CONF_API_PROVIDER,
-            default=defaults.get(CONF_API_PROVIDER, DEFAULT_API_PROVIDER),
-        ): vol.In(["open_meteo"]),
-    }
-    if mode != MODE_STATIC:
-        common[
+    data.update(
+        {
+            vol.Required(
+                CONF_UPDATE_INTERVAL,
+                default=defaults.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+            ): vol.All(vol.Coerce(int), vol.Range(min=60)),
+            vol.Required(
+                CONF_UNITS, default=defaults.get(CONF_UNITS, DEFAULT_UNITS)
+            ): vol.In(["metric", "imperial"]),
+            vol.Required(
+                CONF_API_PROVIDER,
+                default=defaults.get(CONF_API_PROVIDER, DEFAULT_API_PROVIDER),
+            ): vol.In(["open_meteo"]),
             vol.Optional(
-                CONF_USE_PLACE_AS_DEVICE_NAME,
-                default=defaults.get(
-                    CONF_USE_PLACE_AS_DEVICE_NAME,
-                    DEFAULT_USE_PLACE_AS_DEVICE_NAME,
-                ),
-            )
-        ] = bool
-    common[
-        vol.Optional(
-            CONF_AREA_NAME_OVERRIDE,
-            default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
-        )
-    ] = str
-    data.update(common)
+                CONF_AREA_NAME_OVERRIDE,
+                default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
+            ): str,
+        }
+    )
     return vol.Schema(data)
 
 
@@ -138,11 +125,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if not errors:
                 data = {**user_input, CONF_MODE: self._mode}
-                options: dict[str, Any] = {}
-                if self._mode != MODE_STATIC:
-                    use_place = data.pop(CONF_USE_PLACE_AS_DEVICE_NAME, True)
-                    options[CONF_USE_PLACE_AS_DEVICE_NAME] = use_place
-                return self.async_create_entry(title="", data=data, options=options)
+                return self.async_create_entry(title="Open-Meteo", data=data)
 
         schema = _build_schema(self.hass, self._mode, defaults)
         return self.async_show_form(
@@ -210,12 +193,13 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
             if not errors:
                 new_options: dict[str, Any] = {**self._entry.options}
                 if self._mode == MODE_TRACK:
+
                     new_options.pop(CONF_LATITUDE, None)
                     new_options.pop(CONF_LONGITUDE, None)
                 else:
+
                     new_options.pop(CONF_ENTITY_ID, None)
                     new_options.pop(CONF_MIN_TRACK_INTERVAL, None)
-                    new_options.pop(CONF_USE_PLACE_AS_DEVICE_NAME, None)
                 new_options.update(user_input)
                 new_options[CONF_MODE] = self._mode
                 return self.async_create_entry(title="", data=new_options)
@@ -225,9 +209,13 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Required(
                         CONF_ENTITY_ID,
+
                         default=defaults.get(CONF_ENTITY_ID, None),
                     ): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain=["device_tracker", "person"])
+                        selector.EntitySelectorConfig(
+                            domain=["device_tracker", "person"]
+
+                        )
                     ),
                     vol.Optional(
                         CONF_MIN_TRACK_INTERVAL,
@@ -250,13 +238,6 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                             CONF_API_PROVIDER, DEFAULT_API_PROVIDER
                         ),
                     ): vol.In(["open_meteo"]),
-                    vol.Optional(
-                        CONF_USE_PLACE_AS_DEVICE_NAME,
-                        default=defaults.get(
-                            CONF_USE_PLACE_AS_DEVICE_NAME,
-                            DEFAULT_USE_PLACE_AS_DEVICE_NAME,
-                        ),
-                    ): bool,
                     vol.Optional(
                         CONF_AREA_NAME_OVERRIDE,
                         default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),

@@ -1,12 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: Apache-2.0
 """The Open-Meteo integration."""
 from __future__ import annotations
 
-import logging
-from typing import Callable
-
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
 from homeassistant.core import HomeAssistant
 
 from .const import (
@@ -15,158 +12,26 @@ from .const import (
     CONF_MIN_TRACK_INTERVAL,
     CONF_MODE,
     CONF_TRACKED_ENTITY_ID,
-    CONF_UNITS,
     CONF_UPDATE_INTERVAL,
-    CONF_USE_PLACE_AS_DEVICE_NAME,
-    CONF_AREA_NAME_OVERRIDE,
     DEFAULT_API_PROVIDER,
     DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_UNITS,
     DEFAULT_UPDATE_INTERVAL,
-    DEFAULT_USE_PLACE_AS_DEVICE_NAME,
     DOMAIN,
     MODE_STATIC,
     MODE_TRACK,
     PLATFORMS,
+    CONF_UNITS,
 )
-from .coordinator import OpenMeteoDataUpdateCoordinator, async_reverse_geocode
-from .helpers import maybe_update_entry_title, maybe_update_device_name
-
-
-def _entry_store(hass: HomeAssistant, entry: ConfigEntry) -> dict:
-    """Return the per-entry storage."""
-    from .const import DOMAIN as _DOMAIN
-
-    return hass.data.setdefault(_DOMAIN, {}).setdefault("entries", {}).setdefault(
-        entry.entry_id, {}
-    )
-
-
-def _register_unsub(
-    hass: HomeAssistant, entry: ConfigEntry, fn: Callable[[], None]
-) -> None:
-    """Register an unsubscribe callback for the entry."""
-    store = _entry_store(hass, entry)
-    store.setdefault("unsubs", []).append(fn)
-
-
-async def resolve_coords(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> tuple[float, float, str]:
-    """Resolve coordinates for a given entry."""
-    data = {**entry.data, **entry.options}
-    lat = data.get(CONF_LATITUDE)
-    lon = data.get(CONF_LONGITUDE)
-    src = "static"
-
-    track_entity = (
-        data.get(CONF_ENTITY_ID) or data.get(CONF_TRACKED_ENTITY_ID)
-    )
-    if track_entity:
-        st = hass.states.get(track_entity)
-        if st:
-            attrs = st.attributes
-            ent_lat = attrs.get("latitude")
-            ent_lon = attrs.get("longitude")
-            if isinstance(ent_lat, (int, float)) and isinstance(ent_lon, (int, float)):
-                lat = float(ent_lat)
-                lon = float(ent_lon)
-                src = (
-                    "device_tracker"
-                    if track_entity.split(".")[0] == "device_tracker"
-                    else "entity"
-                )
-
-    if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
-        lat = float(hass.config.latitude)
-        lon = float(hass.config.longitude)
-
-    store = _entry_store(hass, entry)
-    store["coords"] = (lat, lon)
-    store["source"] = src
-    store["lat"] = lat
-    store["lon"] = lon
-    store["src"] = src
-    return lat, lon, src
-
-
-async def build_title(
-    hass: HomeAssistant, entry: ConfigEntry, lat: float, lon: float
-) -> str:
-    """Build a title for the entry based on coordinates."""
-    store = _entry_store(hass, entry)
-    
-    # Check for override in options or data
-    override = entry.options.get(CONF_AREA_NAME_OVERRIDE)
-    if override is None:
-        override = entry.data.get(CONF_AREA_NAME_OVERRIDE)
-    
-    if override:
-        store["place_name"] = override
-        return override
-    
-    # Try to use cached place name if available
-    place = store.get("place_name")
-    if place:
-        return place
-    
-    # Fall back to coordinates
-    return f"{lat:.5f},{lon:.5f}"
+from .coordinator import OpenMeteoDataUpdateCoordinator
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Open-Meteo from a config entry."""
-    mode = entry.options.get(CONF_MODE, entry.data.get(CONF_MODE))
-    if mode == MODE_STATIC:
-        data = dict(entry.data)
-        opts = dict(entry.options)
-        changed = False
-        if opts.pop(CONF_USE_PLACE_AS_DEVICE_NAME, None) is not None:
-            changed = True
-        if data.pop(CONF_USE_PLACE_AS_DEVICE_NAME, None) is not None:
-            changed = True
-        if changed:
-            hass.config_entries.async_update_entry(entry, data=data, options=opts)
-    else:
-        if CONF_USE_PLACE_AS_DEVICE_NAME not in entry.options:
-            use_place = entry.data.pop(
-                CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
-            )
-            hass.config_entries.async_update_entry(
-                entry,
-                data=entry.data,
-                options={
-                    **entry.options,
-                    CONF_USE_PLACE_AS_DEVICE_NAME: use_place,
-                },
-            )
-    _LOGGER = logging.getLogger(__name__)
-    
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
-    store = _entry_store(hass, entry)
-    store["coordinator"] = coordinator
-
-    lat, lon, _src = await resolve_coords(hass, entry)
-    
-    # Get place name using reverse geocoding
-    place = None
-    try:
-        place = await async_reverse_geocode(hass, lat, lon)
-        store["place_name"] = place
-    except Exception as err:
-        _LOGGER.debug("Reverse geocoding failed: %s", err, exc_info=err)
-    
-    # Update entry title using the helper function
-    await maybe_update_entry_title(hass, entry, lat, lon, place)
-    
-    # Update device name if needed
-    try:
-        await maybe_update_device_name(hass, entry, place)
-    except Exception as err:
-        _LOGGER.debug("Failed to update device name: %s", err, exc_info=err)
-
     await coordinator.async_config_entry_first_refresh()
     await coordinator._resubscribe_tracked_entity(entry.options.get("entity_id"))
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"coordinator": coordinator}
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_options_update_listener))
     return True
@@ -174,25 +39,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    store = _entry_store(hass, entry)
-    for fn in store.get("unsubs", []):
-        try:
-            fn()
-        except Exception:
-            pass
-    store["unsubs"] = []
-    coordinator = store.get("coordinator")
-    if coordinator:
-        coordinator._unsub_entity = None
-        coordinator._unsub_refresh = None
-        await coordinator.async_shutdown()
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        domain_data = hass.data.get(DOMAIN, {})
-        entries = domain_data.get("entries", {})
-        store.clear()
-        entries.pop(entry.entry_id, None)
-        if not entries and DOMAIN in hass.data:
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+        if not hass.data[DOMAIN]:
             hass.data.pop(DOMAIN)
     return unload_ok
 
@@ -224,7 +74,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _options_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    data = hass.data.get(DOMAIN, {}).get("entries", {}).get(entry.entry_id)
+    data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if data and data.get("coordinator"):
         await data["coordinator"].async_options_updated()
         await data["coordinator"].async_request_refresh()
