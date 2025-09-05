@@ -12,6 +12,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     CONF_AREA_NAME_OVERRIDE,
@@ -109,37 +111,34 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _coords_fallback(self, lat: float, lon: float) -> str:
         return f"{lat:.2f},{lon:.2f}"
 
-    async def _reverse_geocode(self, lat: float, lon: float) -> str | None:
-        """Return location name (e.g., 'Radłów') or None."""
-        session = async_get_clientsession(self.hass)
-        url = "https://nominatim.openstreetmap.org/reverse"
-        params = {
-            "format": "jsonv2",
-            "lat": str(lat),
-            "lon": str(lon),
-            "zoom": "10",
-            "accept-language": "pl"
-        }
-        headers = {
-            "User-Agent": "HomeAssistant-OpenMeteo"
-        }
-        try:
-            async with session.get(url, params=params, headers=headers, timeout=10) as resp:
-                if resp.status != 200:
-                    return None
-                data = await resp.json()
-                # Try to get city/town/village/municipality from the address
-                address = data.get("address") or {}
-                return (
-                    address.get("city")
-                    or address.get("town")
-                    or address.get("village")
-                    or address.get("municipality")
-                    or data.get("name")
-                )
-        except Exception as e:
-            _LOGGER.debug("Reverse geocoding failed: %s", e)
-            return None
+async def async_reverse_geocode(hass: HomeAssistant, lat: float, lon: float) -> str | None:
+    """Return location name for given coordinates or None.
+    
+    Separate function so tests can patch it.
+    """
+    session = async_get_clientsession(hass)
+    url = "https://geocoding-api.open-meteo.com/v1/reverse"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "format": "json",
+        "language": "pl",
+        "count": 1,
+    }
+    try:
+        async with session.get(url, params=params, timeout=10) as resp:
+            if resp.status != 200:
+                return None
+            js = await resp.json()
+            results = js.get("results") or []
+            if not results:
+                return None
+            r = results[0]
+            name = r.get("name") or r.get("admin2") or r.get("admin1")
+            # You can add country_code if needed, but test doesn't require it
+            return name
+    except Exception:
+        return None
 
     async def _async_update_data(self) -> dict[str, Any]:
         mode = self._current_mode()
@@ -225,8 +224,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if data.get(CONF_AREA_NAME_OVERRIDE):
                 loc_name = data.get(CONF_AREA_NAME_OVERRIDE)
             else:
-                name = await self._reverse_geocode(lat, lon)
-                loc_name = name or self._coords_fallback(lat, lon)
+                loc_name = await async_reverse_geocode(self.hass, lat, lon)
+                loc_name = loc_name or self._coords_fallback(lat, lon)
             last_loc_ts = now.isoformat()
             self.location_name = loc_name
         elif self.location_name:
