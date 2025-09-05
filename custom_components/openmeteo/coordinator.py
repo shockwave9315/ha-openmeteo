@@ -40,25 +40,32 @@ _LOGGER = logging.getLogger(__name__)
 async def async_reverse_geocode(
     hass: HomeAssistant, lat: float, lon: float
 ) -> str | None:
-    """Reverse geocode coordinates to a place name."""
-    url = (
-        "https://geocoding-api.open-meteo.com/v1/reverse"
-        f"?latitude={lat:.5f}&longitude={lon:.5f}&language=pl&format=json"
-    )
+    """Resolve a human-readable place for given coords using Open-Meteo geocoding."""
     try:
+        lang = getattr(hass.config, "language", None) or "en"
+        url = (
+            "https://geocoding-api.open-meteo.com/v1/reverse"
+            f"?latitude={lat:.5f}&longitude={lon:.5f}&language={lang}&format=json"
+        )
         session = async_get_clientsession(hass)
         async with session.get(url, timeout=10) as resp:
             if resp.status != 200:
                 return None
-            js = await resp.json()
-        results = js.get("results") or []
-        if not results:
-            return None
-        r = results[0]
-        return r.get("name") or r.get("admin2") or r.get("admin1")
-    except Exception:
+            data = await resp.json()
+    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, KeyError):
         return None
 
+    results = data.get("results") or []
+    if not results:
+        return None
+
+    # priorytet: name -> admin2 -> admin1
+    first = results[0]
+    for key in ("name", "admin2", "admin1"):
+        val = first.get(key)
+        if val:
+            return str(val)
+    return None
 
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Class to manage fetching Open-Meteo data and tracking coordinates."""

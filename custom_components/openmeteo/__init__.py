@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-License-Identifier: Apache-2.0
 """The Open-Meteo integration."""
 from __future__ import annotations
 
+import logging
 from typing import Callable
 
 from homeassistant.config_entries import ConfigEntry
@@ -30,6 +30,7 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import OpenMeteoDataUpdateCoordinator, async_reverse_geocode
+from .helpers import maybe_update_entry_title, maybe_update_device_name
 
 
 def _entry_store(hass: HomeAssistant, entry: ConfigEntry) -> dict:
@@ -93,23 +94,23 @@ async def build_title(
     hass: HomeAssistant, entry: ConfigEntry, lat: float, lon: float
 ) -> str:
     """Build a title for the entry based on coordinates."""
+    store = _entry_store(hass, entry)
+    
+    # Check for override in options or data
     override = entry.options.get(CONF_AREA_NAME_OVERRIDE)
     if override is None:
         override = entry.data.get(CONF_AREA_NAME_OVERRIDE)
-    geocode = entry.options.get("geocode_name", entry.data.get("geocode_name", True))
-    store = _entry_store(hass, entry)
+    
     if override:
         store["place_name"] = override
-        store["place"] = override
         return override
-    if geocode:
-        name = await async_reverse_geocode(hass, lat, lon)
-        if name:
-            store["place_name"] = name
-            store["place"] = name
-            return name
-    store["place_name"] = None
-    store["place"] = None
+    
+    # Try to use cached place name if available
+    place = store.get("place_name")
+    if place:
+        return place
+    
+    # Fall back to coordinates
     return f"{lat:.5f},{lon:.5f}"
 
 
@@ -139,14 +140,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     CONF_USE_PLACE_AS_DEVICE_NAME: use_place,
                 },
             )
+    _LOGGER = logging.getLogger(__name__)
+    
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
     store = _entry_store(hass, entry)
     store["coordinator"] = coordinator
 
     lat, lon, _src = await resolve_coords(hass, entry)
-    title = await build_title(hass, entry, lat, lon)
-    if title != entry.title:
-        hass.config_entries.async_update_entry(entry, title=title)
+    
+    # Get place name using reverse geocoding
+    place = None
+    try:
+        place = await async_reverse_geocode(hass, lat, lon)
+        store["place_name"] = place
+    except Exception as err:
+        _LOGGER.debug("Reverse geocoding failed: %s", err, exc_info=err)
+    
+    # Update entry title using the helper function
+    await maybe_update_entry_title(hass, entry, lat, lon, place)
+    
+    # Update device name if needed
+    try:
+        await maybe_update_device_name(hass, entry, place)
+    except Exception as err:
+        _LOGGER.debug("Failed to update device name: %s", err, exc_info=err)
 
     await coordinator.async_config_entry_first_refresh()
     await coordinator._resubscribe_tracked_entity(entry.options.get("entity_id"))
