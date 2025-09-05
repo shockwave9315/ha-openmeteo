@@ -22,6 +22,7 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import OpenMeteoDataUpdateCoordinator
+from .config_flow import OpenMeteoOptionsFlowHandler
 
 
 CONFIG_ENTRY_VERSION = 2
@@ -133,7 +134,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         pass
     await coordinator._resubscribe_tracked_entity(entry.options.get("entity_id"))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(_options_update_listener))
+
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True
 
 
@@ -163,21 +165,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
-async def _options_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    coord = (
-        hass.data.get(DOMAIN, {})
-        .get("entries", {})
-        .get(entry.entry_id, {})
-        .get("coordinator")
-    )
-    if coord:
-        hass.async_create_task(coord.async_options_updated())
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
-from .config_flow import OpenMeteoOptionsFlowHandler as _OM_OptionsFlowHandler
-
-
-async def async_get_options_flow(config_entry):
-    return _OM_OptionsFlowHandler(config_entry)
+async def async_get_options_flow(config_entry: ConfigEntry) -> OpenMeteoOptionsFlowHandler:
+    return OpenMeteoOptionsFlowHandler(config_entry)
 
 

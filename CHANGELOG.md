@@ -1,3 +1,9 @@
+## 1.3.58 (2025-09-05)
+- fix(options): two-step OptionsFlow; edit mode + fields; save to entry.options
+- chore(flow): single async_get_options_flow exported from __init__.py
+- fix(config): reload on options change (no direct coordinator access)
+- i18n: add labels/errors for new options
+
 ## 1.3.56
 - fix(flow): entity selector without default; Options/gear available again
 
