@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
@@ -55,9 +56,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             interval = DEFAULT_UPDATE_INTERVAL
         if interval < 60:
             interval = 60
-        super().__init__(
-            hass, _LOGGER, name="Open-Meteo", update_interval=timedelta(seconds=interval)
-        )
+        super().__init__(hass, _LOGGER, name="Open-Meteo", update_method=self._async_update_data, update_interval=timedelta(seconds=interval))
         self._cached: tuple[float, float] | None = None
         self._accepted_lat: float | None = None
         self._accepted_lon: float | None = None
@@ -109,6 +108,35 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _coords_fallback(self, lat: float, lon: float) -> str:
         return f"{lat:.2f},{lon:.2f}"
+
+async def async_reverse_geocode(hass: HomeAssistant, lat: float, lon: float) -> str | None:
+    """Return location name for given coordinates or None.
+    
+    Separate function so tests can patch it.
+    """
+    session = async_get_clientsession(hass)
+    url = "https://geocoding-api.open-meteo.com/v1/reverse"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "format": "json",
+        "language": "pl",
+        "count": 1,
+    }
+    try:
+        async with session.get(url, params=params, timeout=10) as resp:
+            if resp.status != 200:
+                return None
+            js = await resp.json()
+            results = js.get("results") or []
+            if not results:
+                return None
+            r = results[0]
+            name = r.get("name") or r.get("admin2") or r.get("admin1")
+            # You can add country_code if needed, but test doesn't require it
+            return name
+    except Exception:
+        return None
 
     async def _async_update_data(self) -> dict[str, Any]:
         mode = self._current_mode()
@@ -267,32 +295,3 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return self._last_data
             raise
 
-
-async def async_reverse_geocode(hass: HomeAssistant, lat: float, lon: float) -> str | None:
-    """Return location name for given coordinates or None.
-    
-    Separate function so tests can patch it.
-    """
-    session = async_get_clientsession(hass)
-    url = "https://geocoding-api.open-meteo.com/v1/reverse"
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "format": "json",
-        "language": "pl",
-        "count": 1,
-    }
-    try:
-        async with session.get(url, params=params, timeout=10) as resp:
-            if resp.status != 200:
-                return None
-            js = await resp.json()
-            results = js.get("results") or []
-            if not results:
-                return None
-            r = results[0]
-            name = r.get("name") or r.get("admin2") or r.get("admin1")
-            # You can add country_code if needed, but test doesn't require it
-            return name
-    except Exception:
-        return None
