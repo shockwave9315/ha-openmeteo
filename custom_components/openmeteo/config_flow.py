@@ -27,6 +27,8 @@ from .const import (
     DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_UNITS,
+    DEFAULT_USE_PLACE_AS_DEVICE_NAME,
+    DEFAULT_SHOW_PLACE_NAME,
 )
 
 def _entity_selector_or_str():
@@ -43,10 +45,24 @@ def _schema_common(defaults: Dict[str, Any]) -> vol.Schema:
     """Wspólne pola dla obu trybów."""
     return vol.Schema(
         {
-            vol.Optional(CONF_UPDATE_INTERVAL, default=defaults.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)): int,
-            vol.Optional(CONF_UNITS, default=defaults.get(CONF_UNITS, DEFAULT_UNITS)): vol.In(["metric", "imperial"]),
-            vol.Optional(CONF_USE_PLACE_AS_DEVICE_NAME, default=defaults.get(CONF_USE_PLACE_AS_DEVICE_NAME, False)): bool,
-            vol.Optional(CONF_SHOW_PLACE_NAME, default=defaults.get(CONF_SHOW_PLACE_NAME, True)): bool,
+            vol.Optional(
+                CONF_UPDATE_INTERVAL,
+                default=defaults.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+            ): int,
+            vol.Optional(
+                CONF_UNITS,
+                default=defaults.get(CONF_UNITS, DEFAULT_UNITS),
+            ): vol.In(["metric", "imperial"]),
+            vol.Optional(
+                CONF_USE_PLACE_AS_DEVICE_NAME,
+                default=defaults.get(
+                    CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
+                ),
+            ): bool,
+            vol.Optional(
+                CONF_SHOW_PLACE_NAME,
+                default=defaults.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME),
+            ): bool,
         }
     )
 
@@ -148,62 +164,90 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class OpenMeteoOptionsFlowHandler(config_entries.OptionsFlow):
-    """Options flow (trybik)."""
+    """Options flow allowing full edit after install."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
         self.config_entry = config_entry
+        self._mode: str | None = None
 
-    async def async_step_init(self, user_input: Dict[str, Any] | None = None) -> FlowResult:
+    def _get(self, key: str, default: Any | None = None) -> Any:
+        """Get a value from options or data with fallback."""
+        return self.config_entry.options.get(
+            key, self.config_entry.data.get(key, default)
+        )
+
+    async def async_step_init(
+        self, user_input: Dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Step 1: choose mode."""
         if user_input is not None:
-            return await self.async_step_save(user_input)
+            self._mode = user_input[CONF_MODE]
+            return await self.async_step_mode_details()
 
-        data = dict(self.config_entry.data)
-        opts = dict(self.config_entry.options)
-
-        def _get(key: str, default: Any = None) -> Any:
-            return opts.get(key, data.get(key, default))
-
-        schema_dict: dict = {
-            vol.Optional(
-                CONF_LATITUDE,
-                default=_get(CONF_LATITUDE, self.hass.config.latitude),
-            ): float,
-            vol.Optional(
-                CONF_LONGITUDE,
-                default=_get(CONF_LONGITUDE, self.hass.config.longitude),
-            ): float,
-            vol.Optional(
-                CONF_MIN_TRACK_INTERVAL,
-                default=_get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL),
-            ): int,
-            vol.Optional(
-                CONF_UPDATE_INTERVAL,
-                default=_get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
-            ): int,
-            vol.Optional(
-                CONF_UNITS, default=_get(CONF_UNITS, DEFAULT_UNITS)
-            ): vol.In(["metric", "imperial"]),
-            vol.Optional(
-                CONF_USE_PLACE_AS_DEVICE_NAME,
-                default=_get(CONF_USE_PLACE_AS_DEVICE_NAME, False),
-            ): bool,
-            vol.Optional(
-                CONF_SHOW_PLACE_NAME, default=_get(CONF_SHOW_PLACE_NAME, True)
-            ): bool,
-        }
-        ent_id = _get(CONF_ENTITY_ID)
-        if ent_id:
-            schema_dict[vol.Optional(CONF_ENTITY_ID, default=ent_id)] = _entity_selector_or_str()
-        else:
-            schema_dict[vol.Optional(CONF_ENTITY_ID)] = _entity_selector_or_str()
-
-        schema = vol.Schema(schema_dict)
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_MODE, default=self._get(CONF_MODE, MODE_STATIC)
+                ): vol.In([MODE_STATIC, MODE_TRACK])
+            }
+        )
         return self.async_show_form(step_id="init", data_schema=schema)
 
-    async def async_step_save(self, user_input: Dict[str, Any]) -> FlowResult:
-        new_options = {**dict(self.config_entry.options), **(user_input or {})}
-        return self.async_create_entry(title="", data=new_options)
+    async def async_step_mode_details(
+        self, user_input: Dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Step 2: edit fields for selected mode."""
+        mode = self._mode or self._get(CONF_MODE, MODE_STATIC)
+        defaults: Dict[str, Any] = {
+            CONF_LATITUDE: self._get(CONF_LATITUDE, self.hass.config.latitude),
+            CONF_LONGITUDE: self._get(CONF_LONGITUDE, self.hass.config.longitude),
+            CONF_ENTITY_ID: self._get(CONF_ENTITY_ID),
+            CONF_MIN_TRACK_INTERVAL: self._get(
+                CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL
+            ),
+            CONF_UPDATE_INTERVAL: self._get(
+                CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+            ),
+            CONF_UNITS: self._get(CONF_UNITS, DEFAULT_UNITS),
+            CONF_USE_PLACE_AS_DEVICE_NAME: self._get(
+                CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
+            ),
+            CONF_SHOW_PLACE_NAME: self._get(
+                CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME
+            ),
+        }
 
+        if user_input is not None:
+            if mode == MODE_STATIC:
+                if (
+                    user_input.get(CONF_LATITUDE) is None
+                    or user_input.get(CONF_LONGITUDE) is None
+                ):
+                    return self.async_show_form(
+                        step_id="mode_details",
+                        data_schema=_build_schema(
+                            self.hass, mode, {**defaults, **user_input}
+                        ),
+                        errors={"base": "latlon_required"},
+                    )
+            elif mode == MODE_TRACK:
+                if not user_input.get(CONF_ENTITY_ID):
+                    return self.async_show_form(
+                        step_id="mode_details",
+                        data_schema=_build_schema(
+                            self.hass, mode, {**defaults, **user_input}
+                        ),
+                        errors={"base": "entity_required"},
+                    )
+            new_options = {
+                **self.config_entry.options,
+                **user_input,
+                CONF_MODE: mode,
+            }
+            return self.async_create_entry(title="", data=new_options)
 
-async def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> OpenMeteoOptionsFlowHandler:
-    return OpenMeteoOptionsFlowHandler(config_entry)
+        return self.async_show_form(
+            step_id="mode_details",
+            data_schema=_build_schema(self.hass, mode, defaults),
+        )
