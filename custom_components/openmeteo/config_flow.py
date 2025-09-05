@@ -1,275 +1,306 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: Apache-2.0
+"""Config and options flows for Open-Meteo."""
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 import voluptuous as vol
+
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers import selector as sel
+from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import selector
 
 from .const import (
-    DOMAIN,
-    # tryb
-    CONF_MODE,
-    MODE_STATIC,
-    MODE_TRACK,
-    # pola
-    CONF_LATITUDE,
-    CONF_LONGITUDE,
+    CONF_AREA_NAME_OVERRIDE,
     CONF_ENTITY_ID,
     CONF_MIN_TRACK_INTERVAL,
-    CONF_UPDATE_INTERVAL,
+    CONF_MODE,
     CONF_UNITS,
-    CONF_USE_PLACE_AS_DEVICE_NAME,
-    CONF_SHOW_PLACE_NAME,
-    # domyślne
+    CONF_UPDATE_INTERVAL,
     DEFAULT_MIN_TRACK_INTERVAL,
-    DEFAULT_UPDATE_INTERVAL,
     DEFAULT_UNITS,
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
+    MODE_STATIC,
+    MODE_TRACK,
+    CONF_API_PROVIDER,
+    DEFAULT_API_PROVIDER,
+    CONF_USE_PLACE_AS_DEVICE_NAME,
     DEFAULT_USE_PLACE_AS_DEVICE_NAME,
-    DEFAULT_SHOW_PLACE_NAME,
 )
 
-def _entity_selector_or_str():
-    """Selector encji z bezpiecznym fallbackiem na str."""
-    try:
-        return sel.EntitySelector(
-            sel.EntitySelectorConfig(domain=["device_tracker", "person"], multiple=False)
-        )
-    except Exception:
-        return str
 
+def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> vol.Schema:
+    """Build a schema for config/option flows."""
+    if mode == MODE_TRACK:
+        data: dict[Any, Any] = {
+            vol.Required(
+                CONF_ENTITY_ID, default=defaults.get(CONF_ENTITY_ID, None)
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["device_tracker", "person"])
+            ),
+            vol.Optional(
+                CONF_MIN_TRACK_INTERVAL,
+                default=defaults.get(
+                    CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=1)),
+        }
+    else:
+        data = {
+            vol.Required(
+                CONF_LATITUDE,
+                default=defaults.get(CONF_LATITUDE, hass.config.latitude),
+            ): vol.All(vol.Coerce(float), vol.Range(min=-90, max=90)),
+            vol.Required(
+                CONF_LONGITUDE,
+                default=defaults.get(CONF_LONGITUDE, hass.config.longitude),
+            ): vol.All(vol.Coerce(float), vol.Range(min=-180, max=180)),
+        }
 
-def _schema_common(defaults: Dict[str, Any]) -> vol.Schema:
-    """Wspólne pola dla obu trybów."""
-    return vol.Schema(
-        {
-            vol.Optional(
-                CONF_UPDATE_INTERVAL,
-                default=defaults.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
-            ): int,
-            vol.Optional(
-                CONF_UNITS,
-                default=defaults.get(CONF_UNITS, DEFAULT_UNITS),
-            ): vol.In(["metric", "imperial"]),
+    common: dict[Any, Any] = {
+        vol.Required(
+            CONF_UPDATE_INTERVAL,
+            default=defaults.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+        ): vol.All(vol.Coerce(int), vol.Range(min=60)),
+        vol.Required(
+            CONF_UNITS, default=defaults.get(CONF_UNITS, DEFAULT_UNITS)
+        ): vol.In(["metric", "imperial"]),
+        vol.Required(
+            CONF_API_PROVIDER,
+            default=defaults.get(CONF_API_PROVIDER, DEFAULT_API_PROVIDER),
+        ): vol.In(["open_meteo"]),
+    }
+    if mode != MODE_STATIC:
+        common[
             vol.Optional(
                 CONF_USE_PLACE_AS_DEVICE_NAME,
                 default=defaults.get(
-                    CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
+                    CONF_USE_PLACE_AS_DEVICE_NAME,
+                    DEFAULT_USE_PLACE_AS_DEVICE_NAME,
                 ),
-            ): bool,
-            vol.Optional(
-                CONF_SHOW_PLACE_NAME,
-                default=defaults.get(CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME),
-            ): bool,
-        }
-    )
-
-
-def _schema_static(hass: HomeAssistant, defaults: Dict[str, Any]) -> vol.Schema:
-    """Pola dla trybu STATIC."""
-    base = vol.Schema(
-        {
-            vol.Required(
-                CONF_LATITUDE, default=defaults.get(CONF_LATITUDE, hass.config.latitude)
-            ): float,
-            vol.Required(
-                CONF_LONGITUDE, default=defaults.get(CONF_LONGITUDE, hass.config.longitude)
-            ): float,
-        }
-    )
-    return base.extend(_schema_common(defaults).schema)
-
-
-def _schema_track(defaults: Dict[str, Any]) -> vol.Schema:
-    """Pola dla trybu TRACK."""
-    # Entity selector nie akceptuje pustych domyślnych wartości,
-    # więc podajemy domyślny `CONF_ENTITY_ID` tylko gdy istnieje.
-    entity_id = defaults.get(CONF_ENTITY_ID)
-    if entity_id:
-        base = vol.Schema(
-            {
-                vol.Required(CONF_ENTITY_ID, default=entity_id): _entity_selector_or_str(),
-                vol.Optional(
-                    CONF_MIN_TRACK_INTERVAL,
-                    default=defaults.get(
-                        CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL
-                    ),
-                ): int,
-            }
+            )
+        ] = bool
+    common[
+        vol.Optional(
+            CONF_AREA_NAME_OVERRIDE,
+            default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
         )
-    else:
-        base = vol.Schema(
-            {
-                vol.Required(CONF_ENTITY_ID): _entity_selector_or_str(),
-                vol.Optional(
-                    CONF_MIN_TRACK_INTERVAL,
-                    default=defaults.get(
-                        CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL
-                    ),
-                ): int,
-            }
-        )
-    return base.extend(_schema_common(defaults).schema)
-
-
-def _build_schema(hass: HomeAssistant, mode: str, defaults: Dict[str, Any]) -> vol.Schema:
-    if mode == MODE_STATIC:
-        return _schema_static(hass, defaults)
-    if mode == MODE_TRACK:
-        return _schema_track(defaults)
-    # Defensive: nie wspieramy innych trybów
-    return _schema_static(hass, defaults)
+    ] = str
+    data.update(common)
+    return vol.Schema(data)
 
 
 class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow (tylko STATIC/TRACK)."""
+    """Handle a config flow for the integration."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
-        self._mode: str | None = None
+        self._mode = MODE_STATIC
 
-    async def async_step_user(self, user_input: Dict[str, Any] | None = None) -> FlowResult:
-        """Krok 1: wybór trybu."""
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """First step: choose tracking mode."""
         if user_input is not None:
             self._mode = user_input[CONF_MODE]
             return await self.async_step_mode_details()
 
         schema = vol.Schema(
-            {
-                vol.Required(CONF_MODE, default=MODE_STATIC): vol.In([MODE_STATIC, MODE_TRACK]),
-            }
+            {vol.Required(CONF_MODE, default=self._mode): vol.In([MODE_STATIC, MODE_TRACK])}
         )
         return self.async_show_form(step_id="user", data_schema=schema)
 
-    async def async_step_mode_details(self, user_input: Dict[str, Any] | None = None) -> FlowResult:
-        """Krok 2: szczegóły trybu."""
-        mode = self._mode or MODE_STATIC
-        defaults: Dict[str, Any] = {
-            CONF_MODE: mode,
-            CONF_LATITUDE: self.hass.config.latitude,
-            CONF_LONGITUDE: self.hass.config.longitude,
-            CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
-            CONF_UNITS: DEFAULT_UNITS,
-            CONF_USE_PLACE_AS_DEVICE_NAME: DEFAULT_USE_PLACE_AS_DEVICE_NAME,
-            CONF_SHOW_PLACE_NAME: DEFAULT_SHOW_PLACE_NAME,
-        }
-        
+    async def async_step_mode_details(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Second step: gather fields for the selected mode."""
+        errors: dict[str, str] = {}
+        defaults = user_input or {}
+
         if user_input is not None:
-            # Walidacja podstawowa
-            if mode == MODE_STATIC:
-                if user_input.get(CONF_LATITUDE) is None or user_input.get(CONF_LONGITUDE) is None:
-                    return self.async_show_form(
-                        step_id="mode_details", 
-                        data_schema=_build_schema(self.hass, mode, {**defaults, **user_input}), 
-                        errors={"base": "latlon_required"}
-                    )
-            elif mode == MODE_TRACK:
-                if not user_input.get(CONF_ENTITY_ID):
-                    return self.async_show_form(
-                        step_id="mode_details", 
-                        data_schema=_build_schema(self.hass, mode, {**defaults, **user_input}), 
-                        errors={"base": "entity_required"}
-                    )
-            
-            # Create entry with all options in data (will be moved to options in async_setup_entry)
-            data = {**user_input, CONF_MODE: mode}
-            return self.async_create_entry(
-                title=f"OpenMeteo ({mode.capitalize()})", 
-                data=data, 
-                options=data  # Initialize options with user input
-            )
+            if self._mode == MODE_TRACK:
+                entity = user_input.get(CONF_ENTITY_ID)
+                if not entity:
+                    errors[CONF_ENTITY_ID] = "required"
+                else:
+                    state = self.hass.states.get(entity)
+                    if not state or "latitude" not in state.attributes or "longitude" not in state.attributes:
+                        errors[CONF_ENTITY_ID] = "invalid_entity"
+            else:
+                if not user_input.get(CONF_LATITUDE):
+                    errors[CONF_LATITUDE] = "required"
+                if not user_input.get(CONF_LONGITUDE):
+                    errors[CONF_LONGITUDE] = "required"
 
-        return self.async_show_form(step_id="mode_details", data_schema=_build_schema(self.hass, mode, defaults))
+            if not errors:
+                data = {**user_input, CONF_MODE: self._mode}
+                options: dict[str, Any] = {}
+                if self._mode != MODE_STATIC:
+                    use_place = data.pop(CONF_USE_PLACE_AS_DEVICE_NAME, True)
+                    options[CONF_USE_PLACE_AS_DEVICE_NAME] = use_place
+                return self.async_create_entry(title="", data=data, options=options)
 
-
-class OpenMeteoOptionsFlowHandler(config_entries.OptionsFlow):
-    """Options flow allowing full edit after install."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
-        self._mode: str | None = None
-
-    def _get(self, key: str, default: Any | None = None) -> Any:
-        """Get a value from options or data with fallback."""
-        return self.config_entry.options.get(
-            key, self.config_entry.data.get(key, default)
+        schema = _build_schema(self.hass, self._mode, defaults)
+        return self.async_show_form(
+            step_id="mode_details", data_schema=schema, errors=errors
         )
 
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> OpenMeteoOptionsFlow:
+        return OpenMeteoOptionsFlow(config_entry)
+
+
+class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
+    """Options flow allowing to tweak settings after setup."""
+
+    def __init__(self, entry: config_entries.ConfigEntry) -> None:
+        self._entry = entry
+        # Copy options so we can safely mutate defaults
+        self._options: dict[str, Any] = dict(entry.options)
+        eff = {**entry.data, **entry.options}
+        # Migrate old configs that stored an empty string for the entity
+        if self._options.get(CONF_ENTITY_ID) == "":
+            self._options[CONF_ENTITY_ID] = None
+        self._mode = eff.get(CONF_MODE, MODE_STATIC)
+
     async def async_step_init(
-        self, user_input: Dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Step 1: choose mode."""
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """First step: choose tracking mode."""
+
         if user_input is not None:
             self._mode = user_input[CONF_MODE]
             return await self.async_step_mode_details()
-
         schema = vol.Schema(
             {
-                vol.Required(
-                    CONF_MODE, default=self._get(CONF_MODE, MODE_STATIC)
-                ): vol.In([MODE_STATIC, MODE_TRACK])
+                vol.Required(CONF_MODE, default=self._mode): vol.In(
+                    [MODE_STATIC, MODE_TRACK]
+                )
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
 
     async def async_step_mode_details(
-        self, user_input: Dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Step 2: edit fields for selected mode."""
-        mode = self._mode or self._get(CONF_MODE, MODE_STATIC)
-        defaults: Dict[str, Any] = {
-            CONF_LATITUDE: self._get(CONF_LATITUDE, self.hass.config.latitude),
-            CONF_LONGITUDE: self._get(CONF_LONGITUDE, self.hass.config.longitude),
-            CONF_ENTITY_ID: self._get(CONF_ENTITY_ID),
-            CONF_MIN_TRACK_INTERVAL: self._get(
-                CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL
-            ),
-            CONF_UPDATE_INTERVAL: self._get(
-                CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
-            ),
-            CONF_UNITS: self._get(CONF_UNITS, DEFAULT_UNITS),
-            CONF_USE_PLACE_AS_DEVICE_NAME: self._get(
-                CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
-            ),
-            CONF_SHOW_PLACE_NAME: self._get(
-                CONF_SHOW_PLACE_NAME, DEFAULT_SHOW_PLACE_NAME
-            ),
-        }
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Second step: gather fields for the selected mode."""
+        errors: dict[str, str] = {}
+
+        data = {**self._entry.data, **self._entry.options}
+        defaults = user_input or data
+
 
         if user_input is not None:
-            if mode == MODE_STATIC:
-                if (
-                    user_input.get(CONF_LATITUDE) is None
-                    or user_input.get(CONF_LONGITUDE) is None
-                ):
-                    return self.async_show_form(
-                        step_id="mode_details",
-                        data_schema=_build_schema(
-                            self.hass, mode, {**defaults, **user_input}
-                        ),
-                        errors={"base": "latlon_required"},
-                    )
-            elif mode == MODE_TRACK:
+            if self._mode == MODE_TRACK:
                 if not user_input.get(CONF_ENTITY_ID):
-                    return self.async_show_form(
-                        step_id="mode_details",
-                        data_schema=_build_schema(
-                            self.hass, mode, {**defaults, **user_input}
+                    errors[CONF_ENTITY_ID] = "required"
+            else:
+                if not user_input.get(CONF_LATITUDE):
+                    errors[CONF_LATITUDE] = "required"
+                if not user_input.get(CONF_LONGITUDE):
+                    errors[CONF_LONGITUDE] = "required"
+
+            if not errors:
+                new_options: dict[str, Any] = {**self._entry.options}
+                if self._mode == MODE_TRACK:
+                    new_options.pop(CONF_LATITUDE, None)
+                    new_options.pop(CONF_LONGITUDE, None)
+                else:
+                    new_options.pop(CONF_ENTITY_ID, None)
+                    new_options.pop(CONF_MIN_TRACK_INTERVAL, None)
+                    new_options.pop(CONF_USE_PLACE_AS_DEVICE_NAME, None)
+                new_options.update(user_input)
+                new_options[CONF_MODE] = self._mode
+                return self.async_create_entry(title="", data=new_options)
+
+        if self._mode == MODE_TRACK:
+            schema = vol.Schema(
+                {
+                    vol.Required(
+                        CONF_ENTITY_ID,
+                        default=defaults.get(CONF_ENTITY_ID, None),
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain=["device_tracker", "person"])
+                    ),
+                    vol.Optional(
+                        CONF_MIN_TRACK_INTERVAL,
+                        default=defaults.get(
+                            CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL
                         ),
-                        errors={"base": "entity_required"},
-                    )
-            new_options = {
-                **self.config_entry.options,
-                **user_input,
-                CONF_MODE: mode,
-            }
-            return self.async_create_entry(title="", data=new_options)
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1)),
+                    vol.Required(
+                        CONF_UPDATE_INTERVAL,
+                        default=defaults.get(
+                            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=60)),
+                    vol.Required(
+                        CONF_UNITS, default=defaults.get(CONF_UNITS, DEFAULT_UNITS)
+                    ): vol.In(["metric", "imperial"]),
+                    vol.Required(
+                        CONF_API_PROVIDER,
+                        default=defaults.get(
+                            CONF_API_PROVIDER, DEFAULT_API_PROVIDER
+                        ),
+                    ): vol.In(["open_meteo"]),
+                    vol.Optional(
+                        CONF_USE_PLACE_AS_DEVICE_NAME,
+                        default=defaults.get(
+                            CONF_USE_PLACE_AS_DEVICE_NAME,
+                            DEFAULT_USE_PLACE_AS_DEVICE_NAME,
+                        ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_AREA_NAME_OVERRIDE,
+                        default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
+                    ): str,
+                }
+            )
+        else:
+            schema = vol.Schema(
+                {
+                    vol.Required(
+                        CONF_LATITUDE,
+                        default=defaults.get(
+                            CONF_LATITUDE, self.hass.config.latitude
+                        ),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=-90, max=90)),
+                    vol.Required(
+                        CONF_LONGITUDE,
+                        default=defaults.get(
+                            CONF_LONGITUDE, self.hass.config.longitude
+                        ),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=-180, max=180)),
+                    vol.Required(
+                        CONF_UPDATE_INTERVAL,
+                        default=defaults.get(
+                            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=60)),
+                    vol.Required(
+                        CONF_UNITS, default=defaults.get(CONF_UNITS, DEFAULT_UNITS)
+                    ): vol.In(["metric", "imperial"]),
+                    vol.Required(
+                        CONF_API_PROVIDER,
+                        default=defaults.get(
+                            CONF_API_PROVIDER, DEFAULT_API_PROVIDER
+                        ),
+                    ): vol.In(["open_meteo"]),
+                    vol.Optional(
+                        CONF_AREA_NAME_OVERRIDE,
+                        default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
+                    ): str,
+                }
+            )
 
         return self.async_show_form(
-            step_id="mode_details",
-            data_schema=_build_schema(self.hass, mode, defaults),
+            step_id="mode_details", data_schema=schema, errors=errors
         )
+

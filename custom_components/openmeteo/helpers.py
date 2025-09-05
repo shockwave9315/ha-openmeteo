@@ -6,7 +6,13 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
-from .const import DOMAIN, CONF_MODE, MODE_STATIC, CONF_USE_PLACE_AS_DEVICE_NAME
+from .const import (
+    DOMAIN,
+    CONF_MODE,
+    MODE_STATIC,
+    CONF_USE_PLACE_AS_DEVICE_NAME,
+    CONF_AREA_NAME_OVERRIDE,
+)
 import re
 
 
@@ -17,13 +23,34 @@ def get_place_title(hass: HomeAssistant, entry: ConfigEntry) -> str:
         .get("entries", {})
         .get(entry.entry_id, {})
     )
-    if store.get("place_name"):
-        return store["place_name"]
+    override = entry.options.get(CONF_AREA_NAME_OVERRIDE)
+    if override is None:
+        override = entry.data.get(CONF_AREA_NAME_OVERRIDE)
+    if override:
+        return override
+    if store.get("place"):
+        return store["place"]
     lat = store.get("lat")
     lon = store.get("lon")
     if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
         return f"{lat:.5f},{lon:.5f}"
     return entry.title
+
+
+async def maybe_update_entry_title(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    lat: float,
+    lon: float,
+    place: str | None,
+) -> None:
+    """Update config entry title if needed."""
+    override = entry.options.get(CONF_AREA_NAME_OVERRIDE)
+    if override is None:
+        override = entry.data.get(CONF_AREA_NAME_OVERRIDE)
+    new_title = override or place or f"{lat:.5f},{lon:.5f}"
+    if new_title != entry.title:
+        hass.config_entries.async_update_entry(entry, title=new_title)
 
 
 def _get_device(hass: HomeAssistant, entry: ConfigEntry) -> dr.DeviceEntry | None:

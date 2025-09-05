@@ -31,7 +31,6 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers import entity_registry as er
 from datetime import datetime
 from homeassistant.util import dt as dt_util
 
@@ -41,12 +40,17 @@ from .const import (
     DOMAIN,
     CONF_MODE,
     CONF_MIN_TRACK_INTERVAL,
+    CONF_API_PROVIDER,
     CONF_ENTITY_ID,
     CONF_TRACKED_ENTITY_ID,
     MODE_STATIC,
     MODE_TRACK,
     DEFAULT_MIN_TRACK_INTERVAL,
+    CONF_USE_PLACE_AS_DEVICE_NAME,
+    DEFAULT_USE_PLACE_AS_DEVICE_NAME,
 )
+from homeassistant.util import slugify
+from .helpers import get_place_title
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -57,26 +61,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator = hass.data[DOMAIN]["entries"][config_entry.entry_id]["coordinator"]
-    registry = er.async_get(hass)
-    unique_id = f"{config_entry.entry_id}_weather"
-    existing = registry.async_get_entity_id("weather", DOMAIN, unique_id)
-    if existing:
-        suggested = existing.split(".")[1]
-    else:
-        base = "open_meteo"
-        suggested = base
-        i = 2
-        while registry.async_get(f"weather.{suggested}"):
-            suggested = f"open_meteo_{i}"
-            i += 1
-        registry.async_get_or_create(
-            domain="weather",
-            platform=DOMAIN,
-            unique_id=unique_id,
-            suggested_object_id=suggested,
-            config_entry=config_entry,
-        )
-    async_add_entities([OpenMeteoWeather(coordinator, config_entry, suggested)])
+    async_add_entities([OpenMeteoWeather(coordinator, config_entry)])
 
 
 def _map_condition(weather_code: int | None, is_day: int | None = 1) -> str | None:
@@ -109,29 +94,23 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
 
     def __init__(
-        self,
-        coordinator: OpenMeteoDataUpdateCoordinator,
-        config_entry: ConfigEntry,
-        suggested_object_id: str,
+        self, coordinator: OpenMeteoDataUpdateCoordinator, config_entry: ConfigEntry
     ) -> None:
         """Initialize the weather entity."""
         super().__init__(coordinator)
         self._config_entry = config_entry
-        self._attr_has_entity_name = False
-        self._attr_suggested_object_id = suggested_object_id
-        self._attr_unique_id = f"{config_entry.entry_id}_weather"
+        self._attr_unique_id = f"{config_entry.entry_id}-weather"
         data = {**config_entry.data, **config_entry.options}
-        name = getattr(coordinator, "location_name", None)
-        lat = getattr(coordinator, "latitude", None)
-        lon = getattr(coordinator, "longitude", None)
-        if not name and isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-            name = f"{lat:.5f},{lon:.5f}"
-        if not getattr(coordinator, "show_place_name", True):
-            name = "Open-Meteo"
+        self._use_place = data.get(
+            CONF_USE_PLACE_AS_DEVICE_NAME, DEFAULT_USE_PLACE_AS_DEVICE_NAME
+        )
+        if self._use_place:
+            place_slug = slugify(get_place_title(coordinator.hass, config_entry))
+            if place_slug:
+                self._attr_suggested_object_id = place_slug
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
             manufacturer="Open-Meteo",
-            name=name,
         )
         mode = data.get(CONF_MODE)
         if not mode:
@@ -144,50 +123,41 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         self._min_track_interval = int(
             data.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL)
         )
-
-    @property
-    def name(self) -> str:
-        c = self.coordinator
-        show = getattr(c, "show_place_name", True)
-        place = getattr(c, "location_name", None)
-        lat, lon = getattr(c, "latitude", None), getattr(c, "longitude", None)
-        shown = place or (
-            f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
-        )
-        return shown if (show and shown) else "Open-Meteo"
+        self._provider = coordinator.provider
 
     @property
     def available(self) -> bool:
         return bool(self.coordinator.data) and getattr(self.coordinator, "last_update_success", True)
 
     @property
+    def name(self) -> str | None:
+        return get_place_title(self.hass, self._config_entry)
+
+    @property
     def native_temperature(self) -> float | None:
         """Return the current temperature."""
-        current = self.coordinator.data.get("current", {})
-        temp = current.get("temperature_2m")
+        cw = self.coordinator.data.get("current_weather", {})
+        temp = cw.get("temperature")
         return round(temp, 1) if isinstance(temp, (int, float)) else None
 
     @property
     def native_pressure(self) -> float | None:
         """Return the current pressure."""
-        current = self.coordinator.data.get("current", {})
-        val = current.get("pressure_msl")
-        if not isinstance(val, (int, float)):
-            val = self._hourly_value("pressure_msl")
+        val = self._hourly_value("pressure_msl")
         return round(val, 1) if isinstance(val, (int, float)) else None
 
     @property
     def native_wind_speed(self) -> float | None:
         """Return the current wind speed."""
-        current = self.coordinator.data.get("current", {})
-        ws = current.get("wind_speed_10m")
+        cw = self.coordinator.data.get("current_weather", {})
+        ws = cw.get("windspeed")
         return round(ws, 1) if isinstance(ws, (int, float)) else None
 
     @property
     def wind_bearing(self) -> float | None:
         """Return the current wind bearing."""
-        current = self.coordinator.data.get("current", {})
-        wb = current.get("wind_direction_10m")
+        cw = self.coordinator.data.get("current_weather", {})
+        wb = cw.get("winddirection")
         return round(wb, 1) if isinstance(wb, (int, float)) else None
 
     @property
@@ -214,11 +184,9 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     @property
     def condition(self) -> str | None:
         """Return the current weather condition."""
-        current = self.coordinator.data.get("current", {})
-        weather_code = current.get("weathercode")
-        is_day = current.get("is_day")
-        if is_day is None:
-            is_day = self._hourly_value("is_day")
+        cw = self.coordinator.data.get("current_weather", {})
+        weather_code = cw.get("weathercode")
+        is_day = cw.get("is_day")
         return _map_condition(weather_code, is_day) if weather_code is not None else None
     
     def _current_hour_index(self) -> int:
@@ -335,29 +303,13 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_state()
 
-    async def _handle_place_update(self) -> None:
-        coord = self.coordinator
-        show_place_name = getattr(coord, "show_place_name", True)
-        place = getattr(coord, "location_name", None)
-        lat, lon = getattr(coord, "latitude", None), getattr(coord, "longitude", None)
-        shown = place or (
-            f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
-        )
-        device_name = shown if (show_place_name and shown) else "Open-Meteo"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, self._config_entry.entry_id)},
-            manufacturer="Open-Meteo",
-            name=device_name,
-        )
-        self.async_write_ha_state()
-
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         signal = f"openmeteo_place_updated_{self._config_entry.entry_id}"
         self.async_on_remove(
-            async_dispatcher_connect(self.hass, signal, self._handle_place_update)
+            async_dispatcher_connect(self.hass, signal, self.async_write_ha_state)
         )
-        await self._handle_place_update()
+        self.async_write_ha_state()
         store = (
             self.hass.data.setdefault(DOMAIN, {})
             .setdefault("entries", {})
@@ -393,17 +345,6 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         return dt_util.as_utc(dt)
 
     @property
-    def name(self) -> str:
-        coord = self.coordinator
-        show = getattr(coord, "show_place_name", True)
-        place = getattr(coord, "location_name", None)
-        lat, lon = getattr(coord, "latitude", None), getattr(coord, "longitude", None)
-        shown = place or (
-            f"{lat:.5f},{lon:.5f}" if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
-        )
-        return shown if (show and shown) else "Open-Meteo"
-
-    @property
     def sunset(self) -> datetime | None:
         val = self.coordinator.data.get("daily", {}).get("sunset", [None])[0]
         if isinstance(val, str):
@@ -419,15 +360,46 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        store = (
-            self.hass.data.get(DOMAIN, {})
-            .get("entries", {})
-            .get(self._config_entry.entry_id, {})
+        attrs = dict(super().extra_state_attributes or {})
+        data = self.coordinator.data or {}
+        loc = data.get("location") or {}
+        attrs.update(
+            {
+                "location_name": data.get("location_name"),
+                "mode": self._mode,
+                "min_track_interval": self._min_track_interval,
+                "last_location_update": data.get("last_location_update"),
+                "provider": self._provider,
+            }
         )
-        return {
-            "place_name": store.get("place_name"),
-            "latitude": self.coordinator.latitude,
-            "longitude": self.coordinator.longitude,
-            "geocode_provider": store.get("geocode_provider"),
-            "geocode_last_success": store.get("geocode_last_success"),
-        }
+        dp = self.native_dew_point
+        if dp is not None:
+            attrs["dew_point"] = dp
+        if "latitude" not in attrs:
+            attrs["latitude"] = loc.get("latitude")
+        if "longitude" not in attrs:
+            attrs["longitude"] = loc.get("longitude")
+
+        # --- diagnostics ---
+        try:
+            store = (
+                self.hass.data.get(DOMAIN, {})
+                .get("entries", {})
+                .get(self._config_entry.entry_id, {})
+            )
+            src = store.get("src")
+            if src:
+                attrs["om_source"] = src
+
+            lat = store.get("lat", loc.get("latitude"))
+            lon = store.get("lon", loc.get("longitude"))
+            if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+                attrs["om_coords_used"] = f"{float(lat):.6f},{float(lon):.6f}"
+
+            place = data.get("location_name") or store.get("place")
+            if place:
+                attrs["om_place_name"] = place
+        except Exception:
+            pass
+
+        return attrs

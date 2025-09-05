@@ -108,6 +108,7 @@ openmeteo:
     - precipitation
     - precipitation_probability
     - pressure_msl
+    - cloud_cover
     - wind_speed_10m
     - wind_gusts_10m
     - wind_direction_10m
@@ -145,7 +146,7 @@ cards:
       - type: weather
         entity: weather.open_meteo_home
       - type: entity
-        entity: sensor.open_meteo_uv_index
+        entity: sensor.open_meteo_indeks_uv
         name: UV
       - type: entity
         entity: sensor.open_meteo_prawdopodobienstwo_opadow
