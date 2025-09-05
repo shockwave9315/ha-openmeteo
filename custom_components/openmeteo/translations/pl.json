@@ -1,0 +1,53 @@
+{
+  "title": "Open-Meteo",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Open-Meteo",
+        "description": "Konfiguruj Open-Meteo.",
+        "data": {
+          "mode": "Tryb",
+          "latitude": "Szerokość geograficzna",
+          "longitude": "Długość geograficzna",
+          "entity_id": "Encja trackera",
+          "min_track_interval": "Min. odstęp śledzenia (min)",
+          "update_interval": "Interwał aktualizacji (s)",
+          "units": "Jednostki",
+          "api_provider": "Dostawca API",
+          "area_name_override": "Nazwa obszaru",
+          "use_place_as_device_name": "Użyj lokalizacji jako nazwy urządzenia"
+        }
+      }
+    },
+    "error": {
+      "missing_location": "Wymagana szerokość i długość geograficzna",
+      "missing_entity": "Wymagana encja do śledzenia",
+      "invalid_entity": "Encja nie ma współrzędnych GPS"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opcje Open-Meteo",
+        "data": {
+          "mode": "Tryb",
+          "latitude": "Szerokość geograficzna",
+          "longitude": "Długość geograficzna",
+          "entity_id": "Encja trackera",
+          "min_track_interval": "Min. odstęp śledzenia (min)",
+          "update_interval": "Interwał aktualizacji (s)",
+          "units": "Jednostki",
+          "api_provider": "Dostawca API",
+          "area_name_override": "Nazwa obszaru",
+          "use_place_as_device_name": "Użyj lokalizacji jako nazwy urządzenia"
+        }
+      }
+    },
+    "error": {
+      "missing_location": "Wymagana szerokość i długość geograficzna",
+      "missing_entity": "Wymagana encja do śledzenia",
+      "invalid_entity": "Encja nie ma współrzędnych GPS"
+    }
+  },
+  "uv_index": { "name": "Indeks UV" }
+}

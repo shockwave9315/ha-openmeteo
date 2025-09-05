@@ -1,0 +1,53 @@
+{
+  "title": "Open-Meteo",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Open-Meteo",
+        "description": "Configure Open-Meteo.",
+        "data": {
+          "mode": "Mode",
+          "latitude": "Latitude",
+          "longitude": "Longitude",
+          "entity_id": "Tracker entity",
+          "min_track_interval": "Min track interval (min)",
+          "update_interval": "Update interval (s)",
+          "units": "Units",
+          "api_provider": "API provider",
+          "area_name_override": "Area name override",
+          "use_place_as_device_name": "Use place as device name"
+        }
+      }
+    },
+    "error": {
+      "missing_location": "Latitude and longitude are required",
+      "missing_entity": "Tracking entity is required",
+      "invalid_entity": "Entity has no GPS coordinates"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Open-Meteo options",
+        "data": {
+          "mode": "Mode",
+          "latitude": "Latitude",
+          "longitude": "Longitude",
+          "entity_id": "Tracker entity",
+          "min_track_interval": "Min track interval (min)",
+          "update_interval": "Update interval (s)",
+          "units": "Units",
+          "api_provider": "API provider",
+          "area_name_override": "Area name override",
+          "use_place_as_device_name": "Use place as device name"
+        }
+      }
+    },
+    "error": {
+      "missing_location": "Latitude and longitude are required",
+      "missing_entity": "Tracking entity is required",
+      "invalid_entity": "Entity has no GPS coordinates"
+    }
+  },
+  "uv_index": { "name": "UV Index" }
+}
