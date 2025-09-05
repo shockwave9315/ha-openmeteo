@@ -40,6 +40,7 @@ from .const import (
     CONF_API_PROVIDER,
     CONF_ENTITY_ID,
     CONF_TRACKED_ENTITY_ID,
+    CONF_USE_PLACE_AS_DEVICE_NAME,
     MODE_STATIC,
     MODE_TRACK,
     DEFAULT_MIN_TRACK_INTERVAL,
@@ -86,13 +87,16 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         pass
         
     def _update_device_name(self) -> None:
-        """Update the device name based on location."""
+        """Update the device name based on location if enabled in options."""
         if not hasattr(self, 'hass') or not hasattr(self, '_config_entry'):
             return
+        if not self._config_entry.options.get(CONF_USE_PLACE_AS_DEVICE_NAME, True):
+            return
         loc = (self.coordinator.data or {}).get("location_name")
-        self.hass.async_create_task(
-            maybe_update_device_name(self.hass, self._config_entry, loc)
-        )
+        if loc:
+            self.hass.async_create_task(
+                maybe_update_device_name(self.hass, self._config_entry, loc)
+            )
         
     async def async_added_to_hass(self) -> None:
         """When entity is added to hass."""

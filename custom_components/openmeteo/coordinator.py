@@ -109,6 +109,38 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _coords_fallback(self, lat: float, lon: float) -> str:
         return f"{lat:.2f},{lon:.2f}"
 
+    async def _reverse_geocode(self, lat: float, lon: float) -> str | None:
+        """Return location name (e.g., 'Radłów') or None."""
+        session = async_get_clientsession(self.hass)
+        url = "https://nominatim.openstreetmap.org/reverse"
+        params = {
+            "format": "jsonv2",
+            "lat": str(lat),
+            "lon": str(lon),
+            "zoom": "10",
+            "accept-language": "pl"
+        }
+        headers = {
+            "User-Agent": "HomeAssistant-OpenMeteo"
+        }
+        try:
+            async with session.get(url, params=params, headers=headers, timeout=10) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+                # Try to get city/town/village/municipality from the address
+                address = data.get("address") or {}
+                return (
+                    address.get("city")
+                    or address.get("town")
+                    or address.get("village")
+                    or address.get("municipality")
+                    or data.get("name")
+                )
+        except Exception as e:
+            _LOGGER.debug("Reverse geocoding failed: %s", e)
+            return None
+
     async def _async_update_data(self) -> dict[str, Any]:
         mode = self._current_mode()
         data = {**self.entry.data, **self.entry.options}

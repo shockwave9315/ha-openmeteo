@@ -17,6 +17,7 @@ from .const import (
     CONF_MODE,
     CONF_UNITS,
     CONF_UPDATE_INTERVAL,
+    CONF_USE_PLACE_AS_DEVICE_NAME,
     DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_UNITS,
     DEFAULT_UPDATE_INTERVAL,
@@ -73,6 +74,10 @@ def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> v
                 CONF_AREA_NAME_OVERRIDE,
                 default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
             ): str,
+            vol.Required(
+                CONF_USE_PLACE_AS_DEVICE_NAME,
+                default=defaults.get(CONF_USE_PLACE_AS_DEVICE_NAME, True),
+            ): bool,
         }
     )
     return vol.Schema(data)
