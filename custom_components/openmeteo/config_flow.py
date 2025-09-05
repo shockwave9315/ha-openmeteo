@@ -147,18 +147,40 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_mode_details(self, user_input: Dict[str, Any] | None = None) -> FlowResult:
         """Krok 2: szczegóły trybu."""
         mode = self._mode or MODE_STATIC
-        defaults: Dict[str, Any] = {}
+        defaults: Dict[str, Any] = {
+            CONF_MODE: mode,
+            CONF_LATITUDE: self.hass.config.latitude,
+            CONF_LONGITUDE: self.hass.config.longitude,
+            CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+            CONF_UNITS: DEFAULT_UNITS,
+            CONF_USE_PLACE_AS_DEVICE_NAME: DEFAULT_USE_PLACE_AS_DEVICE_NAME,
+            CONF_SHOW_PLACE_NAME: DEFAULT_SHOW_PLACE_NAME,
+        }
+        
         if user_input is not None:
             # Walidacja podstawowa
             if mode == MODE_STATIC:
                 if user_input.get(CONF_LATITUDE) is None or user_input.get(CONF_LONGITUDE) is None:
-                    return self.async_show_form(step_id="mode_details", data_schema=_build_schema(self.hass, mode, user_input), errors={"base": "latlon_required"})
+                    return self.async_show_form(
+                        step_id="mode_details", 
+                        data_schema=_build_schema(self.hass, mode, {**defaults, **user_input}), 
+                        errors={"base": "latlon_required"}
+                    )
             elif mode == MODE_TRACK:
                 if not user_input.get(CONF_ENTITY_ID):
-                    return self.async_show_form(step_id="mode_details", data_schema=_build_schema(self.hass, mode, user_input), errors={"base": "entity_required"})
+                    return self.async_show_form(
+                        step_id="mode_details", 
+                        data_schema=_build_schema(self.hass, mode, {**defaults, **user_input}), 
+                        errors={"base": "entity_required"}
+                    )
+            
+            # Create entry with all options in data (will be moved to options in async_setup_entry)
             data = {**user_input, CONF_MODE: mode}
-            # Zawsze twórz wpis z pustymi opcjami, aby udostępnić ekran edycji.
-            return self.async_create_entry(title="", data=data, options={})
+            return self.async_create_entry(
+                title=f"OpenMeteo ({mode.capitalize()})", 
+                data=data, 
+                options=data  # Initialize options with user input
+            )
 
         return self.async_show_form(step_id="mode_details", data_schema=_build_schema(self.hass, mode, defaults))
 

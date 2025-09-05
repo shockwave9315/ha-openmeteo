@@ -120,22 +120,38 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Open-Meteo from a config entry."""
+    # Migrate old config entries to options
+    if not entry.options and entry.data:
+        # Move all data to options and keep only minimal config in data
+        data = {k: v for k, v in entry.data.items() if k in (CONF_LATITUDE, CONF_LONGITUDE, CONF_ENTITY_ID, "mode")}
+        options = {**entry.data}
+        hass.config_entries.async_update_entry(entry, data=data, options=options)
+    
+    # Initialize coordinator with the entry
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
     store = _entry_store(hass, entry)
     store["coordinator"] = coordinator
 
+    # Resolve coordinates and update coordinator
     lat, lon, _src = await resolve_coords(hass, entry)
     coordinator.latitude = lat
     coordinator.longitude = lon
 
+    # Setup platforms
     try:
         await coordinator.async_config_entry_first_refresh()
-    except Exception:
-        pass
-    await coordinator._resubscribe_tracked_entity(entry.options.get("entity_id"))
+    except Exception as err:
+        _LOGGER.error("Error setting up OpenMeteo: %s", err)
+    
+    # Subscribe to entity tracker if needed
+    entity_id = entry.options.get(CONF_ENTITY_ID) or entry.data.get(CONF_ENTITY_ID)
+    if entity_id:
+        await coordinator._resubscribe_tracked_entity(entity_id)
+    
+    # Setup platforms and add update listener
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+    
     return True
 
 
