@@ -28,7 +28,7 @@ from homeassistant.helpers.typing import ConfigType
 from typing import Any, Optional, Tuple
 
 
-def resolve_coords(hass: HomeAssistant, config_entry: ConfigEntry) -> Tuple[float, float]:
+async def resolve_coords(hass: HomeAssistant, config_entry: ConfigEntry) -> Tuple[float, float]:
     """Resolve coordinates from the configuration entry.
     
     Args:
@@ -64,21 +64,18 @@ def resolve_coords(hass: HomeAssistant, config_entry: ConfigEntry) -> Tuple[floa
             raise ValueError(f"Invalid coordinates in configuration: {err}")
 
 
-def build_title(hass: HomeAssistant, config: ConfigType) -> str:
+async def build_title(hass: HomeAssistant, config_entry: ConfigEntry) -> str:
     """Build a title for the integration based on the configuration.
     
     Args:
         hass: Home Assistant instance
-        config: Configuration dictionary
+        config_entry: The config entry object
         
     Returns:
         A string title for the integration
     """
     try:
-        # This function is not called by the failing test, but for consistency
-        # it might be better to adapt it for ConfigEntry as well if needed elsewhere.
-        # For now, leaving it as is since it wasn't the source of the error.
-        lat, lon = resolve_coords(hass, config)
+        lat, lon = await resolve_coords(hass, config_entry)
         return f"{lat:.4f}, {lon:.4f}"
     except ValueError:
         return "Open-Meteo"
