@@ -16,6 +16,7 @@ from homeassistant.components.weather import (
     WeatherEntity,
     WeatherEntityFeature,
 )
+from homeassistant.helpers import device_registry as dr
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     UnitOfLength,
@@ -140,8 +141,21 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
     @property
     def name(self) -> str:
-        loc = (self.coordinator.data or {}).get("location_name") or "Open-Meteo"
-        return loc
+        """Return the device name (location) with fallbacks."""
+        # 1) Try to get from Device Registry
+        try:
+            dev = dr.async_get(self.hass).async_get_device(
+                identifiers={(DOMAIN, self._config_entry.entry_id)}
+            )
+            if dev:
+                return dev.name_by_user or dev.name or \
+                       (self.coordinator.data or {}).get("location_name") or \
+                       self._config_entry.title or "Open-Meteo"
+        except Exception:
+            pass
+        # 2) Fallback if device doesn't exist
+        return (self.coordinator.data or {}).get("location_name") or \
+               self._config_entry.title or "Open-Meteo"
 
     @property
     def available(self) -> bool:
