@@ -1,5 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-# SPDX-License-Identifier: Apache-2.0
 """Weather entity for the Open-Meteo integration."""
 from __future__ import annotations
 
@@ -54,7 +52,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][config_entry.entry_id]
     async_add_entities([OpenMeteoWeather(coordinator, config_entry)])
 
 
@@ -117,20 +115,6 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     @property
     def available(self) -> bool:
         return bool(self.coordinator.data) and getattr(self.coordinator, "last_update_success", True)
-
-    @property
-    def name(self) -> str | None:
-        base = self._attr_name or "Open-Meteo"
-        data = self.coordinator.data or {}
-        loc_name = data.get("location_name")
-        if loc_name:
-            return f"{base} — {loc_name}"
-        loc = data.get("location") or {}
-        lat = loc.get("latitude")
-        lon = loc.get("longitude")
-        if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-            return f"{base} — {lat:.5f},{lon:.5f}"
-        return base
 
     @property
     def native_temperature(self) -> float | None:
@@ -335,23 +319,15 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        attrs = dict(super().extra_state_attributes or {})
-        data = self.coordinator.data or {}
-        loc = data.get("location") or {}
-        attrs.update(
-            {
-                "location_name": data.get("location_name"),
-                "mode": self._mode,
-                "min_track_interval": self._min_track_interval,
-                "last_location_update": data.get("last_location_update"),
-                "provider": self._provider,
-            }
-        )
+        """Return additional state attributes."""
+        attrs = {
+            "location_name": self.coordinator.data.get("location_name"),
+            "mode": self._mode,
+            "min_track_interval": self._min_track_interval,
+            "last_location_update": self.coordinator.data.get("last_location_update"),
+            "provider": self._provider,
+        }
         dp = self.native_dew_point
         if dp is not None:
             attrs["dew_point"] = dp
-        if "latitude" not in attrs:
-            attrs["latitude"] = loc.get("latitude")
-        if "longitude" not in attrs:
-            attrs["longitude"] = loc.get("longitude")
         return attrs

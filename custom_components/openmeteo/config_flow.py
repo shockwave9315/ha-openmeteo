@@ -1,5 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-# SPDX-License-Identifier: Apache-2.0
 """Config and options flows for Open-Meteo."""
 from __future__ import annotations
 
@@ -35,7 +33,7 @@ def _build_schema(hass: HomeAssistant, mode: str, defaults: dict[str, Any]) -> v
     if mode == MODE_TRACK:
         data: dict[Any, Any] = {
             vol.Required(
-                CONF_ENTITY_ID, default=defaults.get(CONF_ENTITY_ID, None)
+                CONF_ENTITY_ID, default=defaults.get(CONF_ENTITY_ID, "")
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["device_tracker", "person"])
             ),
@@ -147,11 +145,11 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
         self._entry = entry
         # Copy options so we can safely mutate defaults
         self._options: dict[str, Any] = dict(entry.options)
-        eff = {**entry.data, **entry.options}
         # Migrate old configs that stored an empty string for the entity
         if self._options.get(CONF_ENTITY_ID) == "":
             self._options[CONF_ENTITY_ID] = None
-        self._mode = eff.get(CONF_MODE, MODE_STATIC)
+        # Default mode comes only from saved options
+        self._mode = self._options.get(CONF_MODE, MODE_STATIC)
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -210,7 +208,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     vol.Required(
                         CONF_ENTITY_ID,
 
-                        default=defaults.get(CONF_ENTITY_ID, None),
+                        default=defaults.get(CONF_ENTITY_ID, ""),
                     ): selector.EntitySelector(
                         selector.EntitySelectorConfig(
                             domain=["device_tracker", "person"]
