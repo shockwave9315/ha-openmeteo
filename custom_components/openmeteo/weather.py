@@ -1,4 +1,4 @@
-"""Weather entity for the Open-Meteo integration (stable entity_id; dynamic place name from coordinator)."""
+"""Weather entity for the Open-Meteo integration (stable entity_id 'open_meteo'; dynamic display name)."""
 from __future__ import annotations
 
 import logging
@@ -64,7 +64,7 @@ def _map_condition(weather_code: int | None, is_day: int | None = 1) -> str | No
 
 
 class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], WeatherEntity):
-    """Implementation of an Open-Meteo weather entity with stable entity_id and dynamic place name."""
+    """Implementation of an Open-Meteo weather entity with stable entity_id and dynamic place display name."""
 
     _attr_attribution = "Weather data provided by Open-Meteo"
     _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
@@ -88,10 +88,14 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         super().__init__(coordinator)
         self._config_entry = config_entry
 
-        # Stable entity_id base; HA will assign weather.open_meteo, then weather.open_meteo_2, etc.
+        # Force stable entity_id base, regardless of display name.
         self._attr_suggested_object_id = "open_meteo"
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
-        self._attr_has_entity_name = True
+        # IMPORTANT: keep has_entity_name False so that entity_id is generated from suggested_object_id,
+        # not from the (dynamic) display name.
+        self._attr_has_entity_name = False
+
+        # Device name can stay generic; card display name will be provided by .name property below
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
             "name": "Open-Meteo",
@@ -112,24 +116,21 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
             opts.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL)
         )
 
-    # -------- Dynamic name (prefers coordinator reverse geocode) --------
+    # -------- Dynamic display name (prefers coordinator reverse geocode) --------
     @property
     def name(self) -> str | None:
         opts = {**self._config_entry.data, **self._config_entry.options}
         use_place = opts.get(CONF_USE_PLACE_AS_DEVICE_NAME, True)
         if not use_place:
             return "Open-Meteo"
-        # Prefer freshly resolved place name from coordinator (reverse geocode)
         place = getattr(self.coordinator, "location_name", None)
         if isinstance(place, str) and place.strip():
             return place.strip()
-        # Fallback to persisted last location name in entry.options (coordinator stores OPT_LAST_LOCATION_NAME)
         place = opts.get("last_location_name")
         if isinstance(place, str) and place.strip():
             return place.strip()
-        # Finally fallback to entry title or generic
-        place = (self._config_entry.title or "").strip()
-        return place or "Open-Meteo"
+        title = (self._config_entry.title or "").strip()
+        return title or "Open-Meteo"
 
     # -------- BASIC METRICS --------
     @property
