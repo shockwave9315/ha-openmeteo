@@ -5,7 +5,7 @@ import asyncio
 import logging
 import random
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Callable, Optional
 
 import aiohttp
 from homeassistant.core import HomeAssistant
@@ -59,9 +59,13 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hass,
             _LOGGER,
             name="Open-Meteo",
-            update_method=self._async_update_data,
+            update_method=self._async_update_data,     # ← MUSI BYĆ
             update_interval=timedelta(seconds=interval),
         )
+        # DODAJ TE DWA POLA (zaraz po super().__init__)
+        self._tracked_entity_id: Optional[str] = None
+        self._unsub_tracked: Optional[Callable[[], None]] = None
+        
         self._cached: tuple[float, float] | None = None
         self._accepted_lat: float | None = None
         self._accepted_lon: float | None = None
@@ -72,8 +76,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.provider: str = entry.options.get("api_provider", DEFAULT_API_PROVIDER)
         self._warned_missing = False
         self._last_data: dict[str, Any] | None = None
-        self._tracked_entity_id: str | None = None
-        self._unsub_tracked: callable | None = None
 
     @property
     def last_location_update(self) -> datetime | None:
@@ -273,14 +275,13 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return self._last_data
             raise
 
-    async def _resubscribe_tracked_entity(self, entity_id: str | None) -> None:
-        """Back-compat: zasubskrybuj zmiany stanu encji z lokalizacją (jeśli podano).
+    async def _resubscribe_tracked_entity(self, entity_id: Optional[str]) -> None:
+        """(Back-compat) Subskrybuj zmiany stanu encji z lokalizacją.
 
-        __init__.py wywołuje to podczas setupu; tu bezpiecznie rejestrujemy listener,
-        a przy każdej zmianie stanu prosimy koordynator o odświeżenie danych.
+        Wywoływane z __init__.py podczas setupu; przy każdej zmianie wymuszamy refresh.
         """
-        # Anuluj poprzednią subskrypcję (jeśli była)
-        if getattr(self, "_unsub_tracked", None):
+        # Anuluj poprzednią subskrypcję
+        if self._unsub_tracked:
             try:
                 self._unsub_tracked()
             except Exception:
@@ -289,13 +290,12 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self._tracked_entity_id = entity_id
         if not entity_id:
-            return  # nic nie śledzimy
+            return
 
-        # Rejestruj listener zmian stanu tej encji
         from homeassistant.helpers.event import async_track_state_change_event
 
         def _on_state_change(event):
-            # Minimalnie: poproś o odświeżenie (HA sam zadba o throttling/merge)
+            # Bez kombinowania: prosimy koordynator o odświeżenie
             self.async_request_refresh()
 
         self._unsub_tracked = async_track_state_change_event(
