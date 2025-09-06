@@ -1,4 +1,4 @@
-"""Weather entity for the Open-Meteo integration (stable entity_id 'open_meteo'; dynamic display name)."""
+"""Weather entity for the Open-Meteo integration (force stable entity_id; dynamic city name)."""
 from __future__ import annotations
 
 import logging
@@ -25,6 +25,8 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -88,14 +90,12 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         super().__init__(coordinator)
         self._config_entry = config_entry
 
-        # Force stable entity_id base, regardless of display name.
+        # We want entity_id: weather.open_meteo, weather.open_meteo_2, ...
         self._attr_suggested_object_id = "open_meteo"
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
-        # IMPORTANT: keep has_entity_name False so that entity_id is generated from suggested_object_id,
-        # not from the (dynamic) display name.
-        self._attr_has_entity_name = False
+        self._attr_has_entity_name = False  # do NOT derive entity_id from display name
 
-        # Device name can stay generic; card display name will be provided by .name property below
+        # Device is generic; card shows display name from .name property
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
             "name": "Open-Meteo",
@@ -294,4 +294,12 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:
+        # If HA assigned a city-based entity_id, migrate it to 'weather.open_meteo' (or _2, _3, ...)
+        reg = er.async_get(self.hass)
+        entry = reg.async_get(self.entity_id)
+        if entry:
+            # Generate a clean target entity_id
+            new_entity_id = async_generate_entity_id(self.hass, "weather.{}", "open_meteo", reg)
+            if entry.entity_id != new_entity_id:
+                reg.async_update_entity(entry.entity_id, new_entity_id=new_entity_id)
         self.async_on_remove(self.coordinator.async_add_listener(self._handle_coordinator_update))
