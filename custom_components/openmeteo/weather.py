@@ -1,4 +1,4 @@
-"""Weather entity for the Open-Meteo integration (stable entity_id; dynamic place name)."""
+"""Weather entity for the Open-Meteo integration (stable entity_id; dynamic place name from coordinator)."""
 from __future__ import annotations
 
 import logging
@@ -25,7 +25,6 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -113,13 +112,24 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
             opts.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL)
         )
 
-    # -------- Dynamic name (follows place if option enabled) --------
+    # -------- Dynamic name (prefers coordinator reverse geocode) --------
     @property
     def name(self) -> str | None:
         opts = {**self._config_entry.data, **self._config_entry.options}
         use_place = opts.get(CONF_USE_PLACE_AS_DEVICE_NAME, True)
-        place_name = (self._config_entry.title or "").strip() or "Open-Meteo"
-        return place_name if use_place else "Open-Meteo"
+        if not use_place:
+            return "Open-Meteo"
+        # Prefer freshly resolved place name from coordinator (reverse geocode)
+        place = getattr(self.coordinator, "location_name", None)
+        if isinstance(place, str) and place.strip():
+            return place.strip()
+        # Fallback to persisted last location name in entry.options (coordinator stores OPT_LAST_LOCATION_NAME)
+        place = opts.get("last_location_name")
+        if isinstance(place, str) and place.strip():
+            return place.strip()
+        # Finally fallback to entry title or generic
+        place = (self._config_entry.title or "").strip()
+        return place or "Open-Meteo"
 
     # -------- BASIC METRICS --------
     @property
@@ -284,6 +294,3 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(self.coordinator.async_add_listener(self._handle_coordinator_update))
-        # If place name changes (e.g., tracking mode), re-render state to refresh .name
-        signal = f"openmeteo_place_updated_{self._config_entry.entry_id}"
-        self.async_on_remove(async_dispatcher_connect(self.hass, signal, self._handle_coordinator_update))
