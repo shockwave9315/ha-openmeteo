@@ -59,6 +59,7 @@ OBJECT_ID_PL = {
     "snow_depth": "pokrywa_sniezna",
     "sunrise": "wschod_slonca",
     "sunset": "zachod_slonca",
+    "uv_index": "promieniowanie_uv",
     "uv_index_max": "maksymalne_promieniowanie_uv",
     "wind_speed_max": "maksymalna_predkosc_wiatru",
     "temperature_min": "temperatura_minimalna",
@@ -381,6 +382,7 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
         # Set device info
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
+            name="Open-Meteo",
             manufacturer="Open-Meteo",
         )
 
@@ -473,10 +475,12 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
         self._attr_icon = "mdi:weather-sunny-alert"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_translation_key = "uv_index"
+        self._attr_name = "Indeks UV"
 
         # Set device info
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
+            name="Open-Meteo",
             manufacturer="Open-Meteo",
         )
 
