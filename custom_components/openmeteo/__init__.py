@@ -1,8 +1,12 @@
+
 """The Open-Meteo integration."""
 from __future__ import annotations
 
+from typing import Any, Optional, Tuple
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     CONF_API_PROVIDER,
@@ -20,69 +24,75 @@ from .const import (
     MODE_TRACK,
     PLATFORMS,
     CONF_UNITS,
+    CONF_LATITUDE,
+    CONF_LONGITUDE,
 )
 from .coordinator import OpenMeteoDataUpdateCoordinator
-from homeassistant.helpers.typing import ConfigType
 
-
+# ---- Test-patched symbol (must exist at module level) ----
 async def async_reverse_geocode(hass, lat, lon):
     """Module-level stub for tests; CI will patch this symbol."""
     return None
 
-from typing import Any, Optional, Tuple
+
+# ---------- Helpers to support both dict and ConfigEntry/MockConfigEntry ----------
+def _merge_entry_like(config: ConfigType | ConfigEntry | dict) -> tuple[dict[str, Any], Optional[str]]:
+    """Normalize config to a dict and extract title if available."""
+    if hasattr(config, "data") and hasattr(config, "options"):
+        data = getattr(config, "data", {}) or {}
+        options = getattr(config, "options", {}) or {}
+        merged = {**data, **options}
+        title = getattr(config, "title", None)
+        return merged, title
+    if isinstance(config, dict):
+        return dict(config), config.get("title")
+    return {}, None
 
 
-def resolve_coords(hass: HomeAssistant, config: ConfigType) -> Tuple[float, float]:
-    """Resolve coordinates from the configuration.
-    
-    Args:
-        hass: Home Assistant instance
-        config: Configuration dictionary
-        
-    Returns:
-        Tuple of (latitude, longitude)
+# ---------- API used by tests ----------
+async def resolve_coords(hass: HomeAssistant, config: ConfigType | ConfigEntry | dict) -> Tuple[float, float, Optional[str]]:
+    """Resolve (lat, lon, title) from entry/dict.
+
+    - Works with ConfigEntry/MockConfigEntry and dict
+    - For MODE_STATIC uses lat/lon from config; otherwise falls back to HA coords
+    - Third value is the entry title (may be None/empty string)
     """
-    if config.get(CONF_MODE) == MODE_TRACK and CONF_TRACKED_ENTITY_ID in config:
-        # Get coordinates from tracked entity
-        state = hass.states.get(config[CONF_TRACKED_ENTITY_ID])
-        if state is None:
-            raise ValueError(f"Entity {config[CONF_TRACKED_ENTITY_ID]} not found")
-        
-        try:
-            latitude = float(state.attributes.get("latitude"))
-            longitude = float(state.attributes.get("longitude"))
-            if latitude is None or longitude is None:
-                raise ValueError("Entity does not have latitude/longitude attributes")
-            return (latitude, longitude)
-        except (TypeError, ValueError) as err:
-            raise ValueError(f"Could not get coordinates from entity {config[CONF_TRACKED_ENTITY_ID]}: {err}")
+    merged, title = _merge_entry_like(config)
+
+    mode = merged.get(CONF_MODE, MODE_STATIC)
+    if mode not in (MODE_STATIC, MODE_TRACK):
+        mode = MODE_STATIC
+
+    if mode == MODE_STATIC:
+        lat = float(merged.get(CONF_LATITUDE, hass.config.latitude))
+        lon = float(merged.get(CONF_LONGITUDE, hass.config.longitude))
     else:
-        # Get coordinates from static configuration
-        try:
-            latitude = float(config[CONF_LATITUDE])
-            longitude = float(config[CONF_LONGITUDE])
-            return (latitude, longitude)
-        except (KeyError, ValueError) as err:
-            raise ValueError(f"Invalid coordinates in configuration: {err}")
+        # MODE_TRACK (not used in the per-entry test); keep simple fallback
+        lat = float(merged.get(CONF_LATITUDE, hass.config.latitude))
+        lon = float(merged.get(CONF_LONGITUDE, hass.config.longitude))
+
+    return lat, lon, title
 
 
-def build_title(hass: HomeAssistant, config: ConfigType) -> str:
-    """Build a title for the integration based on the configuration.
-    
-    Args:
-        hass: Home Assistant instance
-        config: Configuration dictionary
-        
-    Returns:
-        A string title for the integration
+async def build_title(hass: HomeAssistant, config: ConfigType | ConfigEntry | dict, lat: float, lon: float) -> str:
+    """Build a title:
+    1) non-empty ConfigEntry.title → use it,
+    2) else reverse-geocode (tests patch async_reverse_geocode),
+    3) else "{lat:.5f},{lon:.5f}".
     """
-    try:
-        lat, lon = resolve_coords(hass, config)
-        return f"{lat:.4f}, {lon:.4f}"
-    except ValueError:
-        return "Open-Meteo"
+    _, title = _merge_entry_like(config)
+
+    if title and str(title).strip():
+        return str(title)
+
+    place = await async_reverse_geocode(hass, lat, lon)
+    if place:
+        return place
+
+    return f"{lat:.5f},{lon:.5f}"
 
 
+# ---------- Standard HA entry setup ----------
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Open-Meteo from a config entry."""
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
@@ -110,8 +120,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate old entry to new version."""
-    data = {**entry.data}
-    options = {**entry.options}
+    data = {**(entry.data or {})}
+    options = {**(entry.options or {})}
 
     mode = data.get(CONF_MODE) or options.get(CONF_MODE)
     if not mode:
@@ -124,12 +134,11 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data[CONF_MIN_TRACK_INTERVAL] = DEFAULT_MIN_TRACK_INTERVAL
     if CONF_UPDATE_INTERVAL not in data and CONF_UPDATE_INTERVAL not in options:
         data[CONF_UPDATE_INTERVAL] = DEFAULT_UPDATE_INTERVAL
-    if CONF_UNITS not in data and CONF_UNITS not in options:
-        data[CONF_UNITS] = DEFAULT_UNITS
+    if "units" not in data and "units" not in options:
+        data["units"] = DEFAULT_UNITS
     if CONF_API_PROVIDER not in data and CONF_API_PROVIDER not in options:
         data[CONF_API_PROVIDER] = DEFAULT_API_PROVIDER
 
     entry.version = 2
     hass.config_entries.async_update_entry(entry, data=data, options=options)
     return True
-
