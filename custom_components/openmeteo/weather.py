@@ -1,4 +1,4 @@
-"""Weather entity for the Open-Meteo integration (stable entity_id + dynamic city name)."""
+"""Open-Meteo weather entity (stable entity_id, dynamic city display name)."""
 from __future__ import annotations
 
 import logging
@@ -25,6 +25,7 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -37,7 +38,6 @@ from .const import (
     CONF_MIN_TRACK_INTERVAL,
     CONF_ENTITY_ID,
     CONF_TRACKED_ENTITY_ID,
-    CONF_USE_PLACE_AS_DEVICE_NAME,
     MODE_STATIC,
     MODE_TRACK,
     DEFAULT_MIN_TRACK_INTERVAL,
@@ -67,7 +67,7 @@ def _map_condition(weather_code: int | None, is_day: int | None = 1) -> str | No
 
 
 class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], WeatherEntity):
-    """Open-Meteo weather entity with stable entity_id and dynamic display name."""
+    """Open-Meteo weather entity with stable entity_id and dynamic city name."""
 
     _attr_attribution = "Weather data provided by Open-Meteo"
     _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
@@ -91,10 +91,10 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         super().__init__(coordinator)
         self._config_entry = config_entry
 
-        # Stable entity_id base. HA will create weather.open_meteo, weather.open_meteo_2, ...
+        # Stable entity_id base. HA will assign weather.open_meteo, weather.open_meteo_2, ...
         self._attr_suggested_object_id = "open_meteo"
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
-        # Critical: do NOT derive entity_id from display name
+        # Do NOT derive entity_id from display name
         self._attr_has_entity_name = False
 
         # Device metadata
@@ -118,26 +118,25 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
             opts.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL)
         )
 
-    # -------- Dynamic display name (city) --------
+    # -------- Dynamic display name (ALWAYS city) --------
     @property
     def name(self) -> str | None:
-        opts = {**self._config_entry.data, **self._config_entry.options}
-        use_place = opts.get(CONF_USE_PLACE_AS_DEVICE_NAME, True)
-        if not use_place:
-            return "Open-Meteo"
+        # 1) Prefer reverse geocode from coordinator
         place = getattr(self.coordinator, "location_name", None)
         if isinstance(place, str) and place.strip():
             return place.strip()
+        # 2) Fallback to last saved name in entry options (coordinator should store it)
+        opts = {**self._config_entry.data, **self._config_entry.options}
         place = opts.get("last_location_name")
         if isinstance(place, str) and place.strip():
             return place.strip()
+        # 3) Fallback to the entry title or generic
         title = (self._config_entry.title or "").strip()
         return title or "Open-Meteo"
 
     # -------- BASIC METRICS --------
     @property
     def available(self) -> bool:
-        # Match sensors: rely only on coordinator success
         return self.coordinator.last_update_success
 
     @property
@@ -297,4 +296,8 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:
+        # update state on data refresh
         self.async_on_remove(self.coordinator.async_add_listener(self._handle_coordinator_update))
+        # update name instantly when place changes (signal sent by helpers.maybe_update_device_name / coordinator)
+        signal = f"openmeteo_place_updated_{self._config_entry.entry_id}"
+        self.async_on_remove(async_dispatcher_connect(self.hass, signal, self._handle_coordinator_update))
