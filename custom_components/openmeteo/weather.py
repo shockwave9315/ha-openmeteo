@@ -26,7 +26,6 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -296,10 +295,9 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
     async def async_added_to_hass(self) -> None:
         # If HA assigned a city-based entity_id, migrate it to 'weather.open_meteo' (or _2, _3, ...)
         reg = er.async_get(self.hass)
-        entry = reg.async_get(self.entity_id)
-        if entry:
-            # Generate a clean target entity_id
-            new_entity_id = async_generate_entity_id(self.hass, "weather.{}", "open_meteo", reg)
-            if entry.entity_id != new_entity_id:
-                reg.async_update_entity(entry.entity_id, new_entity_id=new_entity_id)
+        ent = reg.async_get(self.entity_id)
+        if ent:
+            new_entity_id = reg.async_generate_entity_id("weather", "open_meteo")
+            if ent.entity_id != new_entity_id:
+                reg.async_update_entity(ent.entity_id, new_entity_id=new_entity_id)
         self.async_on_remove(self.coordinator.async_add_listener(self._handle_coordinator_update))
