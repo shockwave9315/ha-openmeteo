@@ -34,14 +34,34 @@ from .const import (
 )
 
 # Modułowa funkcja – testy CI ją patchują
+
 async def async_reverse_geocode(hass: HomeAssistant, lat: float, lon: float) -> str | None:
+    """Reverse‑geocode coords to a place name using Open‑Meteo's geocoding API.
+    Exists at module level so tests can patch it; in HA runtime we call it directly.
+    """
     session = async_get_clientsession(hass)
     url = "https://geocoding-api.open-meteo.com/v1/reverse"
-    params = {"latitude": lat, "longitude": lon, "count": 1, "language": "pl", "format": "json"}
-    async with session.get(url, params=params, timeout=10) as resp:
-        ...
-        name = r.get("name") or r.get("admin2") or r.get("admin1")
-        return f"{name}, {cc}" if cc else name
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "count": 1,
+        "language": "pl",
+        "format": "json",
+    }
+    try:
+        async with session.get(url, params=params, timeout=10) as resp:
+            if resp.status != 200:
+                return None
+            js = await resp.json()
+            results = js.get("results") or []
+            if not results:
+                return None
+            r = results[0]
+            name = r.get("name") or r.get("admin2") or r.get("admin1")
+            cc = r.get("country_code")
+            return f"{name}, {cc}" if name and cc else name
+    except Exception:
+        return None
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -205,7 +225,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Ustal nazwę miejsca — WAŻNE: użyj modułowej funkcji patchowanej w CI
         loc_name = prev_name
         last_loc_ts = prev_loc_ts
-        if coords_changed:
+        needs_loc_refresh = coords_changed or not prev_name or prev_name == self._coords_fallback(lat, lon)
+        if needs_loc_refresh:
             if data.get(CONF_AREA_NAME_OVERRIDE):
                 loc_name = data.get(CONF_AREA_NAME_OVERRIDE)
             else:
