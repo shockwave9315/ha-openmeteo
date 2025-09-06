@@ -119,15 +119,7 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
     # -------- Dynamic display name (city) --------
     @property
     def name(self) -> str | None:
-        place = getattr(self.coordinator, "location_name", None)
-        if isinstance(place, str) and place.strip():
-            return place.strip()
-        opts = {**self._config_entry.data, **self._config_entry.options}
-        place = opts.get("last_location_name")
-        if isinstance(place, str) and place.strip():
-            return place.strip()
-        title = (self._config_entry.title or "").strip()
-        return title or "Open-Meteo"
+        return "Open-Meteo"
 
     # -------- BASIC METRICS --------
     @property
