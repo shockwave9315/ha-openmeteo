@@ -375,7 +375,7 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
 
         # Set entity attributes
         self._attr_has_entity_name = True
-        self._attr_suggested_object_id = OBJECT_ID_PL.get(sensor_type, sensor_type)
+        self._attr_suggested_object_id = OBJECT_ID_PL.get(sensor_type, sensor_type) or (sensor_type or "open_meteo_sensor")
         self._attr_unique_id = f"{config_entry.entry_id}:{sensor_type}"
 
         # Set device info
