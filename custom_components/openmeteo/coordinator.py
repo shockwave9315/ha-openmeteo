@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-_LOGGER = logging.getLogger(__name__)
 import random
 from datetime import datetime, timedelta
 from typing import Any, Callable, Optional
@@ -12,10 +11,6 @@ import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
-# test hook – pozwala patchować w CI: custom_components.openmeteo.coordinator.async_get_clientsession
-from homeassistant.helpers.aiohttp_client import async_get_clientsession as _ha_async_get_clientsession
-async_get_clientsession = _ha_async_get_clientsession
-
 
 from .const import (
     CONF_AREA_NAME_OVERRIDE,
@@ -34,18 +29,28 @@ from .const import (
     CONF_TRACKING_MODE,
     MODE_STATIC,
     MODE_TRACK,
-    URL,  # endpoint Open-Meteo Forecast
+    URL,
 )
 
-# Modułowa funkcja – testy CI ją patchują
+# logger
+_LOGGER = logging.getLogger(__name__)
+
+# test hook – allow CI to patch this symbol
+from homeassistant.helpers.aiohttp_client import async_get_clientsession as _ha_async_get_clientsession  # noqa: E402
+async_get_clientsession = _ha_async_get_clientsession  # exported symbol for tests
+
+# --- persist last known place across restarts ---
+OPT_LAST_LAT = "last_lat"
+OPT_LAST_LON = "last_lon"
+OPT_LAST_LOCATION_NAME = "last_location_name"
+# ------------------------------------------------
 
 
-async def async_reverse_geocode(hass, lat: float, lon: float) -> str | None:
-    """Reverse-geocode do krótkiej nazwy miejsca.
-    Najpierw Open-Meteo Geocoding, potem fallback Nominatim.
-    (Funkcja jest na poziomie modułu, żeby testy mogły ją patchować.)
+async def async_reverse_geocode(hass: HomeAssistant, lat: float, lon: float) -> str | None:
+    """Reverse-geocode to a short place name.
+    1) Open-Meteo geocoding → 2) Nominatim fallback.
+    Module-level to allow tests to patch this symbol.
     """
-    # używamy modułowego async_get_clientsession – zakładam, że masz import u góry pliku
     session = async_get_clientsession(hass)
 
     # 1) Open-Meteo
@@ -64,7 +69,7 @@ async def async_reverse_geocode(hass, lat: float, lon: float) -> str | None:
                 cc = r.get("country_code")
                 return f"{name}, {cc}" if cc else name
     except Exception:
-        # przechodzimy do fallbacku
+        # fallback poniżej
         pass
 
     # 2) Nominatim fallback
@@ -116,7 +121,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hass,
             _LOGGER,
             name="Open-Meteo",
-            update_method=self._async_update_data,              # <-- KLUCZOWE
+            update_method=self._async_update_data,
             update_interval=timedelta(seconds=interval),
         )
 
@@ -134,6 +139,21 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Back-compat dla __init__.py (track entity)
         self._tracked_entity_id: Optional[str] = None
         self._unsub_tracked: Optional[Callable[[], None]] = None
+
+        # Load last known coords/name from entry.options (persist across restarts)
+        try:
+            if OPT_LAST_LAT in entry.options and OPT_LAST_LON in entry.options:
+                self._cached = (
+                    float(entry.options[OPT_LAST_LAT]),
+                    float(entry.options[OPT_LAST_LON]),
+                )
+                self._accepted_lat, self._accepted_lon = self._cached
+                self._accepted_at = dt_util.utcnow()
+                if not self.location_name:
+                    self.location_name = entry.options.get(OPT_LAST_LOCATION_NAME)
+        except Exception:
+            # don't block startup on bad persisted values
+            pass
 
     @property
     def last_location_update(self) -> datetime | None:
@@ -153,7 +173,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return MODE_TRACK
         return MODE_STATIC
 
-    # Stara metoda zostaje (nieużywana przez update; możesz ją usunąć)
+    # Legacy helper (not used by update; kept for BC)
     async def _reverse_geocode(self, lat: float, lon: float) -> str | None:
         url = (
             "https://geocoding-api.open-meteo.com/v1/reverse"
@@ -219,14 +239,18 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 if not self._warned_missing:
                     _LOGGER.warning(
-                        "Tracked entity %s missing or lacks GPS attributes, "
-                        "falling back to configured coordinates",
+                        "Tracked entity %s missing or lacks GPS attributes, falling back to configured coordinates",
                         ent_id,
                     )
                     self._warned_missing = True
                 if self._cached is None:
-                    lat = float(data.get(CONF_LATITUDE, self.hass.config.latitude))
-                    lon = float(data.get(CONF_LONGITUDE, self.hass.config.longitude))
+                    # Prefer last known tracked coords saved in options; fallback to configured/static
+                    lat = float(
+                        data.get(OPT_LAST_LAT, data.get(CONF_LATITUDE, self.hass.config.latitude))
+                    )
+                    lon = float(
+                        data.get(OPT_LAST_LON, data.get(CONF_LONGITUDE, self.hass.config.longitude))
+                    )
                     self._cached = (lat, lon)
                     self._accepted_lat = lat
                     self._accepted_lon = lon
@@ -248,7 +272,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             elif self._accepted_at is None:
                 self._accepted_at = now
 
-        # Ustal nazwę miejsca — WAŻNE: użyj modułowej funkcji patchowanej w CI
+        # Location name
         loc_name = prev_name
         last_loc_ts = prev_loc_ts
         needs_loc_refresh = coords_changed or not prev_name or prev_name == self._coords_fallback(lat, lon)
@@ -323,6 +347,24 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._last_data["location"] = {"latitude": latitude, "longitude": longitude}
             self._last_data["location_name"] = loc_name
             self._last_data["last_location_update"] = last_loc_ts
+
+            # persist last accepted coords / location name in entry.options
+            try:
+                opts = dict(self.entry.options)
+                need_save = False
+                if self._accepted_lat is not None and self._accepted_lon is not None:
+                    if opts.get(OPT_LAST_LAT) != self._accepted_lat or opts.get(OPT_LAST_LON) != self._accepted_lon:
+                        opts[OPT_LAST_LAT] = self._accepted_lat
+                        opts[OPT_LAST_LON] = self._accepted_lon
+                        need_save = True
+                if self.location_name and opts.get(OPT_LAST_LOCATION_NAME) != self.location_name:
+                    opts[OPT_LAST_LOCATION_NAME] = self.location_name
+                    need_save = True
+                if need_save:
+                    self.hass.config_entries.async_update_entry(self.entry, options=opts)
+            except Exception:
+                pass
+
             return self._last_data
         except UpdateFailed:
             if self._last_data is not None:
