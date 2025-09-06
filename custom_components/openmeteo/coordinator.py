@@ -5,7 +5,7 @@ import asyncio
 import logging
 import random
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Callable, Optional
 
 import aiohttp
 from homeassistant.core import HomeAssistant
@@ -16,14 +16,25 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_AREA_NAME_OVERRIDE,
     CONF_ENTITY_ID,
+    CONF_TRACKED_ENTITY_ID,
     CONF_LATITUDE,
     CONF_LONGITUDE,
     CONF_UPDATE_INTERVAL,
+    CONF_MIN_TRACK_INTERVAL,
+    DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_API_PROVIDER,
+    DEFAULT_HOURLY_VARIABLES,
+    DEFAULT_DAILY_VARIABLES,
+    CONF_MODE,
+    CONF_TRACKING_MODE,
+    MODE_STATIC,
+    MODE_TRACK,
+    URL,  # endpoint Open-Meteo Forecast
 )
 
-async def async_reverse_geocode(hass, lat, lon):
+# Modułowa funkcja – testy CI ją patchują
+async def async_reverse_geocode(hass: HomeAssistant, lat: float, lon: float) -> str | None:
     """Module-level stub for tests; CI will patch this symbol."""
     return None
 
@@ -37,6 +48,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def __init__(self, hass: HomeAssistant, entry) -> None:
         self.entry = entry
+
         interval = entry.options.get(
             CONF_UPDATE_INTERVAL,
             entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
@@ -47,9 +59,15 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             interval = DEFAULT_UPDATE_INTERVAL
         if interval < 60:
             interval = 60
-        super().__init__(hass, _LOGGER, name="Open-Meteo", update_method=self._async_update_data, update_interval=timedelta(super().__init__(
-            hass, _LOGGER, name="Open-Meteo", update_interval=timedelta(seconds=interval)
-        ).split('timedelta(')[1][:-1]))
+
+        super().__init__(
+            hass,
+            _LOGGER,
+            name="Open-Meteo",
+            update_method=self._async_update_data,              # <-- KLUCZOWE
+            update_interval=timedelta(seconds=interval),
+        )
+
         self._cached: tuple[float, float] | None = None
         self._accepted_lat: float | None = None
         self._accepted_lon: float | None = None
@@ -60,6 +78,10 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.provider: str = entry.options.get("api_provider", DEFAULT_API_PROVIDER)
         self._warned_missing = False
         self._last_data: dict[str, Any] | None = None
+
+        # Back-compat dla __init__.py (track entity)
+        self._tracked_entity_id: Optional[str] = None
+        self._unsub_tracked: Optional[Callable[[], None]] = None
 
     @property
     def last_location_update(self) -> datetime | None:
@@ -79,6 +101,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return MODE_TRACK
         return MODE_STATIC
 
+    # Stara metoda zostaje (nieużywana przez update; możesz ją usunąć)
     async def _reverse_geocode(self, lat: float, lon: float) -> str | None:
         url = (
             "https://geocoding-api.open-meteo.com/v1/reverse"
@@ -106,8 +129,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return f"{lat:.2f},{lon:.2f}"
 
     async def _async_update_data(self) -> dict[str, Any]:
-        mode = self._current_mode()
         data = {**self.entry.data, **self.entry.options}
+        mode = self._current_mode()
         min_track = int(data.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL))
         now = dt_util.utcnow()
 
@@ -150,26 +173,16 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
                     self._warned_missing = True
                 if self._cached is None:
-                    lat = float(
-                        data.get(CONF_LATITUDE, self.hass.config.latitude)
-                    )
-                    lon = float(
-                        data.get(CONF_LONGITUDE, self.hass.config.longitude)
-                    )
+                    lat = float(data.get(CONF_LATITUDE, self.hass.config.latitude))
+                    lon = float(data.get(CONF_LONGITUDE, self.hass.config.longitude))
                     self._cached = (lat, lon)
                     self._accepted_lat = lat
                     self._accepted_lon = lon
-                    self._accepted_at = (
-                        now if self._accepted_at is None else self._accepted_at
-                    )
+                    self._accepted_at = now if self._accepted_at is None else self._accepted_at
                     coords_changed = True
         else:
-            lat = float(
-                data.get(CONF_LATITUDE, self.hass.config.latitude)
-            )
-            lon = float(
-                data.get(CONF_LONGITUDE, self.hass.config.longitude)
-            )
+            lat = float(data.get(CONF_LATITUDE, self.hass.config.latitude))
+            lon = float(data.get(CONF_LONGITUDE, self.hass.config.longitude))
             if (
                 self._cached is None
                 or abs(lat - self._cached[0]) > self.EPS
@@ -183,13 +196,14 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             elif self._accepted_at is None:
                 self._accepted_at = now
 
+        # Ustal nazwę miejsca — WAŻNE: użyj modułowej funkcji patchowanej w CI
         loc_name = prev_name
         last_loc_ts = prev_loc_ts
         if coords_changed:
             if data.get(CONF_AREA_NAME_OVERRIDE):
                 loc_name = data.get(CONF_AREA_NAME_OVERRIDE)
             else:
-                name = await self._reverse_geocode(lat, lon)
+                name = await async_reverse_geocode(self.hass, lat, lon)
                 loc_name = name or self._coords_fallback(lat, lon)
             last_loc_ts = now.isoformat()
             self.location_name = loc_name
@@ -261,3 +275,27 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._last_data is not None:
                 return self._last_data
             raise
+
+    # Back-compat: wołane z __init__.py (track encji)
+    async def _resubscribe_tracked_entity(self, entity_id: Optional[str]) -> None:
+        """(Back-compat) Subskrybuj zmiany stanu encji z lokalizacją."""
+        # Anuluj poprzednią subskrypcję
+        if self._unsub_tracked:
+            try:
+                self._unsub_tracked()
+            except Exception:
+                pass
+            self._unsub_tracked = None
+
+        self._tracked_entity_id = entity_id
+        if not entity_id:
+            return
+
+        from homeassistant.helpers.event import async_track_state_change_event
+
+        def _on_state_change(event):
+            self.async_request_refresh()
+
+        self._unsub_tracked = async_track_state_change_event(
+            self.hass, [entity_id], _on_state_change
+        )
