@@ -142,6 +142,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
     store = _entry_store(hass, entry)
     store["coordinator"] = coordinator
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+
 
     lat, lon, _src = await resolve_coords(hass, entry)
     title = await build_title(hass, entry, lat, lon)

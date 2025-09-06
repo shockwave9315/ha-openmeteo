@@ -48,6 +48,7 @@ CONF_TRACKING_MODE = "tracking_mode"
 CONF_TRACKED_ENTITY_ID = "tracked_entity_id"
 # Option: use location name as device name
 CONF_USE_PLACE_AS_DEVICE_NAME = "use_place_as_device_name"
+DEFAULT_USE_PLACE_AS_DEVICE_NAME = True
 
 TRACKING_MODE_FIXED = "fixed"
 TRACKING_MODE_DEVICE = "device"
