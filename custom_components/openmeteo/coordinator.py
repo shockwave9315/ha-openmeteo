@@ -56,7 +56,11 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if interval < 60:
             interval = 60
         super().__init__(
-            hass, _LOGGER, name="Open-Meteo", update_interval=timedelta(seconds=interval)
+            hass,
+            _LOGGER,
+            name="Open-Meteo",
+            update_method=self._async_update_data,
+            update_interval=timedelta(seconds=interval),
         )
         self._cached: tuple[float, float] | None = None
         self._accepted_lat: float | None = None
@@ -68,6 +72,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.provider: str = entry.options.get("api_provider", DEFAULT_API_PROVIDER)
         self._warned_missing = False
         self._last_data: dict[str, Any] | None = None
+        self._tracked_entity_id: str | None = None
+        self._unsub_tracked: callable | None = None
 
     @property
     def last_location_update(self) -> datetime | None:
@@ -266,6 +272,35 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._last_data is not None:
                 return self._last_data
             raise
+
+    async def _resubscribe_tracked_entity(self, entity_id: str | None) -> None:
+        """Back-compat: zasubskrybuj zmiany stanu encji z lokalizacją (jeśli podano).
+
+        __init__.py wywołuje to podczas setupu; tu bezpiecznie rejestrujemy listener,
+        a przy każdej zmianie stanu prosimy koordynator o odświeżenie danych.
+        """
+        # Anuluj poprzednią subskrypcję (jeśli była)
+        if getattr(self, "_unsub_tracked", None):
+            try:
+                self._unsub_tracked()
+            except Exception:
+                pass
+            self._unsub_tracked = None
+
+        self._tracked_entity_id = entity_id
+        if not entity_id:
+            return  # nic nie śledzimy
+
+        # Rejestruj listener zmian stanu tej encji
+        from homeassistant.helpers.event import async_track_state_change_event
+
+        def _on_state_change(event):
+            # Minimalnie: poproś o odświeżenie (HA sam zadba o throttling/merge)
+            self.async_request_refresh()
+
+        self._unsub_tracked = async_track_state_change_event(
+            self.hass, [entity_id], _on_state_change
+        )
 
 
 async def async_reverse_geocode(hass: HomeAssistant, lat: float, lon: float) -> str | None:
