@@ -35,8 +35,14 @@ from .const import (
 
 # Modułowa funkcja – testy CI ją patchują
 async def async_reverse_geocode(hass: HomeAssistant, lat: float, lon: float) -> str | None:
-    """Module-level stub for tests; CI will patch this symbol."""
-    return None
+    session = async_get_clientsession(hass)
+    url = "https://geocoding-api.open-meteo.com/v1/reverse"
+    params = {"latitude": lat, "longitude": lon, "count": 1, "language": "pl", "format": "json"}
+    async with session.get(url, params=params, timeout=10) as resp:
+        ...
+        name = r.get("name") or r.get("admin2") or r.get("admin1")
+        return f"{name}, {cc}" if cc else name
+
 
 _LOGGER = logging.getLogger(__name__)
 
