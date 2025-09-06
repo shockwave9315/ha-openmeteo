@@ -213,6 +213,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if mode == MODE_TRACK:
             ent_id = data.get(CONF_ENTITY_ID) or data.get(CONF_TRACKED_ENTITY_ID)
             state = self.hass.states.get(ent_id) if ent_id else None
+
             if state and "latitude" in state.attributes and "longitude" in state.attributes:
                 try:
                     lat = float(state.attributes["latitude"])
@@ -237,14 +238,23 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 except (TypeError, ValueError):
                     pass
             else:
+                # Tracker jeszcze nie gotowy — użyj zapamiętanych koordów; w ostateczności konfig.
+                using_persisted = OPT_LAST_LAT in data and OPT_LAST_LON in data
+
                 if not self._warned_missing:
-                    _LOGGER.warning(
-                        "Tracked entity %s missing or lacks GPS attributes, falling back to configured coordinates",
-                        ent_id,
-                    )
+                    if using_persisted or self._cached is not None:
+                        _LOGGER.debug(
+                            "Tracked entity %s not ready; using last known coordinates",
+                            ent_id,
+                        )
+                    else:
+                        _LOGGER.warning(
+                            "Tracked entity %s missing or lacks GPS attributes; using configured coordinates",
+                            ent_id,
+                        )
                     self._warned_missing = True
+
                 if self._cached is None:
-                    # Prefer last known tracked coords saved in options; fallback to configured/static
                     lat = float(
                         data.get(OPT_LAST_LAT, data.get(CONF_LATITUDE, self.hass.config.latitude))
                     )
@@ -256,6 +266,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._accepted_lon = lon
                     self._accepted_at = now if self._accepted_at is None else self._accepted_at
                     coords_changed = True
+
         else:
             lat = float(data.get(CONF_LATITUDE, self.hass.config.latitude))
             lon = float(data.get(CONF_LONGITUDE, self.hass.config.longitude))
