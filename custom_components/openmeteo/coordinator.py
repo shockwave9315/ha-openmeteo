@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+_LOGGER = logging.getLogger(__name__)
 import random
 from datetime import datetime, timedelta
 from typing import Any, Callable, Optional
 
 import aiohttp
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -36,16 +36,15 @@ from .const import (
 # Modułowa funkcja – testy CI ją patchują
 
 
-async def async_reverse_geocode(hass: "HomeAssistant", lat: float, lon: float) -> str | None:
-    """Reverse‑geocode to a short place name.
-    1) Open‑Meteo geocoding → 2) Nominatim fallback.
-    Exists at module level so tests can patch it; in HA runtime we call it directly.
+async def async_reverse_geocode(hass, lat: float, lon: float) -> str | None:
+    """Reverse-geocode do krótkiej nazwy miejsca.
+    Najpierw Open-Meteo Geocoding, potem fallback Nominatim.
+    (Funkcja jest na poziomie modułu, żeby testy mogły ją patchować.)
     """
-    from homeassistant.helpers.aiohttp_client import async_get_clientsession
-
+    # używamy modułowego async_get_clientsession – zakładam, że masz import u góry pliku
     session = async_get_clientsession(hass)
 
-    # 1) Open‑Meteo
+    # 1) Open-Meteo
     try:
         url = "https://geocoding-api.open-meteo.com/v1/reverse"
         params = {"latitude": lat, "longitude": lon, "count": 1, "language": "pl", "format": "json"}
@@ -61,7 +60,7 @@ async def async_reverse_geocode(hass: "HomeAssistant", lat: float, lon: float) -
                 cc = r.get("country_code")
                 return f"{name}, {cc}" if cc else name
     except Exception:
-        # fallback below
+        # przechodzimy do fallbacku
         pass
 
     # 2) Nominatim fallback
@@ -88,6 +87,7 @@ async def async_reverse_geocode(hass: "HomeAssistant", lat: float, lon: float) -
         pass
 
     return None
+
 
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Class to manage fetching Open-Meteo data and tracking coordinates."""
