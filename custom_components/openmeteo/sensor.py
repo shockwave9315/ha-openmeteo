@@ -248,7 +248,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         device_class="timestamp",
         value_fn=lambda d: _first_daily_dt(d, "sunset"),
     ),
-    # UWAGA: Indeks UV jest obsługiwany osobną klasą OpenMeteoUvIndexSensor (brak duplikatu tutaj)
+    # UV obsługuje dedykowana klasa OpenMeteoUvIndexSensor (brak duplikatu tutaj)
 }
 
 
@@ -308,27 +308,14 @@ async def async_setup_entry(
     # Dedykowany sensor UV (bez duplikatu w SENSOR_TYPES)
     entities.append(OpenMeteoUvIndexSensor(coordinator, config_entry))
 
-    # Register entity registry migration
-    @callback
-    def async_migrate_entity(entry: er.RegistryEntry) -> None:
-        """Migrate entity registry entry."""
-        if entry.platform != "openmeteo" or entry.domain != "sensor":
-            return
-        async_migrate_entry(hass, config_entry, entry)
-
-    # Process existing entries
+    # Jednorazowa migracja istniejących encji (bez nasłuchu zmian rejestru, HA nie udostępnia takiej metody)
     ent_reg = er.async_get(hass)
     for entry in list(ent_reg.entities.values()):
         if entry.platform == "openmeteo" and entry.domain == "sensor":
-            async_migrate_entry(hass, config_entry, entry)
-
-    # Listen for new entries
-    config_entry.async_on_unload(
-        ent_reg.async_listen_for_matching_entity(
-            async_migrate_entity,
-            {"domain": "sensor", "platform": "openmeteo"},
-        )
-    )
+            try:
+                await async_migrate_entry(hass, config_entry, entry)  # type: ignore[arg-type]
+            except Exception:
+                continue
 
     async_add_entities(entities, True)
 
