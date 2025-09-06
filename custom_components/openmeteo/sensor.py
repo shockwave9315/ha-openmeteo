@@ -87,16 +87,48 @@ def _first_daily_dt(data: dict, key: str):
         return None
 
 
-def _first_hourly(data: dict, key: str):
-    arr = data.get("hourly", {}).get(key)
-    if isinstance(arr, list) and arr:
-        return arr[0]
-    return None
+def _hourly_at_now(data: dict, key: str):
+    """Return hourly value for *current hour* (timezone-aware), or closest if exact not found."""
+    hourly = (data or {}).get("hourly", {})
+    times = hourly.get("time") or []
+    values = hourly.get(key) or []
+    if not times or not values:
+        return None
+
+    tz = dt_util.get_time_zone((data or {}).get("timezone")) or dt_util.UTC
+    now = dt_util.now(tz).replace(minute=0, second=0, microsecond=0)
+
+    # exact match first
+    for t_str, val in zip(times, values):
+        try:
+            dt = dt_util.parse_datetime(t_str)
+            if dt and dt.tzinfo is None:
+                dt = dt.replace(tzinfo=tz)
+            if dt == now:
+                return val
+        except Exception:
+            continue
+
+    # else nearest hour
+    best_val = None
+    best_diff = None
+    for t_str, val in zip(times, values):
+        try:
+            dt = dt_util.parse_datetime(t_str)
+            if dt and dt.tzinfo is None:
+                dt = dt.replace(tzinfo=tz)
+            diff = abs((dt - now).total_seconds())
+            if best_diff is None or diff < best_diff:
+                best_diff = diff
+                best_val = val
+        except Exception:
+            continue
+    return best_val
 
 
 # helper do widzialności w km
 def _visibility_km(data: dict):
-    v = _first_hourly(data, "visibility")
+    v = _hourly_at_now(data, "visibility")
     return v / 1000 if isinstance(v, (int, float)) else None
 
 
@@ -151,7 +183,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=PERCENTAGE,
         icon="mdi:water-percent",
         device_class="humidity",
-        value_fn=lambda d: _first_hourly(d, "relative_humidity_2m"),
+        value_fn=lambda d: _hourly_at_now(d, "relative_humidity_2m"),
     ),
     "apparent_temperature": OpenMeteoSensorDescription(
         key="apparent_temperature",
@@ -159,7 +191,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         icon="mdi:thermometer-alert",
         device_class="temperature",
-        value_fn=lambda d: _first_hourly(d, "apparent_temperature"),
+        value_fn=lambda d: _hourly_at_now(d, "apparent_temperature"),
     ),
     "precipitation_total": OpenMeteoSensorDescription(
         key="precipitation_total",
@@ -167,8 +199,8 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         icon="mdi:cup-water",
         device_class="precipitation",
-        value_fn=lambda d: (_first_hourly(d, "precipitation") or 0)
-        + (_first_hourly(d, "snowfall") or 0),
+        value_fn=lambda d: (_hourly_at_now(d, "precipitation") or 0)
+        + (_hourly_at_now(d, "snowfall") or 0),
     ),
     "wind_speed": OpenMeteoSensorDescription(
         key="wind_speed",
@@ -184,7 +216,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
         icon="mdi:weather-windy-variant",
         device_class=None,
-        value_fn=lambda d: _first_hourly(d, "wind_gusts_10m"),
+        value_fn=lambda d: _hourly_at_now(d, "wind_gusts_10m"),
     ),
     "wind_bearing": OpenMeteoSensorDescription(
         key="wind_bearing",
@@ -200,7 +232,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfPressure.HPA,
         icon="mdi:gauge",
         device_class="pressure",
-        value_fn=lambda d: _first_hourly(d, "pressure_msl"),
+        value_fn=lambda d: _hourly_at_now(d, "pressure_msl"),
     ),
     "visibility": OpenMeteoSensorDescription(
         key="visibility",
@@ -216,8 +248,8 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         icon="mdi:water",
         device_class="temperature",
-        value_fn=lambda d: d.get("current", {}).get("dewpoint_2m")
-        or _first_hourly(d, "dewpoint_2m"),
+        value_fn=lambda d: (d.get("current", {}) or {}).get("dewpoint_2m")
+        or _hourly_at_now(d, "dewpoint_2m"),
     ),
     "location": OpenMeteoSensorDescription(
         key="location",
@@ -248,7 +280,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         device_class="timestamp",
         value_fn=lambda d: _first_daily_dt(d, "sunset"),
     ),
-    # UV obsługuje dedykowana klasa OpenMeteoUvIndexSensor (brak duplikatu tutaj)
+    # UV: osobna klasa OpenMeteoUvIndexSensor
 }
 
 
@@ -308,7 +340,7 @@ async def async_setup_entry(
     # Dedykowany sensor UV (bez duplikatu w SENSOR_TYPES)
     entities.append(OpenMeteoUvIndexSensor(coordinator, config_entry))
 
-    # Jednorazowa migracja istniejących encji (bez nasłuchu zmian rejestru, HA nie udostępnia takiej metody)
+    # Jednorazowa migracja istniejących encji
     ent_reg = er.async_get(hass)
     for entry in list(ent_reg.entities.values()):
         if entry.platform == "openmeteo" and entry.domain == "sensor":
