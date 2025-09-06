@@ -121,18 +121,7 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
     # -------- Dynamic display name (ALWAYS city) --------
     @property
     def name(self) -> str | None:
-        # 1) Prefer reverse geocode from coordinator
-        place = getattr(self.coordinator, "location_name", None)
-        if isinstance(place, str) and place.strip():
-            return place.strip()
-        # 2) Fallback to last saved name in entry options (coordinator should store it)
-        opts = {**self._config_entry.data, **self._config_entry.options}
-        place = opts.get("last_location_name")
-        if isinstance(place, str) and place.strip():
-            return place.strip()
-        # 3) Fallback to the entry title or generic
-        title = (self._config_entry.title or "").strip()
-        return title or "Open-Meteo"
+        return "Open-Meteo"
 
     # -------- BASIC METRICS --------
     @property
