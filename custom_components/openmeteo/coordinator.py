@@ -275,6 +275,15 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Location name
         loc_name = prev_name
         last_loc_ts = prev_loc_ts
+        # Ensure we have lat/lon for naming even if tracker state not yet provided
+        try:
+            _ = lat; _ = lon
+        except NameError:
+            if self._cached is not None:
+                lat, lon = self._cached
+            else:
+                lat = float(data.get(OPT_LAST_LAT, data.get(CONF_LATITUDE, self.hass.config.latitude)))
+                lon = float(data.get(OPT_LAST_LON, data.get(CONF_LONGITUDE, self.hass.config.longitude)))
         needs_loc_refresh = coords_changed or not prev_name or prev_name == self._coords_fallback(lat, lon)
         if needs_loc_refresh:
             if data.get(CONF_AREA_NAME_OVERRIDE):
