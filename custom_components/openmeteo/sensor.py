@@ -49,9 +49,7 @@ OBJECT_ID_PL = {
     "wind_speed": "wiatr",
     "wind_gust": "porywy_wiatru",
     "wind_bearing": "kierunek_wiatru",
-    "precipitation": "opady",
     "precipitation_probability": "prawdopodobienstwo_opadow",
-    "cloud_cover": "zachmurzenie",
     "visibility": "widocznosc",
     "dew_point": "punkt_rosy",
     "weather_code": "pogoda",
@@ -193,8 +191,16 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         device_class="temperature",
         value_fn=lambda d: _hourly_at_now(d, "apparent_temperature"),
     ),
-    "precipitation_total": OpenMeteoSensorDescription(
-        key="precipitation_total",
+    "precipitation_probability": OpenMeteoSensorDescription(
+        key="precipitation_probability",
+        name="Prawdopodobieństwo opadów",
+        native_unit_of_measurement=PERCENTAGE,
+        icon="mdi:umbrella-outline",
+        device_class=None,
+        value_fn=lambda d: _hourly_at_now(d, "precipitation_probability"),
+    ),
+    "precipitation_sum": OpenMeteoSensorDescription(
+        key="precipitation_sum",
         name="Suma opadów",
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         icon="mdi:cup-water",
