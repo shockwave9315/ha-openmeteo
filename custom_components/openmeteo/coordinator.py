@@ -35,37 +35,59 @@ from .const import (
 
 # Modułowa funkcja – testy CI ją patchują
 
-async def async_reverse_geocode(hass: HomeAssistant, lat: float, lon: float) -> str | None:
-    """Reverse‑geocode coords to a place name using Open‑Meteo's geocoding API.
+
+async def async_reverse_geocode(hass: "HomeAssistant", lat: float, lon: float) -> str | None:
+    """Reverse‑geocode to a short place name.
+    1) Open‑Meteo geocoding → 2) Nominatim fallback.
     Exists at module level so tests can patch it; in HA runtime we call it directly.
     """
+    from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
     session = async_get_clientsession(hass)
-    url = "https://geocoding-api.open-meteo.com/v1/reverse"
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "count": 1,
-        "language": "pl",
-        "format": "json",
-    }
+
+    # 1) Open‑Meteo
     try:
+        url = "https://geocoding-api.open-meteo.com/v1/reverse"
+        params = {"latitude": lat, "longitude": lon, "count": 1, "language": "pl", "format": "json"}
         async with session.get(url, params=params, timeout=10) as resp:
+            if resp.status != 200:
+                raise RuntimeError(f"open-meteo geocoding http {resp.status}")
+            js = await resp.json()
+        results = js.get("results") or []
+        if results:
+            r = results[0]
+            name = r.get("name") or r.get("admin2") or r.get("admin1")
+            if name:
+                cc = r.get("country_code")
+                return f"{name}, {cc}" if cc else name
+    except Exception:
+        # fallback below
+        pass
+
+    # 2) Nominatim fallback
+    try:
+        url = "https://nominatim.openstreetmap.org/reverse"
+        params = {
+            "format": "jsonv2",
+            "lat": str(lat),
+            "lon": str(lon),
+            "zoom": "10",
+            "accept-language": "pl",
+        }
+        headers = {"User-Agent": "HomeAssistant-OpenMeteo/1.0 (+https://www.home-assistant.io)"}
+        async with session.get(url, params=params, headers=headers, timeout=10) as resp:
             if resp.status != 200:
                 return None
             js = await resp.json()
-            results = js.get("results") or []
-            if not results:
-                return None
-            r = results[0]
-            name = r.get("name") or r.get("admin2") or r.get("admin1")
-            cc = r.get("country_code")
-            return f"{name}, {cc}" if name and cc else name
+        address = js.get("address") or {}
+        name = address.get("city") or address.get("town") or address.get("village") or js.get("name")
+        if name:
+            cc = (address.get("country_code") or "").upper()
+            return f"{name}, {cc}" if cc else name
     except Exception:
-        return None
+        pass
 
-
-_LOGGER = logging.getLogger(__name__)
-
+    return None
 
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Class to manage fetching Open-Meteo data and tracking coordinates."""
