@@ -1,8 +1,9 @@
-"""Weather entity for the Open-Meteo integration."""
+"""Weather entity for the Open-Meteo integration (stable names)."""
 from __future__ import annotations
 
 import logging
 from typing import Any
+from datetime import datetime
 
 from homeassistant.components.weather import (
     ATTR_FORECAST_CONDITION,
@@ -28,20 +29,16 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from datetime import datetime
 from homeassistant.util import dt as dt_util
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
-from .helpers import maybe_update_device_name
 from .const import (
     CONDITION_MAP,
     DOMAIN,
     CONF_MODE,
     CONF_MIN_TRACK_INTERVAL,
-    CONF_API_PROVIDER,
     CONF_ENTITY_ID,
     CONF_TRACKED_ENTITY_ID,
-    CONF_USE_PLACE_AS_DEVICE_NAME,
     MODE_STATIC,
     MODE_TRACK,
     DEFAULT_MIN_TRACK_INTERVAL,
@@ -69,7 +66,7 @@ def _map_condition(weather_code: int | None, is_day: int | None = 1) -> str | No
 
 
 class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
-    """Implementation of an Open-Meteo weather entity."""
+    """Implementation of an Open-Meteo weather entity with stable naming."""
 
     _attr_attribution = "Weather data provided by Open-Meteo"
     _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
@@ -77,7 +74,7 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     _attr_native_wind_speed_unit = UnitOfSpeed.KILOMETERS_PER_HOUR
     _attr_native_visibility_unit = UnitOfLength.KILOMETERS
     _attr_native_pressure_unit = UnitOfPressure.HPA
-    
+
     _attr_supported_features = (
         WeatherEntityFeature.FORECAST_DAILY
         | WeatherEntityFeature.FORECAST_HOURLY
@@ -86,29 +83,6 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         _attr_supported_features |= WeatherEntityFeature.HOURLY_PRECIPITATION
     except AttributeError:
         pass
-        
-    def _update_device_name(self) -> None:
-        """Update the device name based on location if enabled in options."""
-        if not hasattr(self, 'hass') or not hasattr(self, '_config_entry'):
-            return
-        if not self._config_entry.options.get(CONF_USE_PLACE_AS_DEVICE_NAME, True):
-            return
-        loc = (self.coordinator.data or {}).get("location_name")
-        if loc:
-            self.hass.async_create_task(
-                maybe_update_device_name(self.hass, self._config_entry, loc)
-            )
-        
-    async def async_added_to_hass(self) -> None:
-        """When entity is added to hass."""
-        await super().async_added_to_hass()
-        self._update_device_name()
-        
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self._update_device_name()
-        self.async_write_ha_state()
-
 
     def __init__(
         self, coordinator: OpenMeteoDataUpdateCoordinator, config_entry: ConfigEntry
@@ -116,8 +90,12 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         """Initialize the weather entity."""
         super().__init__(coordinator)
         self._config_entry = config_entry
-        # Stabilne entity_id przy pierwszym utworzeniu (np. weather.pogoda)
-        self._attr_suggested_object_id = "pogoda"
+
+        # Stable, generic names/ids:
+        # - entity_id will be weather.open_meteo on first add; the second entry becomes weather.open_meteo_2
+        # - visible name is always "Open-Meteo" (no city/place)
+        self._attr_suggested_object_id = "open_meteo"
+        self._attr_name = "Open-Meteo"
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
         self._attr_has_entity_name = True
         self._attr_device_info = {
@@ -125,6 +103,7 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             "name": "Open-Meteo",
             "manufacturer": "Open-Meteo",
         }
+
         data = {**config_entry.data, **config_entry.options}
         mode = data.get(CONF_MODE)
         if not mode:
@@ -137,92 +116,47 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         self._min_track_interval = int(
             data.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL)
         )
-        self._provider = coordinator.provider
 
-    
-    @property
-    def name(self) -> str:
-        """Return the display name of the weather entity (location).
-
-        Order of preference:
-        1) user-defined device name,
-        2) reverse-geocoded place name (from coordinator.data["location_name"]),
-        3) device name,
-        4) entry title,
-        5) fallback.
-        This matches tests that expect Radłów even before device rename has propagated.
-        """
-        try:
-            dev = dr.async_get(self.hass).async_get_device(
-                identifiers={(DOMAIN, self._config_entry.entry_id)}
-            )
-            if dev:
-                return (
-                    dev.name_by_user
-                    or (self.coordinator.data or {}).get("location_name")
-                    or dev.name
-                    or self._config_entry.title
-                    or getattr(self, "_attr_name", None)
-                    or "Open-Meteo"
-                )
-        except Exception:
-            pass
-        return (
-            (self.coordinator.data or {}).get("location_name")
-            or self._config_entry.title
-            or getattr(self, "_attr_name", None)
-            or "Open-Meteo"
-        )
-
+    # -------- BASIC METRICS --------
     @property
     def available(self) -> bool:
-        """Return if entity is available."""
-        if not self.coordinator.data:
-            return False
-        return self.coordinator.last_update_success
+        return bool(self.coordinator.data) and self.coordinator.last_update_success
 
     @property
     def native_temperature(self) -> float | None:
-        """Return the current temperature."""
         cw = self.coordinator.data.get("current_weather", {})
         temp = cw.get("temperature")
         return round(temp, 1) if isinstance(temp, (int, float)) else None
 
     @property
     def native_pressure(self) -> float | None:
-        """Return the current pressure."""
         val = self._hourly_value("pressure_msl")
         return round(val, 1) if isinstance(val, (int, float)) else None
 
     @property
     def native_wind_speed(self) -> float | None:
-        """Return the current wind speed."""
         cw = self.coordinator.data.get("current_weather", {})
         ws = cw.get("windspeed")
         return round(ws, 1) if isinstance(ws, (int, float)) else None
 
     @property
     def wind_bearing(self) -> float | None:
-        """Return the current wind bearing."""
         cw = self.coordinator.data.get("current_weather", {})
         wb = cw.get("winddirection")
         return round(wb, 1) if isinstance(wb, (int, float)) else None
 
     @property
     def native_visibility(self) -> float | None:
-        """Return the current visibility."""
         vis = self._hourly_value("visibility")
         return round(vis / 1000, 2) if isinstance(vis, (int, float)) else None
 
     @property
     def humidity(self) -> int | None:
-        """Return the current humidity."""
         hum = self._hourly_value("relative_humidity_2m")
         return round(hum) if isinstance(hum, (int, float)) else None
 
     @property
     def native_dew_point(self) -> float | None:
-        """Return the current dew point."""
         current_dp = self.coordinator.data.get("current", {}).get("dewpoint_2m")
         if isinstance(current_dp, (int, float)):
             return round(current_dp, 1)
@@ -231,12 +165,12 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
     @property
     def condition(self) -> str | None:
-        """Return the current weather condition."""
         cw = self.coordinator.data.get("current_weather", {})
         weather_code = cw.get("weathercode")
         is_day = cw.get("is_day")
         return _map_condition(weather_code, is_day) if weather_code is not None else None
-    
+
+    # -------- FORECAST HELPERS --------
     def _current_hour_index(self) -> int:
         times = self.coordinator.data.get("hourly", {}).get("time") or []
         if not isinstance(times, list):
@@ -259,10 +193,11 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         return None
 
     def _map_daily_forecast(self) -> list[dict[str, Any]]:
-        if not (daily := self.coordinator.data.get("daily")):
+        daily = self.coordinator.data.get("daily") or {}
+        times = daily.get("time") or []
+        if not times:
             return []
-        
-        times = daily.get("time", [])
+
         temp_max = daily.get("temperature_2m_max", [])
         temp_min = daily.get("temperature_2m_min", [])
         wcodes = daily.get("weathercode", [])
@@ -270,8 +205,8 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         ws_max = daily.get("wind_speed_10m_max", [])
         wd_dom = daily.get("wind_direction_10m_dominant", [])
         pop = daily.get("precipitation_probability_max", [])
-        
-        out = []
+
+        out: list[dict[str, Any]] = []
         for i, dt in enumerate(times):
             forecast = {
                 ATTR_FORECAST_TIME: dt,
@@ -286,7 +221,7 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             out.append(forecast)
         return out
 
-
+    # -------- FORECAST PROPERTIES --------
     @property
     def forecast_daily(self) -> list[dict[str, Any]]:
         return self._map_daily_forecast()
@@ -334,65 +269,12 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
                 item["condition"] = None
             result.append(item)
 
-        missing = sorted({k for f in result for k, v in f.items() if v is None})
-        if result:
-            _LOGGER.debug(
-                "Hourly forecast: %d entries from %s to %s; missing fields: %s",
-                len(result),
-                result[0]["datetime"],
-                result[-1]["datetime"],
-                ", ".join(missing) if missing else "none",
-            )
-        else:
-            _LOGGER.debug("Hourly forecast: 0 entries")
         return result
 
+    # -------- UPDATE HANDLERS --------
     @callback
     def _handle_coordinator_update(self) -> None:
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(self.coordinator.async_add_listener(self._handle_coordinator_update))
-
-    @property
-    def sunrise(self) -> datetime | None:
-        val = self.coordinator.data.get("daily", {}).get("sunrise", [None])[0]
-        if isinstance(val, str):
-            dt = dt_util.parse_datetime(val)
-        else:
-            dt = val
-        if not dt:
-            return None
-        if dt.tzinfo is None:
-            tz = dt_util.get_time_zone(self.hass.config.time_zone) or dt_util.UTC
-            dt = dt.replace(tzinfo=tz)
-        return dt_util.as_utc(dt)
-
-    @property
-    def sunset(self) -> datetime | None:
-        val = self.coordinator.data.get("daily", {}).get("sunset", [None])[0]
-        if isinstance(val, str):
-            dt = dt_util.parse_datetime(val)
-        else:
-            dt = val
-        if not dt:
-            return None
-        if dt.tzinfo is None:
-            tz = dt_util.get_time_zone(self.hass.config.time_zone) or dt_util.UTC
-            dt = dt.replace(tzinfo=tz)
-        return dt_util.as_utc(dt)
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return additional state attributes."""
-        attrs = {
-            "location_name": self.coordinator.data.get("location_name"),
-            "mode": self._mode,
-            "min_track_interval": self._min_track_interval,
-            "last_location_update": self.coordinator.data.get("last_location_update"),
-            "provider": self._provider,
-        }
-        dp = self.native_dew_point
-        if dp is not None:
-            attrs["dew_point"] = dp
-        return attrs
