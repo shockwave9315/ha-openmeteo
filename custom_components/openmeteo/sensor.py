@@ -246,7 +246,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     ),
     "precipitation_sum": OpenMeteoSensorDescription(
         key="precipitation_sum",
-        name="Suma opadów",
+        name="Opad (bieżąca godzina)",
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         icon="mdi:cup-water",
         device_class="precipitation",
