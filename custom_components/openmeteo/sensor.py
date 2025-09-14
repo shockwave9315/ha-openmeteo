@@ -254,23 +254,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         + (_hourly_at_now(d, "snowfall") or 0),
     ),
 
-    "precipitation_daily_sum": OpenMeteoSensorDescription(
-        key="precipitation_daily_sum",
-        name="Suma opadów (dzienna)",
-        native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
-        icon="mdi:weather-pouring",
-        device_class="precipitation",
-        value_fn=lambda d: ((d.get("daily", {}) or {}).get("precipitation_sum") or [None])[0],
-    ),
-    "precipitation_last_3h": OpenMeteoSensorDescription(
-        key="precipitation_last_3h",
-        name="Opad (ostatnie 3h)",
-        native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
-        icon="mdi:weather-pouring",
-        device_class="precipitation",
-        value_fn=lambda d: _hourly_sum_last_n(d, ["precipitation", "snowfall"], 3),
-    ),
-
+        
     "precipitation_daily_sum": OpenMeteoSensorDescription(
         key="precipitation_daily_sum",
         name="Suma opadów (dzienna)",
