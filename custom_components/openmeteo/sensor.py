@@ -125,6 +125,50 @@ def _hourly_at_now(data: dict, key: str):
     return best_val
 
 
+
+
+def _hourly_sum_last_n(data: dict, keys: list[str], n: int = 3):
+    """Sum of the last N hourly values for given keys (e.g., ["precipitation","snowfall"]).
+
+    It finds the current-hour index (or nearest), then sums values for indices [idx, idx-1, ..., idx-(n-1)].
+    Missing values are treated as 0. Returns None if no hourly data.
+    """
+    hourly = (data or {}).get("hourly", {})
+    times = hourly.get("time") or []
+    if not times:
+        return None
+    tz = dt_util.get_time_zone((data or {}).get("timezone")) or dt_util.UTC
+    now = dt_util.now(tz).replace(minute=0, second=0, microsecond=0)
+
+    # locate index of current hour (exact or nearest)
+    best_idx = None
+    best_diff = None
+    for idx, t_str in enumerate(times):
+        try:
+            dt = dt_util.parse_datetime(t_str)
+            if dt and dt.tzinfo is None:
+                dt = dt.replace(tzinfo=tz)
+            diff = abs((dt - now).total_seconds())
+            if best_diff is None or diff < best_diff:
+                best_diff = diff
+                best_idx = idx
+        except Exception:
+            continue
+
+    if best_idx is None:
+        return None
+
+    total = 0.0
+    for key in keys or []:
+        values = hourly.get(key) or []
+        for offset in range(n):
+            i = best_idx - offset
+            if i < 0 or i >= len(values):
+                continue
+            v = values[i]
+            if isinstance(v, (int, float)):
+                total += float(v)
+    return total
 # helper do widzialności w km
 def _visibility_km(data: dict):
     v = _hourly_at_now(data, "visibility")
@@ -208,6 +252,40 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         device_class="precipitation",
         value_fn=lambda d: (_hourly_at_now(d, "precipitation") or 0)
         + (_hourly_at_now(d, "snowfall") or 0),
+    ),
+
+    "precipitation_daily_sum": OpenMeteoSensorDescription(
+        key="precipitation_daily_sum",
+        name="Suma opadów (dzienna)",
+        native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
+        icon="mdi:weather-pouring",
+        device_class="precipitation",
+        value_fn=lambda d: ((d.get("daily", {}) or {}).get("precipitation_sum") or [None])[0],
+    ),
+    "precipitation_last_3h": OpenMeteoSensorDescription(
+        key="precipitation_last_3h",
+        name="Opad (ostatnie 3h)",
+        native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
+        icon="mdi:weather-pouring",
+        device_class="precipitation",
+        value_fn=lambda d: _hourly_sum_last_n(d, ["precipitation", "snowfall"], 3),
+    ),
+
+    "precipitation_daily_sum": OpenMeteoSensorDescription(
+        key="precipitation_daily_sum",
+        name="Suma opadów (dzienna)",
+        native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
+        icon="mdi:weather-pouring",
+        device_class="precipitation",
+        value_fn=lambda d: ((d.get("daily", {}) or {}).get("precipitation_sum") or [None])[0],
+    ),
+    "precipitation_last_3h": OpenMeteoSensorDescription(
+        key="precipitation_last_3h",
+        name="Opad (ostatnie 3h)",
+        native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
+        icon="mdi:weather-pouring",
+        device_class="precipitation",
+        value_fn=lambda d: _hourly_sum_last_n(d, ["precipitation", "snowfall"], 3),
     ),
     "wind_speed": OpenMeteoSensorDescription(
         key="wind_speed",
