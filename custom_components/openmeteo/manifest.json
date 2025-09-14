@@ -8,6 +8,6 @@
     "@shockwave9315"
   ],
   "iot_class": "cloud_polling",
-  "version": "1.4.10",
-  "requirements": []}
-
+  "version": "1.4.11",
+  "requirements": []
+}

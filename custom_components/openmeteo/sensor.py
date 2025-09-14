@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
 
 from homeassistant.components.sensor import (
@@ -20,18 +20,38 @@ from homeassistant.const import (
     UnitOfPressure,
     UnitOfSpeed,
     UnitOfTemperature,
-    UnitOfVolume,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import (
-    DOMAIN,
-)
-from .helpers import hourly_value_at_now
+from .const import DOMAIN
 from .coordinator import OpenMeteoDataUpdateCoordinator
+
+# --- Robust import of helper (with fallback) ---
+try:
+    from .helpers import hourly_value_at_now  # type: ignore
+except Exception:  # pragma: no cover
+    def hourly_value_at_now(hours, values, now: datetime | None = None):
+        hours = list(hours or [])
+        vals = list(values or [])
+        if not hours or not vals or len(hours) != len(vals):
+            return None
+        if now is None:
+            now = datetime.now(timezone.utc)
+        now_r = now.replace(minute=0, second=0, microsecond=0)
+        for i, h in enumerate(hours):
+            if h == now_r:
+                return vals[i]
+        for i, h in enumerate(hours):
+            if h >= now_r:
+                return vals[i]
+        for i in range(len(hours) - 1, -1, -1):
+            if hours[i] <= now_r:
+                return vals[i]
+        return None
+# -----------------------------------------------
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -72,16 +92,16 @@ def _precip_last_n_hours(data: dict[str, Any], n: int, keys: list[str] | None = 
         return None
     if not keys:
         keys = ["precipitation"]
-    # index of "now"
-    now_idx_val = hourly_value_at_now(times, list(range(len(times))))
-    if now_idx_val is None:
+    # index proxy: use the helper on a range of indices
+    idx = hourly_value_at_now(times, list(range(len(times))))
+    if idx is None:
         return None
-    idx_now = int(now_idx_val)
+    i_now = int(idx)
     total = 0.0
     for k in keys:
         vals = hourly.get(k) or []
         for off in range(n):
-            i = idx_now - off
+            i = i_now - off
             if 0 <= i < len(vals):
                 v = vals[i]
                 if isinstance(v, (int, float)):
@@ -104,7 +124,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=PERCENTAGE,
         device_class=SensorDeviceClass.HUMIDITY,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda d: (d.get("hourly") or {}).get("relative_humidity_2m") and hourly_value_at_now(
+        value_fn=lambda d: hourly_value_at_now(
             _hourly_times_converted(d),
             (d.get("hourly") or {}).get("relative_humidity_2m"),
         ),
@@ -115,7 +135,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfPressure.HPA,
         device_class=SensorDeviceClass.PRESSURE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda d: (d.get("hourly") or {}).get("pressure_msl") and hourly_value_at_now(
+        value_fn=lambda d: hourly_value_at_now(
             _hourly_times_converted(d),
             (d.get("hourly") or {}).get("pressure_msl"),
         ),
@@ -126,7 +146,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
         device_class=SensorDeviceClass.WIND_SPEED,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda d: (d.get("hourly") or {}).get("wind_speed_10m") and hourly_value_at_now(
+        value_fn=lambda d: hourly_value_at_now(
             _hourly_times_converted(d),
             (d.get("hourly") or {}).get("wind_speed_10m"),
         ),
@@ -137,7 +157,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
         device_class=SensorDeviceClass.WIND_SPEED,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda d: (d.get("hourly") or {}).get("wind_gusts_10m") and hourly_value_at_now(
+        value_fn=lambda d: hourly_value_at_now(
             _hourly_times_converted(d),
             (d.get("hourly") or {}).get("wind_gusts_10m"),
         ),
@@ -148,7 +168,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfLength.MILLIMETERS,
         device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda d: (d.get("hourly") or {}).get("precipitation") and hourly_value_at_now(
+        value_fn=lambda d: hourly_value_at_now(
             _hourly_times_converted(d),
             (d.get("hourly") or {}).get("precipitation"),
         ),
@@ -158,7 +178,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         name="Szansa opadu",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda d: (d.get("hourly") or {}).get("precipitation_probability") and hourly_value_at_now(
+        value_fn=lambda d: hourly_value_at_now(
             _hourly_times_converted(d),
             (d.get("hourly") or {}).get("precipitation_probability"),
         ),
@@ -168,7 +188,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         name="Widoczność",
         native_unit_of_measurement=UnitOfLength.KILOMETERS,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda d: (d.get("hourly") or {}).get("visibility") and hourly_value_at_now(
+        value_fn=lambda d: hourly_value_at_now(
             _hourly_times_converted(d),
             (d.get("hourly") or {}).get("visibility"),
         ),
@@ -179,7 +199,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda d: (d.get("hourly") or {}).get("dewpoint_2m") and hourly_value_at_now(
+        value_fn=lambda d: hourly_value_at_now(
             _hourly_times_converted(d),
             (d.get("hourly") or {}).get("dewpoint_2m"),
         ),
@@ -190,20 +210,16 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfLength.MILLIMETERS,
         device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda d: (d.get("daily") or {}).get("precipitation_sum") and ((d.get("daily") or {}).get("precipitation_sum")[0] if (d.get("daily") or {}).get("precipitation_sum") else None),
+        value_fn=lambda d: ((d.get("daily") or {}).get("precipitation_sum") or [None])[0],
     ),
     "uv_index": OpenMeteoSensorDescription(
         key="uv_index",
         name="Indeks UV",
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda d: (d.get("hourly") or {}).get("uv_index") and hourly_value_at_now(
-            _hourly_times_converted(d),
-            (d.get("hourly") or {}).get("uv_index"),
-        )
-        or ((d.get("hourly") or {}).get("uv_index_clear_sky") and hourly_value_at_now(
-            _hourly_times_converted(d),
-            (d.get("hourly") or {}).get("uv_index_clear_sky"),
-        )),
+        value_fn=lambda d: (
+            hourly_value_at_now(_hourly_times_converted(d), (d.get("hourly") or {}).get("uv_index"))
+            or hourly_value_at_now(_hourly_times_converted(d), (d.get("hourly") or {}).get("uv_index_clear_sky"))
+        ),
     ),
     "precipitation_last_3h": OpenMeteoSensorDescription(
         key="precipitation_last_3h",
@@ -214,8 +230,6 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         value_fn=lambda d: _precip_last_n_hours(d, 3, ["precipitation", "snowfall"]),
     ),
 }
-
-# Entities
 
 
 class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorEntity):
@@ -241,7 +255,7 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
             return None
         try:
             return fn(data)
-        except Exception:  # pragma: no cover (defensive)
+        except Exception:
             return None
 
     @property
@@ -255,7 +269,7 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
             if loc:
                 attrs["location_name"] = loc
             return attrs
-        except Exception:  # pragma: no cover
+        except Exception:
             return None
 
 
@@ -263,9 +277,5 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator: OpenMeteoDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-
-    entities: list[OpenMeteoSensor] = []
-    for desc in SENSORS.values():
-        entities.append(OpenMeteoSensor(coordinator, desc, entry))
-
+    entities: list[OpenMeteoSensor] = [OpenMeteoSensor(coordinator, d, entry) for d in SENSORS.values()]
     async_add_entities(entities)
