@@ -219,8 +219,6 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         icon="mdi:thermometer",
         device_class="temperature",
         value_fn=lambda d: d.get("current_weather", {}).get("temperature"),
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
     ),
     "humidity": OpenMeteoSensorDescription(
         key="humidity",
