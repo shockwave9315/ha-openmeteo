@@ -218,7 +218,10 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         icon="mdi:thermometer",
         device_class="temperature",
-        value_fn=lambda d: d.get("current_weather", {}).get("temperature"),
+        value_fn=lambda d: d.get("current_weather", {}).get("temperature",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1
+    ),
     ),
     "humidity": OpenMeteoSensorDescription(
         key="humidity",
@@ -226,7 +229,9 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=PERCENTAGE,
         icon="mdi:water-percent",
         device_class="humidity",
-        value_fn=lambda d: _hourly_at_now(d, "relative_humidity_2m"),
+        value_fn=lambda d: _hourly_at_now(d, "relative_humidity_2m",
+        state_class=SensorStateClass.MEASUREMENT
+    ),
     ),
     "apparent_temperature": OpenMeteoSensorDescription(
         key="apparent_temperature",
@@ -262,6 +267,9 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         icon="mdi:weather-pouring",
         device_class="precipitation",
         value_fn=lambda d: ((d.get("daily", {}) or {}).get("precipitation_sum") or [None])[0],
+    ,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1
     ),
     "precipitation_last_3h": OpenMeteoSensorDescription(
         key="precipitation_last_3h",
@@ -269,7 +277,10 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         icon="mdi:weather-pouring",
         device_class="precipitation",
-        value_fn=lambda d: _hourly_sum_last_n(d, ["precipitation", "snowfall"], 3),
+        value_fn=lambda d: _hourly_sum_last_n(d, ["precipitation", "snowfall"], 3,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1
+    ),
     ),
     "wind_speed": OpenMeteoSensorDescription(
         key="wind_speed",
@@ -277,7 +288,9 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
         icon="mdi:weather-windy",
         device_class=None,
-        value_fn=lambda d: d.get("current_weather", {}).get("windspeed"),
+        value_fn=lambda d: d.get("current_weather", {}).get("windspeed",
+        state_class=SensorStateClass.MEASUREMENT
+    ),
     ),
     "wind_gust": OpenMeteoSensorDescription(
         key="wind_gust",
@@ -285,7 +298,9 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
         icon="mdi:weather-windy-variant",
         device_class=None,
-        value_fn=lambda d: _hourly_at_now(d, "wind_gusts_10m"),
+        value_fn=lambda d: _hourly_at_now(d, "wind_gusts_10m",
+        state_class=SensorStateClass.MEASUREMENT
+    ),
     ),
     "wind_bearing": OpenMeteoSensorDescription(
         key="wind_bearing",
@@ -301,7 +316,10 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfPressure.HPA,
         icon="mdi:gauge",
         device_class="pressure",
-        value_fn=lambda d: _hourly_at_now(d, "pressure_msl"),
+        value_fn=lambda d: _hourly_at_now(d, "pressure_msl",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1
+    ),
     ),
     "visibility": OpenMeteoSensorDescription(
         key="visibility",
@@ -384,7 +402,7 @@ async def async_migrate_entry(hass, config_entry, entry: er.RegistryEntry) -> bo
 
     slug = OBJECT_ID_PL[key_guess]
     domain = "sensor"
-    new_entity_id = async_generate_entity_id(hass, f"{domain}.{{}}", slug, reg)
+    new_entity_id = async_generate_entity_id(f"{domain}.{{}}", slug, hass=hass)
 
     reg.async_update_entity(ent_id, new_unique_id=new_uid, new_entity_id=new_entity_id)
     return True
@@ -489,7 +507,7 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
             if src:
                 attrs["source"] = src
         except Exception:  # pylint: disable=broad-except
-            pass
+            _LOGGER.exception("Failed to add extra attributes from store")
         return attrs
 
     def _handle_place_update(self, *_) -> None:
@@ -558,50 +576,25 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
         if isinstance(uv_index, (int, float)):
             return round(uv_index, 2)
 
+
         # 2) Try hourly.uv_index for the current hour
         data = self.coordinator.data or {}
         hourly = data.get("hourly", {})
-        times = hourly.get("time", [])
-        values = hourly.get("uv_index", [])
-
-        if not times or not values:
+        times_conv = hourly.get("time_converted")
+        uv_arr = hourly.get("uv_index") or hourly.get("uv_index_clear_sky")
+        if not uv_arr:
             return None
-
-        tz = dt_util.get_time_zone(data.get("timezone")) or dt_util.UTC
-        now = dt_util.now(tz).replace(minute=0, second=0, microsecond=0)
-
-        # First try to find exact hour match
-        for t_str, val in zip(times, values):
-            try:
+        if not times_conv:
+            # build converted times if not provided
+            tz = dt_util.get_time_zone(data.get("timezone")) or dt_util.UTC
+            raw = hourly.get("time", [])
+            times_conv = []
+            for t_str in raw:
                 dt = dt_util.parse_datetime(t_str)
                 if dt and dt.tzinfo is None:
                     dt = dt.replace(tzinfo=tz)
-                if dt == now and isinstance(val, (int, float)):
-                    return round(val, 2)
-            except Exception:
-                continue
-
-        # If no exact match, find the closest hour with data
-        best_val = None
-        best_diff = None
-
-        for t_str, val in zip(times, values):
-            try:
-                dt = dt_util.parse_datetime(t_str)
-                if dt and dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=tz)
-                if isinstance(val, (int, float)):
-                    diff = abs((dt - now).total_seconds())
-                    if best_diff is None or diff < best_diff:
-                        best_diff = diff
-                        best_val = val
-            except Exception:
-                continue
-
-        return round(best_val, 2) if isinstance(best_val, (int, float)) else None
-
-    @property
-    def extra_state_attributes(self):
+                times_conv.append(dt)
+        return hourly_value_at_now(times_conv, uv_arr)
         attrs = _extra_attrs(self.coordinator.data or {})
         try:
             store = (
@@ -622,8 +615,8 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
             if place:
                 attrs["om_place_name"] = place
         except Exception:
-            pass
-        return attrs
+            _LOGGER.exception("Failed to build extra_state_attributes")
+            return attrs
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
