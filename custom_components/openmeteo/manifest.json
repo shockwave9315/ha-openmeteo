@@ -8,11 +8,9 @@
     "@shockwave9315"
   ],
   "iot_class": "cloud_polling",
-  "version": "1.4.4",
+  "version": "1.4.3",
   "requirements": [
     "aiohttp>=3.8.0",
     "async-timeout>=4.0.0"
   ]
 }
-
-
