@@ -238,8 +238,7 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         is_day = cw.get("is_day")
         return _map_condition(weather_code, is_day) if weather_code is not None else None
 
-def 
-_map_daily_forecast(self) -> list[dict[str, Any]]:
+    def _map_daily_forecast(self) -> list[dict[str, Any]]:
         if not (daily := self.coordinator.data.get("daily")):
             return []
         
