@@ -180,7 +180,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             f"?latitude={lat:.5f}&longitude={lon:.5f}&language=pl&format=json"
         )
         try:
-            async with aiohttp.ClientSession() as session:
+            session = async_get_clientsession(self.hass)
                 async with session.get(url, timeout=10) as resp:
                     if resp.status != 200:
                         return None
