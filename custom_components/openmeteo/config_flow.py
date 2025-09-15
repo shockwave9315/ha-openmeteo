@@ -6,6 +6,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
@@ -128,7 +129,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if not errors:
                 data = {**user_input, CONF_MODE: self._mode}
-                return self.async_create_entry(title="Open-Meteo", data=data)
+                return self.async_create_entry(title=await self._guess_title(self._mode, data), data=data)
 
         schema = _build_schema(self.hass, self._mode, defaults)
         return self.async_show_form(
@@ -143,6 +144,41 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return OpenMeteoOptionsFlow(config_entry)
 
 
+
+    async def _guess_title(self, mode: str, data: dict) -> str:
+        """Derive a smart title for the config entry."""
+        try:
+            if mode == MODE_TRACK and data.get(CONF_ENTITY_ID):
+                ent_id = data.get(CONF_ENTITY_ID)
+                st = self.hass.states.get(ent_id)
+                if st:
+                    fn = st.attributes.get("friendly_name") or st.name or ent_id
+                    return f"Open-Meteo: {fn}"
+                return "Open-Meteo: Śledzenie"
+            # STATIC
+            lat = float(data.get(CONF_LATITUDE))
+            lon = float(data.get(CONF_LONGITUDE))
+            session = async_get_clientsession(self.hass)
+            url = (
+                "https://geocoding-api.open-meteo.com/v1/reverse"
+                f"?latitude={lat:.5f}&longitude={lon:.5f}&language=pl&format=json"
+            )
+            async with session.get(url, timeout=10) as resp:
+                if resp.status == 200:
+                    js = await resp.json()
+                    results = js.get("results") or []
+                    if results:
+                        r = results[0]
+                        name = r.get("name") or r.get("admin2") or r.get("admin1")
+                        cc = r.get("country_code")
+                        if name and cc:
+                            return f"{name}, {cc}"
+                        if name:
+                            return name
+            return f"Open-Meteo: {lat:.4f},{lon:.4f}"
+        except Exception:
+            return "Open-Meteo"
+    
 class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
     """Options flow allowing to tweak settings after setup."""
 
@@ -197,7 +233,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
             if not errors:
                 # Persist options update
                 data = {**self._options, **user_input, CONF_MODE: self._mode}
-                return self.async_create_entry(title="", data=data)
+                return self.async_create_entry(title=await self._guess_title(self._mode, data), data=data)
 
         schema = _build_schema(self.hass, self._mode, defaults)
         return self.async_show_form(step_id="mode_details", data_schema=schema, errors=errors)
@@ -234,7 +270,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     new_options.pop(CONF_MIN_TRACK_INTERVAL, None)
                 new_options.update(user_input)
                 new_options[CONF_MODE] = self._mode
-                return self.async_create_entry(title="", data=new_options)
+                return self.async_create_entry(title=await self._guess_title(self._mode, new_options), data=new_options)
 
         if self._mode == MODE_TRACK:
             schema = vol.Schema(
