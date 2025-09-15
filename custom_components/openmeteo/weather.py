@@ -103,11 +103,8 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     async def async_added_to_hass(self) -> None:
         """When entity is added to hass."""
         await super().async_added_to_hass()
-        self._update_device_name()
-        
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        self._update_device_name()
         self.async_write_ha_state()
 
 
@@ -123,7 +120,7 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         self._attr_has_entity_name = True
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
-            "name": "Open-Meteo",
+            "name": config_entry.title,
             "manufacturer": "Open-Meteo",
         }
         data = {**config_entry.data, **config_entry.options}
@@ -143,37 +140,18 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     
     @property
     def name(self) -> str:
-        """Return the display name of the weather entity (location).
-
-        Order of preference:
-        1) user-defined device name,
-        2) reverse-geocoded place name (from coordinator.data["location_name"]),
-        3) device name,
-        4) entry title,
-        5) fallback.
-        This matches tests that expect Radłów even before device rename has propagated.
-        """
+        """Return dynamic friendly name based on current location (stable entity_id)."""
         try:
-            dev = dr.async_get(self.hass).async_get_device(
-                identifiers={(DOMAIN, self._config_entry.entry_id)}
-            )
-            if dev:
-                return (
-                    dev.name_by_user
-                    or (self.coordinator.data or {}).get("location_name")
-                    or dev.name
-                    or self._config_entry.title
-                    or getattr(self, "_attr_name", None)
-                    or "Open-Meteo"
-                )
+            location_name = (self.coordinator.data or {}).get("location_name")
+            if location_name:
+                return location_name
         except Exception:
             pass
-        return (
-            (self.coordinator.data or {}).get("location_name")
-            or self._config_entry.title
-            or getattr(self, "_attr_name", None)
-            or "Open-Meteo"
-        )
+        # Fallback: device name (config_entry.title)
+        try:
+            return self._attr_device_info.get("name")  # type: ignore[union-attr]
+        except Exception:
+            return "Open-Meteo"
 
     @property
     def available(self) -> bool:
