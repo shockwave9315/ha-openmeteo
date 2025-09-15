@@ -115,7 +115,7 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         super().__init__(coordinator)
         self._config_entry = config_entry
         # Stabilne entity_id przy pierwszym utworzeniu (np. weather.pogoda)
-        self._attr_suggested_object_id = "pogoda"
+        self._attr_suggested_object_id = "open_meteo"
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
         self._attr_has_entity_name = False
         self._attr_device_info = {
@@ -139,12 +139,20 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
     
     @property
-    def name(self) -> str:
-        """Return dynamic friendly name based on current location (stable entity_id)."""
+def name(self) -> str | None:
+        """Friendly name: dynamic location after entity_id is created."""
+        if getattr(self, "_freeze_objid", False):
+            return None
         try:
-            location_name = (self.coordinator.data or {}).get("location_name")
-            if location_name:
-                return location_name
+            loc = (self.coordinator.data or {}).get("location_name")
+            if loc:
+                return loc
+        except Exception:
+            pass
+        try:
+            return self._attr_device_info.get("name")  # type: ignore[union-attr]
+        except Exception:
+            return "Open-Meteo"
         except Exception:
             pass
         # Fallback: device name (config_entry.title)
