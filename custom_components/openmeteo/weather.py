@@ -120,6 +120,7 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         # Stabilne entity_id przy pierwszym utworzeniu (np. weather.pogoda)
         self._attr_suggested_object_id = "open_meteo"
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
+        self._use_suggested_object_id = True
         # Freeze name during first add so entity_id uses suggested_object_id
         
         self._attr_has_entity_name = False
@@ -144,8 +145,9 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
     
     @property
-    def name(self) -> str:
-        """Dynamic friendly name based on device/user/location/title."""
+    def name(self) -> str | None:
+        if getattr(self, "_use_suggested_object_id", False):
+            return None
         try:
             dev = dr.async_get(self.hass).async_get_device(identifiers={(DOMAIN, self._config_entry.entry_id)})
             if dev:
@@ -155,8 +157,6 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         except Exception:
             pass
         return (self.coordinator.data or {}).get("location_name") or self._config_entry.title or "Open-Meteo"
-
-    @property
     def available(self) -> bool:
         """Return if entity is available."""
         if not self.coordinator.data:
