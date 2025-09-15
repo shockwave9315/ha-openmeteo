@@ -35,6 +35,8 @@ from .helpers import hourly_at_now as _hourly_at_now, hourly_sum_last_n as _hour
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
 from .const import (
+    CONF_MODE,
+    MODE_STATIC,
     DOMAIN,
     ATTRIBUTION,
     CONF_USE_PLACE_AS_DEVICE_NAME,

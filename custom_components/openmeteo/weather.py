@@ -126,7 +126,7 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         self._attr_has_entity_name = False
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
-            "name": config_entry.title,
+            "name": device_name,
             "manufacturer": "Open-Meteo",
         }
         data = {**config_entry.data, **config_entry.options}
@@ -146,7 +146,6 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     
     @property
     def name(self) -> str:
-        """Return user/device/location/title name (never None)."""
         try:
             dev = dr.async_get(self.hass).async_get_device(identifiers={(DOMAIN, self._config_entry.entry_id)})
             if dev:
