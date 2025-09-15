@@ -348,7 +348,7 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
         # Set device info
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
-            name="Open-Meteo",
+            name=config_entry.title,
             manufacturer="Open-Meteo",
         )
 
@@ -446,7 +446,7 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
         # Set device info
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
-            name="Open-Meteo",
+            name=config_entry.title,
             manufacturer="Open-Meteo",
         )
 
