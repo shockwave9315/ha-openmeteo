@@ -180,23 +180,23 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             f"?latitude={lat:.5f}&longitude={lon:.5f}&language=pl&format=json"
         )
         try:
-            session = async_get_clientsession(self.hass)
-                async with session.get(url, timeout=10) as resp:
-                    if resp.status != 200:
-                        return None
-                    js = await resp.json()
-                    results = js.get("results") or []
-                    if not results:
-                        return None
-                    r = results[0]
-                    name = r.get("name") or r.get("admin2") or r.get("admin1")
-                    country = r.get("country_code")
-                    if name and country:
-                        return f"{name}, {country}"
-                    return name
+            session = _ha_async_get_clientsession(self.hass)
+            async with session.get(url, timeout=10) as resp:
+                if resp.status != 200:
+                    return None
+                js = await resp.json()
+                results = js.get("results") or []
+                if not results:
+                    return None
+                r = results[0]
+                name = r.get("name") or r.get("admin2") or r.get("admin1")
+                country = r.get("country_code")
+                if name and country:
+                    return f"{name}, {country}"
+                return name
+
         except Exception:
             return None
-
     def _coords_fallback(self, lat: float, lon: float) -> str:
         return f"{lat:.2f},{lon:.2f}"
 
