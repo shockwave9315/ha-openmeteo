@@ -1,3 +1,6 @@
+## 1.4.39
+- fix(weather): restore safe device-name initialization so setup works and devices use the resolved place name
+
 ## 1.3.32
 - fix: correct override handling, prevent coords as names, stabilize tests
 

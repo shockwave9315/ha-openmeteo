@@ -101,9 +101,12 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         self._attr_has_entity_name = False
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
         self._attr_suggested_object_id = self._derive_object_id()
+
+        device_name = self._default_device_name()
+        self._device_name = device_name
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
-            name=self._default_device_name(),
+            name=device_name,
             manufacturer="Open-Meteo",
         )
 
@@ -170,6 +173,11 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
 
         location = (self.coordinator.data or {}).get("location_name")
         if location:
+            self._device_name = str(location)
+            try:
+                self._attr_device_info["name"] = str(location)
+            except (AttributeError, TypeError):  # pragma: no cover - defensive
+                pass
             self.hass.async_create_task(
                 maybe_update_device_name(self.hass, self._config_entry, location)
             )
@@ -251,6 +259,7 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
             (self.coordinator.data or {}).get("location_name"),
             self._config_entry.options.get(CONF_AREA_NAME_OVERRIDE),
             self._config_entry.title,
+            getattr(self, "_device_name", None),
         ):
             if candidate:
                 return str(candidate)
