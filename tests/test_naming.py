@@ -113,6 +113,42 @@ async def test_device_name_follows_place_and_respects_user_rename(expected_linge
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("expected_lingering_timers", [True])
+async def test_weather_device_info_uses_location_name(expected_lingering_timers):
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant_custom_component.common import (
+        MockConfigEntry,
+        async_test_home_assistant,
+    )
+    from custom_components.openmeteo.weather import OpenMeteoWeather
+    from custom_components.openmeteo.const import (
+        CONF_LATITUDE,
+        CONF_LONGITUDE,
+        CONF_MODE,
+        DOMAIN,
+        MODE_STATIC,
+    )
+
+    with patch("homeassistant.util.dt.get_time_zone", return_value=dt_util.UTC):
+        async with async_test_home_assistant() as hass:
+            entry = MockConfigEntry(
+                domain=DOMAIN,
+                data={CONF_MODE: MODE_STATIC, CONF_LATITUDE: A_LAT, CONF_LONGITUDE: A_LON},
+                options={},
+                title="",
+            )
+            coordinator = DummyCoordinator(hass)
+            coordinator.data = {"location_name": "Radłów"}
+
+            weather = OpenMeteoWeather(coordinator, entry)
+
+            assert weather.device_info["name"] == "Radłów"
+            assert weather.name == "Radłów"
+
+            await hass.async_stop()
+
+
+@pytest.mark.asyncio
 async def test_options_flow_static_has_no_use_place():
     from pytest_homeassistant_custom_component.common import (
         MockConfigEntry,
