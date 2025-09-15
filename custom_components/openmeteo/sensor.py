@@ -96,6 +96,17 @@ class OpenMeteoSensorDescription(SensorEntityDescription):
 
 
 
+
+
+def _visibility_km(d: dict) -> float | None:
+    """Return visibility in kilometers using hourly_at_now('visibility')."""
+    try:
+        vis = _hourly_at_now(d, "visibility")
+        if isinstance(vis, (int, float)):
+            return round(vis / 1000, 2)
+        return None
+    except Exception:
+        return None
 SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "temperature": OpenMeteoSensorDescription(
         key="temperature",
