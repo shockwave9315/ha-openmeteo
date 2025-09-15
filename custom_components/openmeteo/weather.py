@@ -30,7 +30,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from datetime import datetime
 from homeassistant.util import dt as dt_util
-from .helpers import hourly_at_now as _hourly_at_now
+from .helpers import hourly_at_now as _hourly_at_now, hourly_index_at_now
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
 from .helpers import maybe_update_device_name
@@ -237,21 +237,9 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         weather_code = cw.get("weathercode")
         is_day = cw.get("is_day")
         return _map_condition(weather_code, is_day) if weather_code is not None else None
-    
-    def _current_hour_index(self) -> int:
-        times = self.coordinator.data.get("hourly", {}).get("time") or []
-        if not isinstance(times, list):
-            return 0
-        now = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
-        for i, ts in enumerate(times):
-            dt = dt_util.parse_datetime(ts)
-            if dt and dt_util.as_utc(dt) >= now:
-                return i
-        return max(len(times) - 1, 0)
 
-    
-
-    def _map_daily_forecast(self) -> list[dict[str, Any]]:
+def 
+_map_daily_forecast(self) -> list[dict[str, Any]]:
         if not (daily := self.coordinator.data.get("daily")):
             return []
         
@@ -294,7 +282,10 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             _LOGGER.debug("Hourly forecast: 0 entries")
             return []
 
-        idx = self._current_hour_index()
+        idx = hourly_index_at_now(self.coordinator.data)
+        if idx is None:
+            _LOGGER.debug("Hourly forecast: index not found")
+            return []
         end = min(len(times), idx + 72)
         result: list[dict[str, Any]] = []
         for i in range(idx, end):

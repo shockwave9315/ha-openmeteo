@@ -88,6 +88,14 @@ def _first_daily_dt(data: dict, key: str):
 
 
 
+
+def _first_daily_value(d: dict, key: str):
+    try:
+        arr = ((d.get('daily', {}) or {}).get(key)) or []
+        return arr[0] if isinstance(arr, list) and arr else None
+    except Exception:
+        return None
+
 @dataclass(frozen=True, kw_only=True)
 class OpenMeteoSensorDescription(SensorEntityDescription):
     """Extended description with custom value/attr functions."""
@@ -151,13 +159,13 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     ),
 
         
-    "precipitation_daily_sum": OpenMeteoSensorDescription(
+    "precipitation_daily_sum": OpenMeteoSensorDescription("precipitation_daily_sum": OpenMeteoSensorDescription(
         key="precipitation_daily_sum",
         name="Suma opadów (dzienna)",
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         icon="mdi:weather-pouring",
         device_class="precipitation",
-        value_fn=lambda d: ((d.get("daily", {}) or {}).get("precipitation_sum") or [None])[0],
+        value_fn=lambda d: _first_daily_value(d, "precipitation_sum"),
     ),
     "precipitation_last_3h": OpenMeteoSensorDescription(
         key="precipitation_last_3h",
