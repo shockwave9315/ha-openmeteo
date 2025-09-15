@@ -159,7 +159,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     ),
 
         
-    "precipitation_daily_sum": OpenMeteoSensorDescription("precipitation_daily_sum": OpenMeteoSensorDescription(
+    "precipitation_daily_sum": OpenMeteoSensorDescription(
         key="precipitation_daily_sum",
         name="Suma opadów (dzienna)",
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
