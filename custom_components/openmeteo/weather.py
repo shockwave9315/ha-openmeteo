@@ -30,7 +30,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from datetime import datetime
 from homeassistant.util import dt as dt_util
-from .helpers import hourly_at_now as _hourly_at_now, hourly_index_at_now
+from .helpers import hourly_at_now as _hourly_at_now
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
 from .helpers import maybe_update_device_name
@@ -103,8 +103,11 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     async def async_added_to_hass(self) -> None:
         """When entity is added to hass."""
         await super().async_added_to_hass()
+        self._update_device_name()
+        
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        self._update_device_name()
         self.async_write_ha_state()
 
 
@@ -115,12 +118,12 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         super().__init__(coordinator)
         self._config_entry = config_entry
         # Stabilne entity_id przy pierwszym utworzeniu (np. weather.pogoda)
-        self._attr_suggested_object_id = "open_meteo"
+        self._attr_suggested_object_id = "pogoda"
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
-        self._attr_has_entity_name = False
+        self._attr_has_entity_name = True
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
-            "name": config_entry.title,
+            "name": "Open-Meteo",
             "manufacturer": "Open-Meteo",
         }
         data = {**config_entry.data, **config_entry.options}
@@ -139,27 +142,38 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
     
     @property
-def name(self) -> str | None:
-        """Friendly name: dynamic location after entity_id is created."""
-        if getattr(self, "_freeze_objid", False):
-            return None
+    def name(self) -> str:
+        """Return the display name of the weather entity (location).
+
+        Order of preference:
+        1) user-defined device name,
+        2) reverse-geocoded place name (from coordinator.data["location_name"]),
+        3) device name,
+        4) entry title,
+        5) fallback.
+        This matches tests that expect Radłów even before device rename has propagated.
+        """
         try:
-            loc = (self.coordinator.data or {}).get("location_name")
-            if loc:
-                return loc
+            dev = dr.async_get(self.hass).async_get_device(
+                identifiers={(DOMAIN, self._config_entry.entry_id)}
+            )
+            if dev:
+                return (
+                    dev.name_by_user
+                    or (self.coordinator.data or {}).get("location_name")
+                    or dev.name
+                    or self._config_entry.title
+                    or getattr(self, "_attr_name", None)
+                    or "Open-Meteo"
+                )
         except Exception:
             pass
-        try:
-            return self._attr_device_info.get("name")  # type: ignore[union-attr]
-        except Exception:
-            return "Open-Meteo"
-        except Exception:
-            pass
-        # Fallback: device name (config_entry.title)
-        try:
-            return self._attr_device_info.get("name")  # type: ignore[union-attr]
-        except Exception:
-            return "Open-Meteo"
+        return (
+            (self.coordinator.data or {}).get("location_name")
+            or self._config_entry.title
+            or getattr(self, "_attr_name", None)
+            or "Open-Meteo"
+        )
 
     @property
     def available(self) -> bool:
@@ -177,7 +191,6 @@ def name(self) -> str | None:
 
     @property
     def native_pressure(self) -> float | None:
-        """Return the current pressure."""
         val = _hourly_at_now(self.coordinator.data, "pressure_msl")
         return round(val, 1) if isinstance(val, (int, float)) else None
 
@@ -197,23 +210,22 @@ def name(self) -> str | None:
 
     @property
     def native_visibility(self) -> float | None:
-        """Return the current visibility."""
         vis = _hourly_at_now(self.coordinator.data, "visibility")
         return round(vis / 1000, 2) if isinstance(vis, (int, float)) else None
 
     @property
     def humidity(self) -> int | None:
-        """Return the current humidity."""
         hum = _hourly_at_now(self.coordinator.data, "relative_humidity_2m")
         return round(hum) if isinstance(hum, (int, float)) else None
 
     @property
     def native_dew_point(self) -> float | None:
-        """Return the current dew point."""
         current_dp = self.coordinator.data.get("current", {}).get("dewpoint_2m")
         if isinstance(current_dp, (int, float)):
             return round(current_dp, 1)
         val = _hourly_at_now(self.coordinator.data, "dewpoint_2m")
+        return round(val, 1) if isinstance(val, (int, float)) else None
+        val = self._hourly_value("dewpoint_2m")
         return round(val, 1) if isinstance(val, (int, float)) else None
 
     @property
@@ -223,6 +235,27 @@ def name(self) -> str | None:
         weather_code = cw.get("weathercode")
         is_day = cw.get("is_day")
         return _map_condition(weather_code, is_day) if weather_code is not None else None
+    
+    def _current_hour_index(self) -> int:
+        times = self.coordinator.data.get("hourly", {}).get("time") or []
+        if not isinstance(times, list):
+            return 0
+        now = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
+        for i, ts in enumerate(times):
+            dt = dt_util.parse_datetime(ts)
+            if dt and dt_util.as_utc(dt) >= now:
+                return i
+        return max(len(times) - 1, 0)
+
+    def _hourly_value(self, key: str, idx: int | None = None) -> float | None:
+        arr = self.coordinator.data.get("hourly", {}).get(key)
+        if not isinstance(arr, list) or not arr:
+            return None
+        if idx is None:
+            idx = self._current_hour_index()
+        if idx < len(arr):
+            return arr[idx]
+        return None
 
     def _map_daily_forecast(self) -> list[dict[str, Any]]:
         if not (daily := self.coordinator.data.get("daily")):
@@ -267,10 +300,7 @@ def name(self) -> str | None:
             _LOGGER.debug("Hourly forecast: 0 entries")
             return []
 
-        idx = hourly_index_at_now(self.coordinator.data)
-        if idx is None:
-            _LOGGER.debug("Hourly forecast: index not found")
-            return []
+        idx = self._current_hour_index()
         end = min(len(times), idx + 72)
         result: list[dict[str, Any]] = []
         for i in range(idx, end):
