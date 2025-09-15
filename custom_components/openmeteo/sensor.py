@@ -29,6 +29,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
+from .helpers import hourly_at_now as _hourly_at_now
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import async_generate_entity_id
 
@@ -84,45 +85,6 @@ def _first_daily_dt(data: dict, key: str):
         return val
     except Exception:
         return None
-
-
-def _hourly_at_now(data: dict, key: str):
-    """Return hourly value for *current hour* (timezone-aware), or closest if exact not found."""
-    hourly = (data or {}).get("hourly", {})
-    times = hourly.get("time") or []
-    values = hourly.get(key) or []
-    if not times or not values:
-        return None
-
-    tz = dt_util.get_time_zone((data or {}).get("timezone")) or dt_util.UTC
-    now = dt_util.now(tz).replace(minute=0, second=0, microsecond=0)
-
-    # exact match first
-    for t_str, val in zip(times, values):
-        try:
-            dt = dt_util.parse_datetime(t_str)
-            if dt and dt.tzinfo is None:
-                dt = dt.replace(tzinfo=tz)
-            if dt == now:
-                return val
-        except Exception:
-            continue
-
-    # else nearest hour
-    best_val = None
-    best_diff = None
-    for t_str, val in zip(times, values):
-        try:
-            dt = dt_util.parse_datetime(t_str)
-            if dt and dt.tzinfo is None:
-                dt = dt.replace(tzinfo=tz)
-            diff = abs((dt - now).total_seconds())
-            if best_diff is None or diff < best_diff:
-                best_diff = diff
-                best_val = val
-        except Exception:
-            continue
-    return best_val
 
 
 
@@ -547,6 +509,16 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
         )
 
     @property
+    def native_value(self):
+        """Return the UV index (prefer current; fallback hourly@now)."""
+        if not self.coordinator.data:
+            return None
+        uv_now = (self.coordinator.data.get("current") or {}).get("uv_index")
+        if isinstance(uv_now, (int, float)):
+            return round(uv_now, 2)
+        uv_hourly = _hourly_at_now(self.coordinator.data, "uv_index")
+        return round(uv_hourly, 2) if isinstance(uv_hourly, (int, float)) else None
+
     def native_value(self):
         """Return the UV index."""
         if not self.coordinator.data:
