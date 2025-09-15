@@ -31,7 +31,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import async_generate_entity_id
-from .helpers import hourly_at_now as _hourly_at_now
+from .helpers import hourly_at_now as _hourly_at_now, hourly_sum_last_n as _hourly_sum_last_n, extra_attrs as _extra_attrs
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
 from .const import (

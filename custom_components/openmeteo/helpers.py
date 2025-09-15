@@ -1,18 +1,24 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Helper utilities for Open-Meteo integration."""
 from __future__ import annotations
+
+from typing import Any, Iterable, Optional, Sequence
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import device_registry as dr
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 
 
-async def maybe_update_device_name(hass: HomeAssistant, config_entry: ConfigEntry, new_name: str | None) -> None:
-    """Ustaw nazwę urządzenia na `new_name`, jeśli użytkownik nie zmienił jej ręcznie.
-
-    - Szukamy urządzenia po identifiers {(DOMAIN, entry_id)}.
-    - Jeśli user ustawił własną nazwę (name_by_user) — nie ruszamy.
-    - Aktualizujemy tylko, gdy device.name różni się od new_name.
+async def maybe_update_device_name(
+    hass: HomeAssistant, config_entry: ConfigEntry, new_name: Optional[str]
+) -> None:
+    """Set device name to `new_name` if user didn't override it.
+    - Finds device by identifiers {(DOMAIN, entry_id)}.
+    - If user set name_by_user -> keep it.
+    - Update only if device exists and name differs.
     """
     if not new_name:
         return
@@ -21,58 +27,127 @@ async def maybe_update_device_name(hass: HomeAssistant, config_entry: ConfigEntr
     device = dev_reg.async_get_device(identifiers={(DOMAIN, config_entry.entry_id)})
     if not device:
         return
-
-    # Szanujemy ręczną zmianę użytkownika
     if device.name_by_user:
         return
+    if device.name == new_name:
+        return
 
-    if device.name != new_name:
-        dev_reg.async_update_device(device_id=device.id, name=new_name)
+    dev_reg.async_update_device(device_id=device.id, name=new_name)
 
-from typing import Any, Iterable, Optional
-from homeassistant.util import dt as dt_util
 
-def _parse_hour(ts: str, tz):
+def _parse_hour(ts: str, tz) -> Optional[dt_util.dt.datetime]:
+    """Parse an ISO8601 string into a timezone-aware hour-aligned datetime."""
     try:
         dt = dt_util.parse_datetime(ts)
         if not dt:
             return None
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=tz)
+        # Align to full hour
         return dt.replace(minute=0, second=0, microsecond=0)
     except Exception:
         return None
 
-def hourly_at_now(data: dict, key: str):
-    """Return hourly[key] value for current hour (timezone-aware), or nearest if exact missing."""
+
+def hourly_index_at_now(data: dict) -> Optional[int]:
+    """Return the index in hourly['time'] that matches the current hour (exact or nearest)."""
     if not isinstance(data, dict):
         return None
+
     hourly = (data.get("hourly") or {})
-    times = hourly.get("time") or []
-    values = hourly.get(key) or []
-    if not times or not values:
+    times: Iterable[str] = hourly.get("time") or []
+    if not times:
         return None
+
     tz = dt_util.get_time_zone(data.get("timezone")) or dt_util.UTC
     now = dt_util.now(tz).replace(minute=0, second=0, microsecond=0)
 
-    parsed_times = []
-    exact_idx = None
+    best_idx = None
+    best_diff = None
+
     for idx, t in enumerate(times):
         dt_hr = _parse_hour(t, tz)
-        parsed_times.append(dt_hr)
-        if dt_hr == now:
-            exact_idx = idx
-            break
-    if exact_idx is not None and exact_idx < len(values):
-        return values[exact_idx]
-
-    best_val = None
-    best_diff = None
-    for dt_hr, val in zip(parsed_times, values):
         if dt_hr is None:
             continue
+        if dt_hr == now:
+            return idx
         diff = abs((dt_hr - now).total_seconds())
         if best_diff is None or diff < best_diff:
             best_diff = diff
-            best_val = val
-    return best_val
+            best_idx = idx
+
+    return best_idx
+
+
+def hourly_at_now(data: dict, key: str) -> Any:
+    """Return hourly[key] value for the hour closest to 'now' (respects timezone)."""
+    if not isinstance(data, dict):
+        return None
+
+    hourly = (data.get("hourly") or {})
+    values: Iterable[Any] = hourly.get(key) or []
+    if not values:
+        return None
+
+    idx = hourly_index_at_now(data)
+    if idx is None:
+        return None
+
+    values_list = list(values)
+    if 0 <= idx < len(values_list):
+        return values_list[idx]
+    return None
+
+
+def hourly_sum_last_n(data: dict, keys: Sequence[str], n_hours: int) -> Optional[float]:
+    """Sum last N hours for given hourly keys (e.g., ['precipitation','snowfall']).
+    Includes the current hour (closest to 'now'). Ignores non-numeric entries.
+    """
+    if not isinstance(data, dict) or not isinstance(n_hours, int) or n_hours <= 0:
+        return None
+
+    hourly = (data.get("hourly") or {})
+    times = hourly.get("time") or []
+    if not times:
+        return None
+
+    idx = hourly_index_at_now(data)
+    if idx is None:
+        return None
+
+    start = max(0, idx - (n_hours - 1))
+    total = 0.0
+    found = False
+
+    for i in range(start, idx + 1):
+        for key in keys:
+            arr = hourly.get(key) or []
+            if i < len(arr):
+                val = arr[i]
+                if isinstance(val, (int, float)):
+                    total += float(val)
+                    found = True
+
+    return round(total, 2) if found else None
+
+
+def extra_attrs(data: dict) -> dict[str, Any]:
+    """Build extra attributes for sensors from API payload (safe, minimal)."""
+    attrs: dict[str, Any] = {}
+    try:
+        loc = data.get("location") or {}
+        tz = data.get("timezone")
+        if tz:
+            attrs["timezone"] = tz
+        lat = loc.get("latitude") or data.get("latitude")
+        lon = loc.get("longitude") or data.get("longitude")
+        if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+            attrs["latitude"] = round(float(lat), 5)
+            attrs["longitude"] = round(float(lon), 5)
+        elev = (data.get("elevation") or loc.get("elevation"))
+        if isinstance(elev, (int, float)):
+            attrs["elevation"] = elev
+    except Exception:
+        # be resilient; attributes are optional
+        pass
+    return attrs
