@@ -30,8 +30,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from datetime import datetime
 from homeassistant.util import dt as dt_util
+from .helpers import hourly_at_now as _hourly_at_now
 
-from .helpers import hourly_at_now
 from .coordinator import OpenMeteoDataUpdateCoordinator
 from .helpers import maybe_update_device_name
 from .const import (
@@ -190,10 +190,9 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         return round(temp, 1) if isinstance(temp, (int, float)) else None
 
     @property
-@property
     def native_pressure(self) -> float | None:
-        """Return the current pressure (hourly@now)."""
-        val = hourly_at_now(self.coordinator.data, "pressure_msl")
+        """Return the current pressure."""
+        val = _hourly_at_now(self.coordinator.data, "pressure_msl")
         return round(val, 1) if isinstance(val, (int, float)) else None
 
     @property
@@ -211,27 +210,24 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         return round(wb, 1) if isinstance(wb, (int, float)) else None
 
     @property
-@property
     def native_visibility(self) -> float | None:
-        """Return the current visibility in km (hourly@now)."""
-        val = hourly_at_now(self.coordinator.data, "visibility")
-        return round(val / 1000, 2) if isinstance(val, (int, float)) else None
+        """Return the current visibility."""
+        vis = _hourly_at_now(self.coordinator.data, "visibility")
+        return round(vis / 1000, 2) if isinstance(vis, (int, float)) else None
 
     @property
-@property
-    def humidity(self) -> float | None:
-        """Return the current humidity (hourly@now)."""
-        val = hourly_at_now(self.coordinator.data, "relative_humidity_2m")
-        return round(val) if isinstance(val, (int, float)) else None
+    def humidity(self) -> int | None:
+        """Return the current humidity."""
+        hum = _hourly_at_now(self.coordinator.data, "relative_humidity_2m")
+        return round(hum) if isinstance(hum, (int, float)) else None
 
     @property
-@property
     def native_dew_point(self) -> float | None:
         """Return the current dew point."""
         current_dp = self.coordinator.data.get("current", {}).get("dewpoint_2m")
         if isinstance(current_dp, (int, float)):
             return round(current_dp, 1)
-        val = hourly_at_now(self.coordinator.data, "dewpoint_2m")
+        val = _hourly_at_now(self.coordinator.data, "dewpoint_2m")
         return round(val, 1) if isinstance(val, (int, float)) else None
 
     @property
@@ -252,11 +248,8 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
             if dt and dt_util.as_utc(dt) >= now:
                 return i
         return max(len(times) - 1, 0)
-        if idx is None:
-            idx = self._current_hour_index()
-        if idx < len(arr):
-            return arr[idx]
-        return None
+
+    
 
     def _map_daily_forecast(self) -> list[dict[str, Any]]:
         if not (daily := self.coordinator.data.get("daily")):

@@ -172,6 +172,35 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
+    async def async_step_mode_details(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Second step: gather fields for the selected mode."""
+        errors: dict[str, str] = {}
+        defaults = user_input or {}
+
+        if user_input is not None:
+            if self._mode == MODE_TRACK:
+                entity = user_input.get(CONF_ENTITY_ID)
+                if not entity:
+                    errors[CONF_ENTITY_ID] = "required"
+                else:
+                    state = self.hass.states.get(entity)
+                    if not state or "latitude" not in state.attributes or "longitude" not in state.attributes:
+                        errors[CONF_ENTITY_ID] = "invalid_entity"
+            else:
+                if not user_input.get(CONF_LATITUDE):
+                    errors[CONF_LATITUDE] = "required"
+                if not user_input.get(CONF_LONGITUDE):
+                    errors[CONF_LONGITUDE] = "required"
+
+            if not errors:
+                # Persist options update
+                data = {**self._options, **user_input, CONF_MODE: self._mode}
+                return self.async_create_entry(title="", data=data)
+
+        schema = _build_schema(self.hass, self._mode, defaults)
+        return self.async_show_form(step_id="mode_details", data_schema=schema, errors=errors)
 
     async def async_step_mode_details(
         self, user_input: dict[str, Any] | None = None

@@ -29,9 +29,9 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
-from .helpers import hourly_at_now as _hourly_at_now
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import async_generate_entity_id
+from .helpers import hourly_at_now as _hourly_at_now
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
 from .const import (
@@ -88,68 +88,6 @@ def _first_daily_dt(data: dict, key: str):
 
 
 
-
-def _hourly_sum_last_n(data: dict, keys: list[str], n: int = 3):
-    """Sum of the last N hourly values for given keys (e.g., ["precipitation","snowfall"]).
-
-    It finds the current-hour index (or nearest), then sums values for indices [idx, idx-1, ..., idx-(n-1)].
-    Missing values are treated as 0. Returns None if no hourly data.
-    """
-    hourly = (data or {}).get("hourly", {})
-    times = hourly.get("time") or []
-    if not times:
-        return None
-    tz = dt_util.get_time_zone((data or {}).get("timezone")) or dt_util.UTC
-    now = dt_util.now(tz).replace(minute=0, second=0, microsecond=0)
-
-    # locate index of current hour (exact or nearest)
-    best_idx = None
-    best_diff = None
-    for idx, t_str in enumerate(times):
-        try:
-            dt = dt_util.parse_datetime(t_str)
-            if dt and dt.tzinfo is None:
-                dt = dt.replace(tzinfo=tz)
-            diff = abs((dt - now).total_seconds())
-            if best_diff is None or diff < best_diff:
-                best_diff = diff
-                best_idx = idx
-        except Exception:
-            continue
-
-    if best_idx is None:
-        return None
-
-    total = 0.0
-    for key in keys or []:
-        values = hourly.get(key) or []
-        for offset in range(n):
-            i = best_idx - offset
-            if i < 0 or i >= len(values):
-                continue
-            v = values[i]
-            if isinstance(v, (int, float)):
-                total += float(v)
-    return total
-# helper do widzialności w km
-def _visibility_km(data: dict):
-    v = _hourly_at_now(data, "visibility")
-    return v / 1000 if isinstance(v, (int, float)) else None
-
-
-def _extra_attrs(data: dict) -> dict:
-    loc = (data or {}).get("location") or {}
-    return {
-        "attribution": ATTRIBUTION,
-        "latitude": loc.get("latitude"),
-        "longitude": loc.get("longitude"),
-        "model": data.get("model"),
-        "source": "open-meteo",
-        "last_update": (data.get("current_weather") or {}).get("time"),
-    }
-
-
-@dataclass(kw_only=True)
 class OpenMeteoSensorDescription(SensorEntityDescription):
     key: str
     value_fn: Callable[[dict[str, Any]], Any]
@@ -510,7 +448,7 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
 
     @property
     def native_value(self):
-        """Return the UV index (prefer current; fallback hourly@now)."""
+        """Return the UV index (prefer current, else hourly@now)."""
         if not self.coordinator.data:
             return None
         uv_now = (self.coordinator.data.get("current") or {}).get("uv_index")
@@ -519,58 +457,6 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
         uv_hourly = _hourly_at_now(self.coordinator.data, "uv_index")
         return round(uv_hourly, 2) if isinstance(uv_hourly, (int, float)) else None
 
-    def native_value(self):
-        """Return the UV index."""
-        if not self.coordinator.data:
-            return None
-
-        # 1) Try current.uv_index first (API v4+)
-        current = (self.coordinator.data or {}).get("current", {})
-        uv_index = current.get("uv_index")
-        if isinstance(uv_index, (int, float)):
-            return round(uv_index, 2)
-
-        # 2) Try hourly.uv_index for the current hour
-        data = self.coordinator.data or {}
-        hourly = data.get("hourly", {})
-        times = hourly.get("time", [])
-        values = hourly.get("uv_index", [])
-
-        if not times or not values:
-            return None
-
-        tz = dt_util.get_time_zone(data.get("timezone")) or dt_util.UTC
-        now = dt_util.now(tz).replace(minute=0, second=0, microsecond=0)
-
-        # First try to find exact hour match
-        for t_str, val in zip(times, values):
-            try:
-                dt = dt_util.parse_datetime(t_str)
-                if dt and dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=tz)
-                if dt == now and isinstance(val, (int, float)):
-                    return round(val, 2)
-            except Exception:
-                continue
-
-        # If no exact match, find the closest hour with data
-        best_val = None
-        best_diff = None
-
-        for t_str, val in zip(times, values):
-            try:
-                dt = dt_util.parse_datetime(t_str)
-                if dt and dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=tz)
-                if isinstance(val, (int, float)):
-                    diff = abs((dt - now).total_seconds())
-                    if best_diff is None or diff < best_diff:
-                        best_diff = diff
-                        best_val = val
-            except Exception:
-                continue
-
-        return round(best_val, 2) if isinstance(best_val, (int, float)) else None
 
     @property
     def extra_state_attributes(self):
