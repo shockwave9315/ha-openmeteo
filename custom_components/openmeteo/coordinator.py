@@ -200,6 +200,34 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _coords_fallback(self, lat: float, lon: float) -> str:
         return f"{lat:.2f},{lon:.2f}"
 
+    def _should_update_entry_title(
+        self, new_title: str, fallback: str | None, data: dict[str, Any]
+    ) -> bool:
+        """Determine whether the config entry title should be updated."""
+
+        if not new_title:
+            return False
+
+        current = (self.entry.title or "").strip()
+        if new_title == current:
+            return False
+
+        # User-provided override always wins.
+        if data.get(CONF_AREA_NAME_OVERRIDE):
+            return True
+
+        if not current:
+            return True
+
+        normalized = current.lower()
+        if normalized.startswith("open-meteo"):
+            return True
+
+        if fallback and normalized == fallback.lower():
+            return True
+
+        return False
+
     async def _async_update_data(self) -> dict[str, Any]:
         data = {**self.entry.data, **self.entry.options}
         mode = self._current_mode()
@@ -295,17 +323,24 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 lat = float(data.get(OPT_LAST_LAT, data.get(CONF_LATITUDE, self.hass.config.latitude)))
                 lon = float(data.get(OPT_LAST_LON, data.get(CONF_LONGITUDE, self.hass.config.longitude)))
-        needs_loc_refresh = coords_changed or not prev_name or prev_name == self._coords_fallback(lat, lon)
+        fallback_label = self._coords_fallback(lat, lon)
+        needs_loc_refresh = coords_changed or not prev_name or prev_name == fallback_label
         if needs_loc_refresh:
             if data.get(CONF_AREA_NAME_OVERRIDE):
                 loc_name = data.get(CONF_AREA_NAME_OVERRIDE)
             else:
                 name = await async_reverse_geocode(self.hass, lat, lon)
-                loc_name = name or self._coords_fallback(lat, lon)
+                loc_name = name or fallback_label
             last_loc_ts = now.isoformat()
             self.location_name = loc_name
         elif self.location_name:
             loc_name = self.location_name
+
+        if loc_name and self._should_update_entry_title(loc_name, fallback_label, data):
+            try:
+                self.hass.config_entries.async_update_entry(self.entry, title=loc_name)
+            except Exception:
+                pass
 
         if not self._cached:
             raise UpdateFailed("No valid coordinates available")
