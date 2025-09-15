@@ -88,27 +88,12 @@ def _first_daily_dt(data: dict, key: str):
 
 
 
+@dataclass(frozen=True, kw_only=True)
 class OpenMeteoSensorDescription(SensorEntityDescription):
-    key: str
-    value_fn: Callable[[dict[str, Any]], Any]
-    device_class: SensorDeviceClass | str | None = None
-    entity_category: EntityCategory | None = None
-    entity_registry_enabled_default: bool = True
-    entity_registry_visible_default: bool = True
-    force_update: bool = False
-    icon: str | None = None
-    has_entity_name: bool = False
-    name: str | None = None
-    translation_key: str | None = None
-    translation_placeholders: Mapping[str, str] | None = None
-    unit_of_measurement: str | None = None
-    last_reset: datetime | None = None
-    native_unit_of_measurement: str | None = None
-    options: list[str] | None = None
-    state_class: SensorStateClass | str | None = None
-    suggested_display_precision: int | None = None
-    suggested_unit_of_measurement: str | None = None
+    """Extended description with custom value/attr functions."""
+    value_fn: Callable[[dict[str, Any]], Any] | None = None
     attr_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None
+
 
 
 SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
