@@ -103,11 +103,11 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
     async def async_added_to_hass(self) -> None:
         """When entity is added to hass."""
         await super().async_added_to_hass()
-        self._freeze_objid = False
+        
         
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        self._freeze_objid = False
+        
         self.async_write_ha_state()
 
 
@@ -121,7 +121,7 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
         self._attr_suggested_object_id = "open_meteo"
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
         # Freeze name during first add so entity_id uses suggested_object_id
-        self._freeze_objid = True
+        
         self._attr_has_entity_name = False
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
@@ -144,20 +144,14 @@ class OpenMeteoWeather(CoordinatorEntity, WeatherEntity):
 
     
     @property
-    def name(self) -> str | None:
-        """Dynamic friendly name based on location, but freeze during first add for stable entity_id."""
-        if getattr(self, "_freeze_objid", False):
-            return None
+    def name(self) -> str:
+        """Dynamic friendly name based on device/user/location/title."""
         try:
             dev = dr.async_get(self.hass).async_get_device(identifiers={(DOMAIN, self._config_entry.entry_id)})
             if dev:
-                return (
-                    dev.name_by_user
-                    or (self.coordinator.data or {}).get("location_name")
-                    or dev.name
-                    or self._config_entry.title
-                    or "Open-Meteo"
-                )
+                nm = dev.name_by_user or (self.coordinator.data or {}).get("location_name") or dev.name
+                if nm:
+                    return nm
         except Exception:
             pass
         return (self.coordinator.data or {}).get("location_name") or self._config_entry.title or "Open-Meteo"
