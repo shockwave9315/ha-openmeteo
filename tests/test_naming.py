@@ -73,6 +73,7 @@ async def test_device_name_follows_place_and_respects_user_rename(expected_linge
         CONF_MODE,
         CONF_USE_PLACE_AS_DEVICE_NAME,
         DOMAIN,
+        NAME,
         MODE_STATIC,
     )
 
@@ -98,8 +99,8 @@ async def test_device_name_follows_place_and_respects_user_rename(expected_linge
             weather.hass = hass
             weather.entity_id = "weather.test"
             await weather.async_added_to_hass()
-            assert weather.name == "Radłów"
-            assert "Open-Meteo" not in weather.name
+            assert weather.name == NAME
+            assert weather.device_info["name"] == "Radłów"
 
             dev_reg.async_update_device(device.id, name_by_user="My Station")
             device = dev_reg.async_get(device.id)
@@ -126,6 +127,7 @@ async def test_weather_device_info_uses_location_name(expected_lingering_timers)
         CONF_LONGITUDE,
         CONF_MODE,
         DOMAIN,
+        NAME,
         MODE_STATIC,
     )
 
@@ -143,7 +145,7 @@ async def test_weather_device_info_uses_location_name(expected_lingering_timers)
             weather = OpenMeteoWeather(coordinator, entry)
 
             assert weather.device_info["name"] == "Radłów"
-            assert weather.name == "Radłów"
+            assert weather.name == NAME
 
             await hass.async_stop()
 
@@ -198,6 +200,7 @@ async def test_weather_entity_name_from_reverse_geocode(expected_lingering_timer
     from homeassistant.util import dt as dt_util
     from custom_components.openmeteo.coordinator import OpenMeteoDataUpdateCoordinator
     from custom_components.openmeteo.weather import OpenMeteoWeather
+    from custom_components.openmeteo.const import NAME
     from custom_components.openmeteo.const import (
         CONF_LATITUDE,
         CONF_LONGITUDE,
@@ -244,5 +247,5 @@ async def test_weather_entity_name_from_reverse_geocode(expected_lingering_timer
             weather.hass = hass
             weather.entity_id = "weather.test"
             await weather.async_added_to_hass()
-            assert weather.name == "Radłów"
+            assert weather.name == NAME
             await hass.async_stop()
