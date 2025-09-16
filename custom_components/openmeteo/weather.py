@@ -26,7 +26,9 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -45,6 +47,7 @@ from .const import (
     CONF_USE_PLACE_AS_DEVICE_NAME,
     DEFAULT_MIN_TRACK_INTERVAL,
     DOMAIN,
+    NAME,
     MODE_STATIC,
     MODE_TRACK,
 )
@@ -52,6 +55,72 @@ from .coordinator import OpenMeteoDataUpdateCoordinator
 from .helpers import hourly_at_now as _hourly_at_now, maybe_update_device_name
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _stable_weather_object_id(config_entry: ConfigEntry) -> str:
+    """Return a stable object id that does not depend on location details."""
+
+    entry_id_slug = slugify(getattr(config_entry, "entry_id", "") or "")
+    if entry_id_slug:
+        suffix = entry_id_slug[-8:]
+        return f"open_meteo_{suffix}"
+    return "open_meteo"
+
+
+def _legacy_weather_object_id(config_entry: ConfigEntry) -> str:
+    """Return the legacy object id derived from the location information."""
+
+    options = getattr(config_entry, "options", {}) or {}
+    data = {**(getattr(config_entry, "data", {}) or {}), **options}
+
+    for candidate in (
+        options.get(CONF_AREA_NAME_OVERRIDE),
+        getattr(config_entry, "title", None),
+    ):
+        slug = slugify(candidate or "")
+        if slug:
+            return slug
+
+    lat = data.get(CONF_LATITUDE)
+    lon = data.get(CONF_LONGITUDE)
+    try:
+        slug = slugify(f"{float(lat):.4f}_{float(lon):.4f}")
+    except (TypeError, ValueError):
+        slug = "open_meteo"
+    return slug or "open_meteo"
+
+
+async def _async_migrate_weather_entity(
+    hass: HomeAssistant, config_entry: ConfigEntry
+) -> None:
+    """Migrate an existing weather entity to the new stable object id."""
+
+    ent_reg = er.async_get(hass)
+    unique_id = f"{config_entry.entry_id}-weather"
+    entity_id = ent_reg.async_get_entity_id("weather", DOMAIN, unique_id)
+    if not entity_id:
+        return
+
+    entry = ent_reg.async_get(entity_id)
+    if not entry:
+        return
+
+    expected_legacy = _legacy_weather_object_id(config_entry)
+    if entry.entity_id != f"weather.{expected_legacy}":
+        # Respect user-customised entity ids.
+        return
+
+    new_object_id = _stable_weather_object_id(config_entry)
+    if expected_legacy == new_object_id:
+        return
+
+    new_entity_id = async_generate_entity_id(
+        "weather.{}", new_object_id, hass, ent_reg
+    )
+    if new_entity_id == entry.entity_id:
+        return
+
+    ent_reg.async_update_entity(entity_id, new_entity_id=new_entity_id)
 
 
 async def async_setup_entry(
@@ -62,6 +131,7 @@ async def async_setup_entry(
     """Set up the Open-Meteo weather entity from a config entry."""
 
     coordinator = hass.data[DOMAIN][config_entry.entry_id]
+    await _async_migrate_weather_entity(hass, config_entry)
     async_add_entities([OpenMeteoWeather(coordinator, config_entry)])
 
 
@@ -79,6 +149,7 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
     """Representation of the Open-Meteo weather entity."""
 
     _attr_attribution = ATTRIBUTION
+    _attr_name = NAME
     _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_native_precipitation_unit = UnitOfPrecipitationDepth.MILLIMETERS
     _attr_native_wind_speed_unit = UnitOfSpeed.KILOMETERS_PER_HOUR
@@ -144,24 +215,9 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
             return "Open-Meteo"
 
     def _derive_object_id(self) -> str:
-        """Return a slugified object id based on location data."""
+        """Return the stable object id for this weather entity."""
 
-        for candidate in (
-            self._config_entry.options.get(CONF_AREA_NAME_OVERRIDE),
-            self._config_entry.title,
-        ):
-            slug = slugify(candidate or "")
-            if slug:
-                return slug
-
-        data = {**self._config_entry.data, **self._config_entry.options}
-        lat = data.get(CONF_LATITUDE)
-        lon = data.get(CONF_LONGITUDE)
-        try:
-            slug = slugify(f"{float(lat):.4f}_{float(lon):.4f}")
-        except (TypeError, ValueError):
-            slug = "open_meteo"
-        return slug or "open_meteo"
+        return _stable_weather_object_id(self._config_entry)
 
     def _update_device_name(self) -> None:
         """Update the device name in the registry when the place changes."""
@@ -255,15 +311,7 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
     # -------------------------------------------------------------------------
     @property
     def name(self) -> str:
-        for candidate in (
-            (self.coordinator.data or {}).get("location_name"),
-            self._config_entry.options.get(CONF_AREA_NAME_OVERRIDE),
-            self._config_entry.title,
-            getattr(self, "_device_name", None),
-        ):
-            if candidate:
-                return str(candidate)
-        return "Open-Meteo"
+        return self._attr_name or NAME
 
     @property
     def available(self) -> bool:
