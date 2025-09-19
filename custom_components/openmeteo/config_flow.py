@@ -16,11 +16,15 @@ from .const import (
     CONF_ENTITY_ID,
     CONF_MIN_TRACK_INTERVAL,
     CONF_MODE,
+    CONF_OPTIONS_SAVE_COOLDOWN_SEC,
+    CONF_REVERSE_GEOCODE_COOLDOWN_MIN,
     CONF_UNITS,
     CONF_UPDATE_INTERVAL,
     CONF_USE_PLACE_AS_DEVICE_NAME,
     DEFAULT_API_PROVIDER,
     DEFAULT_MIN_TRACK_INTERVAL,
+    DEFAULT_OPTIONS_SAVE_COOLDOWN_SEC,
+    DEFAULT_REVERSE_GEOCODE_COOLDOWN_MIN,
     DEFAULT_UNITS,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
@@ -79,6 +83,14 @@ def _build_schema(
             CONF_AREA_NAME_OVERRIDE,
             default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
         ): str,
+        vol.Optional(
+            CONF_REVERSE_GEOCODE_COOLDOWN_MIN,
+            default=defaults.get(CONF_REVERSE_GEOCODE_COOLDOWN_MIN, DEFAULT_REVERSE_GEOCODE_COOLDOWN_MIN),
+        ): vol.All(vol.Coerce(int), vol.Range(min=1, max=240)),
+        vol.Optional(
+            CONF_OPTIONS_SAVE_COOLDOWN_SEC,
+            default=defaults.get(CONF_OPTIONS_SAVE_COOLDOWN_SEC, DEFAULT_OPTIONS_SAVE_COOLDOWN_SEC),
+        ): vol.All(vol.Coerce(int), vol.Range(min=10, max=3600)),
     }
     if include_use_place:
         extra[vol.Required(

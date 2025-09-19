@@ -20,6 +20,8 @@ from .const import (
     CONF_LONGITUDE,
     CONF_UPDATE_INTERVAL,
     CONF_MIN_TRACK_INTERVAL,
+    CONF_REVERSE_GEOCODE_COOLDOWN_MIN,
+    CONF_OPTIONS_SAVE_COOLDOWN_SEC,
     DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_API_PROVIDER,
@@ -30,6 +32,8 @@ from .const import (
     MODE_STATIC,
     MODE_TRACK,
     URL,
+    DEFAULT_REVERSE_GEOCODE_COOLDOWN_MIN,
+    DEFAULT_OPTIONS_SAVE_COOLDOWN_SEC,
 )
 
 # logger
@@ -102,6 +106,9 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Class to manage fetching Open-Meteo data and tracking coordinates."""
 
     EPS = 1e-4
+    # Defaults are overridden per-entry from options
+    REVERSE_GEOCODE_COOLDOWN = timedelta(minutes=10)
+    OPTIONS_SAVE_COOLDOWN = timedelta(seconds=60)
 
     def __init__(self, hass: HomeAssistant, entry) -> None:
         self.entry = entry
@@ -135,6 +142,25 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.provider: str = entry.options.get("api_provider", DEFAULT_API_PROVIDER)
         self._warned_missing = False
         self._last_data: dict[str, Any] | None = None
+        self._last_geocode_at: datetime | None = None
+        self._last_options_save_at: datetime | None = None
+        # Cooldowns from options (fall back to defaults)
+        try:
+            rg_min = int(entry.options.get(
+                CONF_REVERSE_GEOCODE_COOLDOWN_MIN,
+                entry.data.get(CONF_REVERSE_GEOCODE_COOLDOWN_MIN, DEFAULT_REVERSE_GEOCODE_COOLDOWN_MIN),
+            ))
+        except (TypeError, ValueError):
+            rg_min = DEFAULT_REVERSE_GEOCODE_COOLDOWN_MIN
+        try:
+            opt_sec = int(entry.options.get(
+                CONF_OPTIONS_SAVE_COOLDOWN_SEC,
+                entry.data.get(CONF_OPTIONS_SAVE_COOLDOWN_SEC, DEFAULT_OPTIONS_SAVE_COOLDOWN_SEC),
+            ))
+        except (TypeError, ValueError):
+            opt_sec = DEFAULT_OPTIONS_SAVE_COOLDOWN_SEC
+        self._rg_cooldown_td = timedelta(minutes=max(1, rg_min))
+        self._opt_save_cooldown_td = timedelta(seconds=max(10, opt_sec))
 
         # Back-compat dla __init__.py (track entity)
         self._tracked_entity_id: Optional[str] = None
@@ -197,6 +223,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         except Exception:
             return None
+
     def _coords_fallback(self, lat: float, lon: float) -> str:
         return f"{lat:.2f},{lon:.2f}"
 
@@ -329,10 +356,23 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if data.get(CONF_AREA_NAME_OVERRIDE):
                 loc_name = data.get(CONF_AREA_NAME_OVERRIDE)
             else:
-                name = await async_reverse_geocode(self.hass, lat, lon)
-                loc_name = name or fallback_label
+                # Apply cooldown to avoid excessive reverse-geocoding
+                allow_geocode = (
+                    self._last_geocode_at is None
+                    or now - self._last_geocode_at >= self._rg_cooldown_td
+                )
+                if allow_geocode:
+                    name = await async_reverse_geocode(self.hass, lat, lon)
+                    self._last_geocode_at = now
+                    loc_name = name or fallback_label
+                else:
+                    _LOGGER.debug(
+                        "Reverse geocode skipped due to cooldown; using fallback %s", fallback_label
+                    )
+                    loc_name = fallback_label
             last_loc_ts = now.isoformat()
             self.location_name = loc_name
+
         elif self.location_name:
             loc_name = self.location_name
 
@@ -416,7 +456,15 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     opts[OPT_LAST_LOCATION_NAME] = self.location_name
                     need_save = True
                 if need_save:
-                    self.hass.config_entries.async_update_entry(self.entry, options=opts)
+                    # Debounce options persistence to reduce churn
+                    if (
+                        self._last_options_save_at is None
+                        or now - self._last_options_save_at >= self._opt_save_cooldown_td
+                    ):
+                        self.hass.config_entries.async_update_entry(self.entry, options=opts)
+                        self._last_options_save_at = now
+                    else:
+                        _LOGGER.debug("Options save skipped due to cooldown")
             except Exception:
                 pass
 
