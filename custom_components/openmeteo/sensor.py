@@ -32,6 +32,7 @@ from homeassistant.util import dt as dt_util
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import async_generate_entity_id
 from .helpers import hourly_at_now as _hourly_at_now, hourly_sum_last_n as _hourly_sum_last_n, extra_attrs as _extra_attrs
+import logging
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
 from .const import (
@@ -117,6 +118,8 @@ def _visibility_km(d: dict) -> float | None:
         return None
     except Exception:
         return None
+_LOGGER = logging.getLogger(__name__)
+
 SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "temperature": OpenMeteoSensorDescription(
         key="temperature",
@@ -283,8 +286,6 @@ async def async_migrate_entry(hass, config_entry, entry: er.RegistryEntry) -> bo
         return False
 
     new_uid = f"{config_entry.entry_id}:{key_guess}"
-    if new_uid == old_uid:
-        return False
 
     reg = er.async_get(hass)
 
@@ -292,7 +293,21 @@ async def async_migrate_entry(hass, config_entry, entry: er.RegistryEntry) -> bo
     domain = "sensor"
     new_entity_id = async_generate_entity_id(f"{domain}.{{}}", slug, hass, reg)
 
-    reg.async_update_entity(ent_id, new_unique_id=new_uid, new_entity_id=new_entity_id)
+    _LOGGER.debug(
+        "[openmeteo] Sensor migration for %s: key=%s slug=%s old_uid=%s -> new_uid=%s new_entity_id=%s",
+        ent_id,
+        key_guess,
+        slug,
+        old_uid,
+        new_uid,
+        new_entity_id,
+    )
+
+    # Aktualizuj entity_id zawsze, a unique_id tylko jeśli się zmienił
+    if new_uid != old_uid:
+        reg.async_update_entity(ent_id, new_unique_id=new_uid, new_entity_id=new_entity_id)
+    else:
+        reg.async_update_entity(ent_id, new_entity_id=new_entity_id)
     return True
 
 
@@ -318,8 +333,13 @@ async def async_setup_entry(
     # Jednorazowa migracja istniejących encji
     ent_reg = er.async_get(hass)
     for entry in list(ent_reg.entities.values()):
-        if entry.platform == "openmeteo" and entry.domain == "sensor":
+        if entry.platform == "openmeteo" and entry.domain == "sensor" and entry.config_entry_id == config_entry.entry_id:
             try:
+                _LOGGER.debug(
+                    "[openmeteo] Sensor migration check: entity_id=%s unique_id=%s",
+                    entry.entity_id,
+                    entry.unique_id,
+                )
                 await async_migrate_entry(hass, config_entry, entry)  # type: ignore[arg-type]
             except Exception:
                 continue

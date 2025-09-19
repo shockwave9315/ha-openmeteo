@@ -68,11 +68,17 @@ async def async_setup_entry(
     # Jednorazowa migracja istniejącej encji pogody do stabilnego schematu
     ent_reg = er.async_get(hass)
     for entry in list(ent_reg.entities.values()):
-        if entry.platform == DOMAIN and entry.domain == "weather":
+        if entry.platform == DOMAIN and entry.domain == "weather" and entry.config_entry_id == config_entry.entry_id:
             try:
+                _LOGGER.debug(
+                    "[openmeteo] Weather migration check: entity_id=%s, unique_id=%s",
+                    entry.entity_id,
+                    entry.unique_id,
+                )
                 await async_migrate_weather_entry(hass, config_entry, entry)  # type: ignore[arg-type]
-            except Exception:
+            except Exception as ex:
                 # Bezpiecznie ignorujemy pojedyncze błędy migracji
+                _LOGGER.debug("[openmeteo] Weather migration error for %s: %s", entry.entity_id, ex)
                 pass
 
     async_add_entities([OpenMeteoWeather(coordinator, config_entry)])
@@ -101,6 +107,13 @@ async def async_migrate_weather_entry(
 
     reg = er.async_get(hass)
     new_entity_id = async_generate_entity_id("weather.{}", "open_meteo", hass, reg)
+    _LOGGER.debug(
+        "[openmeteo] Weather migrating entity: %s -> %s, unique_id: %s -> %s",
+        ent_id,
+        new_entity_id,
+        old_uid,
+        new_uid,
+    )
     reg.async_update_entity(ent_id, new_unique_id=new_uid, new_entity_id=new_entity_id)
     return True
 
