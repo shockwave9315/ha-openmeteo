@@ -346,6 +346,13 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
         self._attr_has_entity_name = True
         self._attr_suggested_object_id = OBJECT_ID_PL.get(sensor_type, sensor_type) or (sensor_type or "open_meteo_sensor")
         self._attr_unique_id = f"{config_entry.entry_id}:{sensor_type}"
+        # Naming
+        self._attr_has_entity_name = True
+        try:
+            self._attr_name = self.entity_description.name
+        except Exception:
+            self._attr_name = None
+        self._attr_suggested_object_id = OBJECT_ID_PL.get(sensor_type, sensor_type)
 
         # Set device info
         self._attr_device_info = DeviceInfo(
@@ -433,8 +440,6 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
         config_entry: ConfigEntry,
     ) -> None:
         super().__init__(coordinator)
-        self._config_entry = config_entry
-
         # Set entity attributes
         self._attr_has_entity_name = True
         self._attr_suggested_object_id = OBJECT_ID_PL.get("uv_index", "promieniowanie_uv")
@@ -445,7 +450,8 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
         self._attr_translation_key = "uv_index"
         self._attr_name = "Indeks UV"
 
-        # Set device info
+
+                # Set device info
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
             name=config_entry.title,
