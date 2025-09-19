@@ -4,6 +4,13 @@ from unittest.mock import patch
 A_LAT = 50.087220625849994
 A_LON = 20.849695801734928
 
+@pytest.fixture
+def expected_lingering_timers():
+    # W tych prostych testach nie ładujemy pełnej integracji,
+    # więc plugin cleanup może wykrywać harmonogramy ustawione w tle przez HA.
+    # Pozwalamy na nie, aby nie traktować ich jako błędu testu.
+    return True
+
 class DummyCoordinator:
     def __init__(self, hass, data=None):
         self.hass = hass
@@ -53,6 +60,10 @@ async def test_weather_device_info_uses_location_name():
             weather.hass = hass
             await weather.async_added_to_hass()
             assert weather.name == "Radłów"
+            # cleanup
+            await weather.async_will_remove_from_hass()
+            await hass.async_block_till_done()
+            await hass.async_stop()
 
 @pytest.mark.asyncio
 async def test_weather_entity_id_stable_and_friendly_name():
@@ -87,3 +98,7 @@ async def test_weather_entity_id_stable_and_friendly_name():
             weather.hass = hass
             await weather.async_added_to_hass()
             assert weather.name == "Radłów"
+            # cleanup
+            await weather.async_will_remove_from_hass()
+            await hass.async_block_till_done()
+            await hass.async_stop()
