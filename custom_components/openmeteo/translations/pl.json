@@ -22,6 +22,27 @@
           "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
           "options_save_cooldown_sec": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
         }
+      },
+      "mode_details": {
+        "title": "Open-Meteo",
+        "description": "Uzupełnij szczegóły konfiguracji.",
+        "data": {
+          "mode": "Tryb",
+          "latitude": "Szerokość geograficzna",
+          "longitude": "Długość geograficzna",
+          "entity_id": "Encja trackera",
+          "min_track_interval": "Min. odstęp śledzenia (min)",
+          "update_interval": "Interwał aktualizacji (s)",
+          "units": "Jednostki",
+          "api_provider": "Dostawca API",
+          "area_name_override": "Nazwa obszaru",
+          "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
+          "options_save_cooldown_sec": "Odstęp zapisu ustawień (s)"
+        },
+        "data_description": {
+          "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
+          "options_save_cooldown_sec": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
+        }
       }
     },
     "error": {
@@ -33,6 +54,26 @@
   "options": {
     "step": {
       "init": {
+        "title": "Opcje Open-Meteo",
+        "data": {
+          "mode": "Tryb",
+          "latitude": "Szerokość geograficzna",
+          "longitude": "Długość geograficzna",
+          "entity_id": "Encja trackera",
+          "min_track_interval": "Min. odstęp śledzenia (min)",
+          "update_interval": "Interwał aktualizacji (s)",
+          "units": "Jednostki",
+          "api_provider": "Dostawca API",
+          "area_name_override": "Nazwa obszaru",
+          "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
+          "options_save_cooldown_sec": "Odstęp zapisu ustawień (s)"
+        },
+        "data_description": {
+          "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
+          "options_save_cooldown_sec": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
+        }
+      },
+      "mode_details": {
         "title": "Opcje Open-Meteo",
         "data": {
           "mode": "Tryb",
