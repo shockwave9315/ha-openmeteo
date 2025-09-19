@@ -10,6 +10,16 @@ class DummyCoordinator:
         self.data = data or {}
         self.last_update_success = True
         self.provider = "Open-Meteo"
+        self._listeners = []
+
+    def async_add_listener(self, update_callback, context=None):
+        self._listeners.append(update_callback)
+        def _remove():
+            try:
+                self._listeners.remove(update_callback)
+            except ValueError:
+                pass
+        return _remove
 
 @pytest.mark.asyncio
 async def test_weather_device_info_uses_location_name():
