@@ -301,6 +301,7 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
     # Nazwę ustawiamy poprzez _attr_name w _update_friendly_name(),
     # aby nie wpływała na generowanie entity_id przy pierwszym dodaniu.
 
+    @property
     def available(self) -> bool:
         return bool(self.coordinator.data) and self.coordinator.last_update_success
 
