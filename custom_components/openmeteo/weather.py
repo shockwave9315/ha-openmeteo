@@ -211,9 +211,9 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         if loc:
             return str(loc)
         return self._config_entry.title or "Open-Meteo"
-
+@property
     def available(self) -> bool:
-        return bool(self.coordinator.data) and self.coordinator.last_update_success
+    return bool(self.coordinator.data) and self.coordinator.last_update_success
 
     @property
     def native_temperature(self) -> float | None:
