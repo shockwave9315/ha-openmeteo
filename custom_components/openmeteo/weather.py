@@ -188,11 +188,21 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         """Device name is stable; no-op."""
         return
 
+    def _update_friendly_name(self) -> None:
+        """Set friendly name to location name without impacting entity_id generation."""
+        loc = (self.coordinator.data or {}).get("location_name")
+        new_name = str(loc) if loc else (self._config_entry.title or "Open-Meteo")
+        if getattr(self, "_attr_name", None) != new_name:
+            self._attr_name = new_name
+
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self._update_device_name()
+        # Ustawiamy przyjazną nazwę po dodaniu, by nie wpływać na entity_id
+        self._update_friendly_name()
 
     def _handle_coordinator_update(self) -> None:
+        self._update_friendly_name()
         self.async_write_ha_state()
 
     # -------------------------------------------------------------------------
@@ -258,13 +268,8 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
     # -------------------------------------------------------------------------
     # Entity properties
     # -------------------------------------------------------------------------
-    @property
-    def name(self) -> str:
-        """Zwraca dynamiczną, przyjazną nazwę encji (lokalizacja)."""
-        loc = (self.coordinator.data or {}).get("location_name")
-        if loc:
-            return str(loc)
-        return self._config_entry.title or "Open-Meteo"
+    # Nazwę ustawiamy poprzez _attr_name w _update_friendly_name(),
+    # aby nie wpływała na generowanie entity_id przy pierwszym dodaniu.
 
     def available(self) -> bool:
         return bool(self.coordinator.data) and self.coordinator.last_update_success
