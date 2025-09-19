@@ -83,20 +83,21 @@ def _build_schema(
             CONF_AREA_NAME_OVERRIDE,
             default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
         ): str,
-        vol.Optional(
-            CONF_REVERSE_GEOCODE_COOLDOWN_MIN,
-            default=defaults.get(CONF_REVERSE_GEOCODE_COOLDOWN_MIN, DEFAULT_REVERSE_GEOCODE_COOLDOWN_MIN),
-        ): vol.All(vol.Coerce(int), vol.Range(min=1, max=240)),
-        vol.Optional(
-            CONF_OPTIONS_SAVE_COOLDOWN_SEC,
-            default=defaults.get(CONF_OPTIONS_SAVE_COOLDOWN_SEC, DEFAULT_OPTIONS_SAVE_COOLDOWN_SEC),
-        ): vol.All(vol.Coerce(int), vol.Range(min=10, max=3600)),
     }
     if include_use_place:
         extra[vol.Required(
             CONF_USE_PLACE_AS_DEVICE_NAME,
             default=defaults.get(CONF_USE_PLACE_AS_DEVICE_NAME, True),
         )] = bool
+        # Cooldowny tylko dla trybu TRACK
+        extra[vol.Optional(
+            CONF_REVERSE_GEOCODE_COOLDOWN_MIN,
+            default=defaults.get(CONF_REVERSE_GEOCODE_COOLDOWN_MIN, DEFAULT_REVERSE_GEOCODE_COOLDOWN_MIN),
+        )] = vol.All(vol.Coerce(int), vol.Range(min=1, max=240))
+        extra[vol.Optional(
+            CONF_OPTIONS_SAVE_COOLDOWN_SEC,
+            default=defaults.get(CONF_OPTIONS_SAVE_COOLDOWN_SEC, DEFAULT_OPTIONS_SAVE_COOLDOWN_SEC),
+        )] = vol.All(vol.Coerce(int), vol.Range(min=10, max=3600))
 
     data.update(extra)
     return vol.Schema(data)
