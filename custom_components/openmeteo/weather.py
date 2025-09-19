@@ -104,7 +104,7 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
-            name=config_entry.title,
+            name=(self.coordinator.data or {}).get("location_name") or config_entry.title or "Open-Meteo",
             manufacturer="Open-Meteo",
         )
 
