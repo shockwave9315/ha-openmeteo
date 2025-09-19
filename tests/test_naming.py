@@ -97,9 +97,9 @@ async def test_device_name_follows_place_and_respects_user_rename(expected_linge
 
             weather = OpenMeteoWeather(DummyCoordinator(hass), entry)
             weather.hass = hass
-            weather.entity_id = "weather.test"
+            weather.entity_id = "weather.open_meteo"
             await weather.async_added_to_hass()
-            assert weather.name == NAME
+            assert weather.name == entry.title
             assert weather.device_info["name"] == "Radłów"
 
             dev_reg.async_update_device(device.id, name_by_user="My Station")
@@ -145,7 +145,7 @@ async def test_weather_device_info_uses_location_name(expected_lingering_timers)
             weather = OpenMeteoWeather(coordinator, entry)
 
             assert weather.device_info["name"] == "Radłów"
-            assert weather.name == NAME
+            assert weather.name == entry.title
 
             await hass.async_stop()
 
@@ -245,7 +245,7 @@ async def test_weather_entity_name_from_reverse_geocode(expected_lingering_timer
                 await coordinator.async_refresh()
             weather = OpenMeteoWeather(coordinator, entry)
             weather.hass = hass
-            weather.entity_id = "weather.test"
+            weather.entity_id = "weather.open_meteo"
             await weather.async_added_to_hass()
-            assert weather.name == NAME
+            assert weather.name == entry.title
             await hass.async_stop()
