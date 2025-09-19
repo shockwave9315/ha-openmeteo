@@ -67,6 +67,25 @@ async def async_setup_entry(
 
     # Jednorazowa migracja istniejącej encji pogody do stabilnego schematu
     ent_reg = er.async_get(hass)
+    # Pre-create registry entry with stable object_id so first add picks it up
+    try:
+        reg_entry = ent_reg.async_get_or_create(
+            domain="weather",
+            platform=DOMAIN,
+            unique_id=f"{config_entry.entry_id}-weather",
+            suggested_object_id="open_meteo",
+            config_entry=config_entry,
+        )
+        desired = async_generate_entity_id("weather.{}", "open_meteo", hass, ent_reg)
+        if reg_entry.entity_id != desired:
+            _LOGGER.debug(
+                "[openmeteo] Pre-create: renaming weather entity_id %s -> %s",
+                reg_entry.entity_id,
+                desired,
+            )
+            ent_reg.async_update_entity(reg_entry.entity_id, new_entity_id=desired)
+    except Exception as ex:
+        _LOGGER.debug("[openmeteo] Pre-create weather entity failed: %s", ex)
     for entry in list(ent_reg.entities.values()):
         if entry.platform == DOMAIN and entry.domain == "weather" and entry.config_entry_id == config_entry.entry_id:
             try:
