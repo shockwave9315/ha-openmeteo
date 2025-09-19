@@ -14,7 +14,13 @@
           "update_interval": "Update interval (s)",
           "units": "Units",
           "api_provider": "API provider",
-          "area_name_override": "Area name override"
+          "area_name_override": "Area name override",
+          "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
+          "options_save_cooldown_sec": "Options save cooldown (s)"
+        },
+        "data_description": {
+          "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve place name from coordinates. Higher value = less battery/data usage.",
+          "options_save_cooldown_sec": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
         }
       }
     },
@@ -37,10 +43,17 @@
           "update_interval": "Update interval (s)",
           "units": "Units",
           "api_provider": "API provider",
-          "area_name_override": "Area name override"
+          "area_name_override": "Area name override",
+          "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
+          "options_save_cooldown_sec": "Options save cooldown (s)"
+        },
+        "data_description": {
+          "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve place name from coordinates. Higher value = less battery/data usage.",
+          "options_save_cooldown_sec": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
         }
       }
-    },
+    }
+,
     "error": {
       "missing_location": "Latitude and longitude are required",
       "missing_entity": "Tracking entity is required",

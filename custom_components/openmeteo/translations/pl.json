@@ -14,7 +14,13 @@
           "update_interval": "Interwał aktualizacji (s)",
           "units": "Jednostki",
           "api_provider": "Dostawca API",
-          "area_name_override": "Nazwa obszaru"
+          "area_name_override": "Nazwa obszaru",
+          "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
+          "options_save_cooldown_sec": "Odstęp zapisu ustawień (s)"
+        },
+        "data_description": {
+          "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
+          "options_save_cooldown_sec": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
         }
       }
     },
@@ -37,10 +43,17 @@
           "update_interval": "Interwał aktualizacji (s)",
           "units": "Jednostki",
           "api_provider": "Dostawca API",
-          "area_name_override": "Nazwa obszaru"
+          "area_name_override": "Nazwa obszaru",
+          "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
+          "options_save_cooldown_sec": "Odstęp zapisu ustawień (s)"
+        },
+        "data_description": {
+          "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
+          "options_save_cooldown_sec": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
         }
       }
-    },
+    }
+,
     "error": {
       "missing_location": "Wymagana szerokość i długość geograficzna",
       "missing_entity": "Wymagana encja do śledzenia",
