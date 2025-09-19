@@ -200,6 +200,17 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         self._update_device_name()
         # Ustawiamy przyjazną nazwę po dodaniu, by nie wpływać na entity_id
         self._update_friendly_name()
+        # Wymuś stabilny entity_id: weather.open_meteo (z ewentualnym sufiksem, jeśli zajęte)
+        try:
+            reg = er.async_get(self.hass)
+            desired = async_generate_entity_id("weather.{}", "open_meteo", self.hass, reg)
+            if self.entity_id != desired:
+                _LOGGER.debug(
+                    "[openmeteo] Forcing weather entity_id %s -> %s", self.entity_id, desired
+                )
+                reg.async_update_entity(self.entity_id, new_entity_id=desired)
+        except Exception as ex:
+            _LOGGER.debug("[openmeteo] Could not force weather entity_id: %s", ex)
 
     def _handle_coordinator_update(self) -> None:
         self._update_friendly_name()
