@@ -151,7 +151,8 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
     ) -> None:
         super().__init__(coordinator)
         self._config_entry = config_entry
-        self._attr_has_entity_name = True
+        # Ważne: has_entity_name=False, aby entity_id było "weather.open_meteo" bez prefiksu miejscowości
+        self._attr_has_entity_name = False
         self._attr_unique_id = f"{config_entry.entry_id}-weather"
         self._attr_suggested_object_id = "open_meteo"
 
