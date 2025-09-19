@@ -31,6 +31,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.entity import async_generate_entity_id
 
 from .const import (
     ATTRIBUTION,
@@ -62,7 +64,45 @@ async def async_setup_entry(
     """Set up the Open-Meteo weather entity from a config entry."""
 
     coordinator = hass.data[DOMAIN][config_entry.entry_id]
+
+    # Jednorazowa migracja istniejącej encji pogody do stabilnego schematu
+    ent_reg = er.async_get(hass)
+    for entry in list(ent_reg.entities.values()):
+        if entry.platform == DOMAIN and entry.domain == "weather":
+            try:
+                await async_migrate_weather_entry(hass, config_entry, entry)  # type: ignore[arg-type]
+            except Exception:
+                # Bezpiecznie ignorujemy pojedyncze błędy migracji
+                pass
+
     async_add_entities([OpenMeteoWeather(coordinator, config_entry)])
+
+
+async def async_migrate_weather_entry(
+    hass: HomeAssistant, config_entry: ConfigEntry, entry: er.RegistryEntry
+) -> bool:
+    """Migrate old unique_id/entity_id of weather entity to stable scheme.
+
+    Docelowo:
+    - unique_id: "<entry_id>-weather"
+    - entity_id: "weather.open_meteo"
+    """
+    if entry.domain != "weather" or entry.platform != DOMAIN:
+        return False
+
+    old_uid = entry.unique_id or ""
+    ent_id = entry.entity_id
+
+    new_uid = f"{config_entry.entry_id}-weather"
+
+    # Jeśli już jest ustawione poprawnie i entity_id jest zgodne, nic nie rób
+    if old_uid == new_uid and ent_id.endswith(".open_meteo"):
+        return False
+
+    reg = er.async_get(hass)
+    new_entity_id = async_generate_entity_id("weather.{}", "open_meteo", hass, reg)
+    reg.async_update_entity(ent_id, new_unique_id=new_uid, new_entity_id=new_entity_id)
+    return True
 
 
 def _map_condition(weather_code: int | None, is_day: int | None = 1) -> str | None:
