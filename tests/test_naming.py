@@ -9,6 +9,7 @@ class DummyCoordinator:
         self.hass = hass
         self.data = data or {}
         self.last_update_success = True
+        self.provider = "Open-Meteo"
 
 @pytest.mark.asyncio
 async def test_weather_device_info_uses_location_name():
@@ -32,13 +33,15 @@ async def test_weather_device_info_uses_location_name():
                 domain=DOMAIN,
                 data={CONF_MODE: MODE_STATIC, CONF_LATITUDE: A_LAT, CONF_LONGITUDE: A_LON},
                 options={},
-                title="",  # celowo pusto
+                title="Radłów",  # urządzenie = miejscowość w naszej logice
             )
             coordinator = DummyCoordinator(hass, {"location_name": "Radłów"})
             weather = OpenMeteoWeather(coordinator, entry)
-            # device = miejscowość
+            # device = miejscowość (z tytułu wpisu)
             assert weather.device_info["name"] == "Radłów"
-            # friendly name = miejscowość
+            # ustawiamy friendly name po dodaniu encji do hass
+            weather.hass = hass
+            await weather.async_added_to_hass()
             assert weather.name == "Radłów"
 
 @pytest.mark.asyncio
@@ -70,5 +73,7 @@ async def test_weather_entity_id_stable_and_friendly_name():
             # ustaw stabilne entity_id
             weather.entity_id = "weather.open_meteo"
             assert weather.entity_id == "weather.open_meteo"
-            # friendly = miejscowość
+            # friendly = miejscowość (po dodaniu do hass)
+            weather.hass = hass
+            await weather.async_added_to_hass()
             assert weather.name == "Radłów"
