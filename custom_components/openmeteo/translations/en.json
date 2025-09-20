@@ -23,6 +23,30 @@
           "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
         }
       }
+      ,
+      "mode_details": {
+        "title": "Open-Meteo",
+        "description": "Fill in configuration details.",
+        "data": {
+          "mode": "Mode",
+          "latitude": "Latitude",
+          "longitude": "Longitude",
+          "entity_id": "Tracker entity",
+          "min_track_interval": "Min track interval (min)",
+          "update_interval_min": "Update interval (min)",
+          "units": "Units",
+          "api_provider": "API provider",
+          "area_name_override": "Area name override",
+          "use_place_as_device_name": "Use place name as device name",
+          "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
+          "options_save_cooldown_min": "Options save cooldown (min)"
+        },
+        "data_description": {
+          "use_place_as_device_name": "When enabled, the device in the Device Registry will be named after the place (e.g. Radłów). When disabled, your own custom device name is kept.",
+          "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve a place name from coordinates. Higher value = less battery/data usage.",
+          "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
+        }
+      }
     },
     "error": {
       "missing_location": "Latitude and longitude are required",
@@ -49,6 +73,29 @@
         },
         "data_description": {
           "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve place name from coordinates. Higher value = less battery/data usage.",
+          "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
+        }
+      }
+      ,
+      "mode_details": {
+        "title": "Open-Meteo options",
+        "data": {
+          "mode": "Mode",
+          "latitude": "Latitude",
+          "longitude": "Longitude",
+          "entity_id": "Tracker entity",
+          "min_track_interval": "Min track interval (min)",
+          "update_interval_min": "Update interval (min)",
+          "units": "Units",
+          "api_provider": "API provider",
+          "area_name_override": "Area name override",
+          "use_place_as_device_name": "Use place name as device name",
+          "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
+          "options_save_cooldown_min": "Options save cooldown (min)"
+        },
+        "data_description": {
+          "use_place_as_device_name": "When enabled, the device in the Device Registry will be named after the place (e.g. Radłów). When disabled, your own custom device name is kept.",
+          "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve a place name from coordinates. Higher value = less battery/data usage.",
           "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
         }
       }
