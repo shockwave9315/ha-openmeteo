@@ -142,6 +142,82 @@ async def async_reverse_postcode(
     return None
 
 
+async def async_reverse_postcode_info(
+    hass: HomeAssistant,
+    lat: float,
+    lon: float,
+    *,
+    language: str | None = None,
+    zoom: int | None = None,
+) -> dict[str, Any] | None:
+    """Reverse geocode to obtain postcode and state/admin1.
+
+    Returns {"postcode": str|None, "state": str|None} or None on error.
+    """
+    try:
+        lat_f = float(lat)
+        lon_f = float(lon)
+    except Exception:
+        return None
+
+    lang = (language or getattr(hass.config, "language", None) or "en").lower()
+    url = "https://nominatim.openstreetmap.org/reverse"
+    params = {
+        "lat": f"{lat_f:.6f}",
+        "lon": f"{lon_f:.6f}",
+        "format": "json",
+        "addressdetails": 1,
+        "accept-language": lang,
+    }
+    if isinstance(zoom, int):
+        params["zoom"] = zoom
+    headers = {"User-Agent": "ha-openmeteo/1.4 (https://github.com/shockwave9315/ha-openmeteo)"}
+
+    session = async_get_clientsession(hass)
+    try:
+        async with async_timeout.timeout(10):
+            resp = await session.get(url, params=params, headers=headers)
+            if resp.status != 200:
+                return None
+            data = await resp.json()
+    except Exception:
+        return None
+
+    addr = (data or {}).get("address") or {}
+    return {
+        "postcode": (addr.get("postcode") or None),
+        "state": (addr.get("state") or addr.get("county") or None),
+    }
+
+
+async def async_reverse_postcode_info_cached(
+    hass: HomeAssistant,
+    lat: float,
+    lon: float,
+    *,
+    language: str | None = None,
+) -> dict[str, Any] | None:
+    """Cached reverse postcode+state with zoom fallbacks."""
+    try:
+        key = _pcache_key(lat, lon)
+    except Exception:
+        key = None
+
+    # Reuse postcode cache if present
+    if key and key in _postcode_cache:
+        return {"postcode": _postcode_cache[key], "state": None}
+
+    info = await async_reverse_postcode_info(hass, lat, lon, language=language)
+    if not (info and info.get("postcode")):
+        for z in (14, 10):
+            info = await async_reverse_postcode_info(hass, lat, lon, language=language, zoom=z)
+            if info and info.get("postcode"):
+                break
+    if key and info and info.get("postcode"):
+        _postcode_cache[key] = str(info["postcode"])  # populate postcode cache too
+    return info
+
+
 def hourly_index_at_now(data: dict) -> Optional[int]:
     """Return the index in hourly['time'] that matches the current hour (exact or nearest)."""
     if not isinstance(data, dict):

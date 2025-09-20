@@ -252,18 +252,21 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 )
                             except Exception:
                                 pass
-                    # Limit to top 10 and enrich with per-item postcode
-                    self._search_results = results[:10]
+                    # Limit to top 50 and enrich with per-item postcode
+                    self._search_results = results[:50]
                     # Try to fetch postcode for each result (best-effort)
                     for r in self._search_results:
                         try:
-                            pc = await async_reverse_postcode(
+                            info = await async_reverse_postcode_info_cached(
                                 self.hass,
                                 float(r.get("latitude")),
                                 float(r.get("longitude")),
                             )
-                            if pc:
-                                r["postcode"] = pc
+                            if info:
+                                if info.get("postcode"):
+                                    r["postcode"] = info.get("postcode")
+                                if info.get("state"):
+                                    r["_state"] = info.get("state")
                         except Exception:
                             continue
                     self._search_zip = postal_code or None
@@ -294,21 +297,19 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             lat = r.get("latitude")
             lon = r.get("longitude")
             pc = (r.get("postcode") or "").strip()
+            st = (r.get("_state") or "").strip()
             try:
                 base = f"{name}, {admin1}, {cc} ({float(lat):.4f}, {float(lon):.4f})"
                 fpc = format_postal(cc, pc) if pc else None
-                if fpc:
+                # show postcode only if available and (state matches admin1 or state missing)
+                if fpc and (not st or st.lower() in admin1.lower() or admin1.lower() in st.lower()):
                     return f"{base} • kod: {fpc}"
-                if self._search_zip:
-                    return f"{base} • kod: {format_postal(cc, self._search_zip) or self._search_zip}"
                 return base
             except Exception:
                 base = f"{name}, {admin1}, {cc}"
                 fpc = format_postal(cc, pc) if pc else None
-                if fpc:
+                if fpc and (not st or st.lower() in admin1.lower() or admin1.lower() in st.lower()):
                     return f"{base} • kod: {fpc}"
-                if self._search_zip:
-                    return f"{base} • kod: {format_postal(cc, self._search_zip) or self._search_zip}"
                 return base
 
         options = {str(idx): _label(r) for idx, r in enumerate(self._search_results)}
