@@ -124,6 +124,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "temperature": OpenMeteoSensorDescription(
         key="temperature",
         translation_key="temperature",
+        name="Temperatura",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         icon="mdi:thermometer",
         device_class="temperature",
@@ -132,6 +133,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "humidity": OpenMeteoSensorDescription(
         key="humidity",
         translation_key="humidity",
+        name="Wilgotność",
         native_unit_of_measurement=PERCENTAGE,
         icon="mdi:water-percent",
         device_class="humidity",
@@ -140,6 +142,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "apparent_temperature": OpenMeteoSensorDescription(
         key="apparent_temperature",
         translation_key="apparent_temperature",
+        name="Temperatura odczuwalna",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         icon="mdi:thermometer-alert",
         device_class="temperature",
@@ -148,6 +151,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "precipitation_probability": OpenMeteoSensorDescription(
         key="precipitation_probability",
         translation_key="precipitation_probability",
+        name="Prawdopodobieństwo opadów",
         native_unit_of_measurement=PERCENTAGE,
         icon="mdi:umbrella-outline",
         device_class=None,
@@ -156,6 +160,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "precipitation_sum": OpenMeteoSensorDescription(
         key="precipitation_sum",
         translation_key="precipitation_sum",
+        name="Opad (bieżąca godzina)",
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         icon="mdi:cup-water",
         device_class="precipitation",
@@ -167,6 +172,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "precipitation_daily_sum": OpenMeteoSensorDescription(
         key="precipitation_daily_sum",
         translation_key="precipitation_daily_sum",
+        name="Suma opadów (dzienna)",
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         icon="mdi:weather-pouring",
         device_class="precipitation",
@@ -175,6 +181,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "precipitation_last_3h": OpenMeteoSensorDescription(
         key="precipitation_last_3h",
         translation_key="precipitation_last_3h",
+        name="Opad (ostatnie 3h)",
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         icon="mdi:weather-pouring",
         device_class="precipitation",
@@ -183,6 +190,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "wind_speed": OpenMeteoSensorDescription(
         key="wind_speed",
         translation_key="wind_speed",
+        name="Prędkość wiatru",
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
         icon="mdi:weather-windy",
         device_class=None,
@@ -191,6 +199,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "wind_gust": OpenMeteoSensorDescription(
         key="wind_gust",
         translation_key="wind_gust",
+        name="Porywy wiatru",
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
         icon="mdi:weather-windy-variant",
         device_class=None,
@@ -199,6 +208,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "wind_bearing": OpenMeteoSensorDescription(
         key="wind_bearing",
         translation_key="wind_bearing",
+        name="Kierunek wiatru",
         native_unit_of_measurement=DEGREE,
         icon="mdi:compass",
         device_class=None,
@@ -207,6 +217,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "pressure": OpenMeteoSensorDescription(
         key="pressure",
         translation_key="pressure",
+        name="Ciśnienie",
         native_unit_of_measurement=UnitOfPressure.HPA,
         icon="mdi:gauge",
         device_class="pressure",
@@ -215,6 +226,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "visibility": OpenMeteoSensorDescription(
         key="visibility",
         translation_key="visibility",
+        name="Widzialność",
         native_unit_of_measurement=UnitOfLength.KILOMETERS,
         icon="mdi:eye",
         device_class=None,
@@ -223,6 +235,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "dew_point": OpenMeteoSensorDescription(
         key="dew_point",
         translation_key="dew_point",
+        name="Punkt rosy",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         icon="mdi:water",
         device_class="temperature",
@@ -232,6 +245,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "location": OpenMeteoSensorDescription(
         key="location",
         translation_key="location",
+        name="Lokalizacja",
         native_unit_of_measurement=None,
         icon="mdi:map-marker",
         device_class=None,
@@ -245,6 +259,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "sunrise": OpenMeteoSensorDescription(
         key="sunrise",
         translation_key="sunrise",
+        name="Wschód słońca",
         native_unit_of_measurement=None,
         icon="mdi:weather-sunset-up",
         device_class="timestamp",
@@ -253,6 +268,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     "sunset": OpenMeteoSensorDescription(
         key="sunset",
         translation_key="sunset",
+        name="Zachód słońca",
         native_unit_of_measurement=None,
         icon="mdi:weather-sunset-down",
         device_class="timestamp",
