@@ -8,6 +8,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import async_timeout
 
 from .const import DOMAIN
 
@@ -151,3 +153,56 @@ def extra_attrs(data: dict) -> dict[str, Any]:
         # be resilient; attributes are optional
         pass
     return attrs
+
+
+async def async_forward_geocode(
+    hass: HomeAssistant,
+    name: str,
+    *,
+    count: int = 10,
+) -> list[dict[str, Any]]:
+    """Query Open-Meteo Geocoding API for a place name (forward geocoding).
+
+    Returns a simplified list of results with keys:
+    - name, admin1, admin2, country_code, latitude, longitude
+    """
+
+    if not name or not isinstance(name, str):
+        return []
+
+    lang = (getattr(hass.config, "language", None) or "en").lower()
+    url = "https://geocoding-api.open-meteo.com/v1/search"
+    params = {
+        "name": name,
+        "count": max(1, min(int(count), 15)),
+        "language": lang,
+        "format": "json",
+    }
+
+    session = async_get_clientsession(hass)
+    try:
+        async with async_timeout.timeout(10):
+            resp = await session.get(url, params=params)
+            if resp.status != 200:
+                return []
+            data = await resp.json()
+    except Exception:
+        return []
+
+    results = []
+    for r in (data or {}).get("results", []) or []:
+        try:
+            results.append(
+                {
+                    "name": r.get("name"),
+                    "admin1": r.get("admin1"),
+                    "admin2": r.get("admin2"),
+                    "country_code": r.get("country_code"),
+                    "latitude": r.get("latitude"),
+                    "longitude": r.get("longitude"),
+                }
+            )
+        except Exception:
+            continue
+
+    return results

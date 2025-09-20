@@ -33,6 +33,7 @@ from .const import (
     MODE_TRACK,
 )
 from .coordinator import async_reverse_geocode
+from .helpers import async_forward_geocode  # new helper for onboarding
 
 
 def _build_schema(
@@ -178,6 +179,8 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._mode = MODE_STATIC
+        self._prefill: dict[str, Any] = {}
+        self._search_results: list[dict[str, Any]] = []
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -186,6 +189,8 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             self._mode = user_input[CONF_MODE]
+            if self._mode == MODE_STATIC:
+                return await self.async_step_search_place()
             return await self.async_step_mode_details()
 
         schema = vol.Schema(
@@ -193,13 +198,82 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         return self.async_show_form(step_id="user", data_schema=schema)
 
+    async def async_step_search_place(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Static onboarding: ask for a place name to forward‑geocode."""
+
+        assert self._mode == MODE_STATIC
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            query = (user_input.get("place_query") or "").strip()
+            if not query:
+                errors["place_query"] = "required"
+            else:
+                try:
+                    results = await async_forward_geocode(self.hass, query, count=10)
+                except Exception:  # pragma: no cover – defensive
+                    results = []
+                    errors["base"] = "network_error"
+
+                # Optional narrowing: if HA country is PL, keep only PL
+                country = (self.hass.config.country or "").upper()
+                if country == "PL":
+                    results = [r for r in results if (r.get("country_code") or "").upper() == "PL"]
+
+                if not results and not errors:
+                    errors["place_query"] = "no_results"
+                else:
+                    # store and go to pick list
+                    self._search_results = results[:10]
+                    return await self.async_step_pick_place()
+
+        schema = vol.Schema({vol.Required("place_query", default=user_input.get("place_query") if user_input else ""): str})
+        return self.async_show_form(step_id="search_place", data_schema=schema, errors=errors)
+
+    async def async_step_pick_place(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Let the user pick one of the geocoding results, then prefill lat/lon."""
+
+        assert self._mode == MODE_STATIC
+
+        def _label(r: dict[str, Any]) -> str:
+            name = r.get("name") or "?"
+            admin1 = r.get("admin1") or r.get("admin2") or ""
+            cc = (r.get("country_code") or "").upper()
+            lat = r.get("latitude")
+            lon = r.get("longitude")
+            try:
+                return f"{name}, {admin1}, {cc} ({float(lat):.4f}, {float(lon):.4f})"
+            except Exception:
+                return f"{name}, {admin1}, {cc}"
+
+        options = {str(idx): _label(r) for idx, r in enumerate(self._search_results)}
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            key = user_input.get("picked")
+            if key in options:
+                r = self._search_results[int(key)]
+                self._prefill = {
+                    CONF_LATITUDE: r.get("latitude"),
+                    CONF_LONGITUDE: r.get("longitude"),
+                }
+                return await self.async_step_mode_details()
+            errors["picked"] = "required"
+
+        schema = vol.Schema({vol.Required("picked"): vol.In(options)})
+        return self.async_show_form(step_id="pick_place", data_schema=schema, errors=errors)
+
     async def async_step_mode_details(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
         """Collect details specific to the chosen mode."""
 
         errors: dict[str, str] = {}
-        defaults = user_input or {}
+        defaults = user_input or dict(self._prefill)
 
         if user_input is not None:
             if self._mode == MODE_TRACK:

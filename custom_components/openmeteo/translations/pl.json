@@ -25,6 +25,20 @@
           "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
         }
       },
+      "search_place": {
+        "title": "Open-Meteo",
+        "description": "Wyszukaj miejscowość (tryb statyczny).",
+        "data": {
+          "place_query": "Wpisz miejscowość"
+        }
+      },
+      "pick_place": {
+        "title": "Open-Meteo",
+        "description": "Wybierz miejscowość z listy.",
+        "data": {
+          "picked": "Wybierz miejscowość"
+        }
+      },
       "mode_details": {
         "title": "Open-Meteo",
         "description": "Uzupełnij szczegóły konfiguracji.",
@@ -52,7 +66,9 @@
     "error": {
       "missing_location": "Wymagana szerokość i długość geograficzna",
       "missing_entity": "Wymagana encja do śledzenia",
-      "invalid_entity": "Encja nie ma współrzędnych GPS"
+      "invalid_entity": "Encja nie ma współrzędnych GPS",
+      "no_results": "Brak wyników dla podanej nazwy",
+      "network_error": "Błąd sieci podczas wyszukiwania. Spróbuj ponownie."
     }
   },
   "options": {
