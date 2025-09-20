@@ -1,3 +1,18 @@
+## 1.4.72
+- feat(options): unify cooldown jednostki – `options_save_cooldown` w minutach (UI), z pełnym fallbackiem do legacy `*_sec`.
+- feat(i18n): tłumaczenia PL/EN zaktualizowane (etykiety + opisy) pod nowe pola.
+- docs: README odświeżone do v1.4.71+ (TRACK cooldowns, stabilne entity_id, wskazówki baterii).
+
+## 1.4.71
+- docs: pełna aktualizacja README w stylu z ikonami, opis nowych opcji TRACK.
+- chore(manifest): podbicie wersji.
+
+## 1.4.70
+- feat(ui): dodane opcje „Reverse geocode cooldown (min)” i „Options save cooldown (s)” w options flow (TRACK);
+  w 1.4.72 zamienione na minuty.
+- feat(i18n): etykiety i opisy po polsku i angielsku; lepsze zrozumienie w UI.
+- feat(icons): wsparcie ikon – `hacs.json` i `manifest.json` wskazują `icon.png`.
+
 ## 1.4.39
 - fix(weather): restore safe device-name initialization so setup works and devices use the resolved place name
 

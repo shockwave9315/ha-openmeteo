@@ -40,6 +40,9 @@ CONF_API_KEY = "api_key"
 CONF_AREA_NAME_OVERRIDE = "area_name_override"
 # Cooldowns
 CONF_REVERSE_GEOCODE_COOLDOWN_MIN = "reverse_geocode_cooldown_min"
+# New: express options save cooldown in minutes (UI shows minutes)
+CONF_OPTIONS_SAVE_COOLDOWN_MIN = "options_save_cooldown_min"
+# Backward-compat: legacy seconds key (still honored if present)
 CONF_OPTIONS_SAVE_COOLDOWN_SEC = "options_save_cooldown_sec"
 
 # Modes
@@ -66,6 +69,9 @@ DEFAULT_UNITS = "metric"
 DEFAULT_API_PROVIDER = "open_meteo"
 # Defaults for cooldowns
 DEFAULT_REVERSE_GEOCODE_COOLDOWN_MIN = 15  # minutes
+# New default in minutes
+DEFAULT_OPTIONS_SAVE_COOLDOWN_MIN = 1  # minute
+# Legacy default (seconds) retained for migration/back-compat only
 DEFAULT_OPTIONS_SAVE_COOLDOWN_SEC = 60  # seconds
 
 DEFAULT_DAILY_VARIABLES = [

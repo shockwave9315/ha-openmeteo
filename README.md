@@ -50,7 +50,7 @@ Integracja dostarcza encję `weather` z bieżącą pogodą i prognozą oraz zest
    - **Tracker** — wskaż encję `device_tracker` lub `person` **z GPS**.
 3. Ustaw opcje (interwał aktualizacji, jednostki, nazwa obszaru). W trybie **Tracker** zobaczysz dodatkowo:
    - „Odstęp odświeżania nazwy miejsca (min)” — reverse‑geocode cooldown,
-   - „Odstęp zapisu ustawień (s)” — options save cooldown,
+   - „Odstęp zapisu ustawień (min)” — options save cooldown,
    - „Użyj nazwy miejsca jako nazwy urządzenia”.
 
 > **Options flow jest dwukrokowy** — najpierw wybór trybu (**Static / Tracker**), potem pola właściwe dla danego trybu.
@@ -135,7 +135,7 @@ cards:
 
 - Stabilne `entity_id` dla encji pogody i sensorów, migracje rejestru encji.
 - Uporządkowane nazewnictwo i tłumaczenia PL/EN w UI.
-- Reverse‑geocode cooldown i options save cooldown w trybie **TRACK**.
+- Reverse‑geocode cooldown i options save cooldown (w minutach) w trybie **TRACK**.
 - Zabezpieczenia na błędy API i sieci, cache ostatnich danych.
 
 ---

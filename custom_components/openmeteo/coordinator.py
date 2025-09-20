@@ -21,7 +21,7 @@ from .const import (
     CONF_UPDATE_INTERVAL,
     CONF_MIN_TRACK_INTERVAL,
     CONF_REVERSE_GEOCODE_COOLDOWN_MIN,
-    CONF_OPTIONS_SAVE_COOLDOWN_SEC,
+    CONF_OPTIONS_SAVE_COOLDOWN_MIN,
     DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_API_PROVIDER,
@@ -33,7 +33,7 @@ from .const import (
     MODE_TRACK,
     URL,
     DEFAULT_REVERSE_GEOCODE_COOLDOWN_MIN,
-    DEFAULT_OPTIONS_SAVE_COOLDOWN_SEC,
+    DEFAULT_OPTIONS_SAVE_COOLDOWN_MIN,
 )
 
 # logger
@@ -152,15 +152,27 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ))
         except (TypeError, ValueError):
             rg_min = DEFAULT_REVERSE_GEOCODE_COOLDOWN_MIN
+        # Options save cooldown: prefer minutes key, fall back to legacy seconds
+        opt_seconds: int
         try:
-            opt_sec = int(entry.options.get(
-                CONF_OPTIONS_SAVE_COOLDOWN_SEC,
-                entry.data.get(CONF_OPTIONS_SAVE_COOLDOWN_SEC, DEFAULT_OPTIONS_SAVE_COOLDOWN_SEC),
-            ))
+            opt_min = entry.options.get(
+                CONF_OPTIONS_SAVE_COOLDOWN_MIN,
+                entry.data.get(CONF_OPTIONS_SAVE_COOLDOWN_MIN, None),
+            )
+            if opt_min is not None:
+                opt_seconds = int(opt_min) * 60
+            else:
+                # legacy seconds
+                legacy_sec = entry.options.get(
+                    "options_save_cooldown_sec",
+                    entry.data.get("options_save_cooldown_sec", DEFAULT_OPTIONS_SAVE_COOLDOWN_MIN * 60),
+                )
+                opt_seconds = int(legacy_sec)
         except (TypeError, ValueError):
-            opt_sec = DEFAULT_OPTIONS_SAVE_COOLDOWN_SEC
+            opt_seconds = DEFAULT_OPTIONS_SAVE_COOLDOWN_MIN * 60
+
         self._rg_cooldown_td = timedelta(minutes=max(1, rg_min))
-        self._opt_save_cooldown_td = timedelta(seconds=max(10, opt_sec))
+        self._opt_save_cooldown_td = timedelta(seconds=max(60, opt_seconds))
 
         # Back-compat dla __init__.py (track entity)
         self._tracked_entity_id: Optional[str] = None
