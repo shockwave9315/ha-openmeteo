@@ -41,6 +41,7 @@ from .helpers import (
     haversine_km,
     async_reverse_postcode,
     async_reverse_postcode_info_cached,
+    async_best_effort_postcode_cached,
     format_postal,
 )
 
@@ -279,16 +280,16 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         if idx >= 15:  # avoid rate limits; enrich only top 15
                             break
                         try:
-                            info = await async_reverse_postcode_info_cached(
+                            # Best-effort postcode around the point (center + small neighborhood)
+                            pc, approx = await async_best_effort_postcode_cached(
                                 self.hass,
                                 float(r.get("latitude")),
                                 float(r.get("longitude")),
                             )
-                            if info:
-                                if info.get("postcode"):
-                                    r["postcode"] = info.get("postcode")
-                                if info.get("state"):
-                                    r["_state"] = info.get("state")
+                            if pc:
+                                r["postcode"] = pc
+                                if approx:
+                                    r["_postcode_approx"] = True
                         except Exception:
                             continue
                         # throttle to avoid Nominatim rate limits
@@ -323,18 +324,21 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             lon = r.get("longitude")
             pc = (r.get("postcode") or "").strip()
             st = (r.get("_state") or "").strip()
+            approx_pc = bool(r.get("_postcode_approx"))
             try:
                 base = f"{name}, {admin1}, {cc} ({float(lat):.4f}, {float(lon):.4f})"
                 fpc = format_postal(cc, pc) if pc else None
                 # Show postcode whenever available (we removed user-zip fallback, so it's per-point)
                 if fpc:
-                    return f"{base} • kod: {fpc}"
+                    mark = "≈" if approx_pc else ""
+                    return f"{base} • kod: {mark}{fpc}"
                 return base
             except Exception:
                 base = f"{name}, {admin1}, {cc}"
                 fpc = format_postal(cc, pc) if pc else None
                 if fpc:
-                    return f"{base} • kod: {fpc}"
+                    mark = "≈" if approx_pc else ""
+                    return f"{base} • kod: {mark}{fpc}"
                 return base
 
         options = {str(idx): _label(r) for idx, r in enumerate(self._search_results)}

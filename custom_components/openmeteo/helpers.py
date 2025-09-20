@@ -218,6 +218,43 @@ async def async_reverse_postcode_info_cached(
     return info
 
 
+async def async_best_effort_postcode_cached(
+    hass: HomeAssistant,
+    lat: float,
+    lon: float,
+    *,
+    language: str | None = None,
+) -> tuple[str | None, bool]:
+    """Try to get the most appropriate postcode for given coords.
+
+    Strategy:
+    - First, get postcode at the exact point (cached).
+    - If missing, probe a few nearby offsets and choose the most frequent postcode.
+    - Uses cached reverse lookups internally to minimize requests.
+    """
+    # 1) Center point
+    info = await async_reverse_postcode_info_cached(hass, lat, lon, language=language)
+    if info and isinstance(info.get("postcode"), str) and info["postcode"].strip():
+        return str(info["postcode"]).strip(), False
+
+    # 2) Probe small neighborhood (approx 400–700 m offsets)
+    offsets = [(0.004, 0.0), (-0.004, 0.0), (0.0, 0.006), (0.0, -0.006)]
+    seen: dict[str, int] = {}
+    for dlat, dlon in offsets:
+        probe = await async_reverse_postcode_info_cached(
+            hass, float(lat) + dlat, float(lon) + dlon, language=language
+        )
+        pc = (probe or {}).get("postcode")
+        if isinstance(pc, str) and pc.strip():
+            k = pc.strip()
+            seen[k] = seen.get(k, 0) + 1
+
+    if not seen:
+        return None, False
+    # return the postcode with highest frequency (mode)
+    return max(seen.items(), key=lambda kv: kv[1])[0], True
+
+
 def hourly_index_at_now(data: dict) -> Optional[int]:
     """Return the index in hourly['time'] that matches the current hour (exact or nearest)."""
     if not isinstance(data, dict):
