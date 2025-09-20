@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any
+import asyncio
 
 import voluptuous as vol
 
@@ -38,6 +39,7 @@ from .helpers import (
     async_zip_to_coords,
     haversine_km,
     async_reverse_postcode,
+    async_reverse_postcode_info_cached,
     format_postal,
 )
 
@@ -224,7 +226,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["place_query"] = "required"
             else:
                 try:
-                    results = await async_forward_geocode(self.hass, query, count=10)
+                    results = await async_forward_geocode(self.hass, query, count=50)
                 except Exception:  # pragma: no cover – defensive
                     results = []
                     errors["base"] = "network_error"
@@ -254,8 +256,10 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 pass
                     # Limit to top 50 and enrich with per-item postcode
                     self._search_results = results[:50]
-                    # Try to fetch postcode for each result (best-effort)
-                    for r in self._search_results:
+                    # Try to fetch postcode for top results (best-effort, throttled)
+                    for idx, r in enumerate(self._search_results):
+                        if idx >= 15:  # avoid rate limits; enrich only top 15
+                            break
                         try:
                             info = await async_reverse_postcode_info_cached(
                                 self.hass,
@@ -269,6 +273,8 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                     r["_state"] = info.get("state")
                         except Exception:
                             continue
+                        # throttle a bit to avoid 429
+                        await asyncio.sleep(0.2)
                     self._search_zip = postal_code or None
                     return await self.async_step_pick_place()
 
@@ -301,14 +307,14 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 base = f"{name}, {admin1}, {cc} ({float(lat):.4f}, {float(lon):.4f})"
                 fpc = format_postal(cc, pc) if pc else None
-                # show postcode only if available and (state matches admin1 or state missing)
-                if fpc and (not st or st.lower() in admin1.lower() or admin1.lower() in st.lower()):
+                # Show postcode whenever available (we removed user-zip fallback, so it's per-point)
+                if fpc:
                     return f"{base} • kod: {fpc}"
                 return base
             except Exception:
                 base = f"{name}, {admin1}, {cc}"
                 fpc = format_postal(cc, pc) if pc else None
-                if fpc and (not st or st.lower() in admin1.lower() or admin1.lower() in st.lower()):
+                if fpc:
                     return f"{base} • kod: {fpc}"
                 return base
 
