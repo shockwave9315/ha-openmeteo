@@ -126,5 +126,24 @@
       "missing_entity": "Wymagana encja do śledzenia",
       "invalid_entity": "Encja nie ma współrzędnych GPS"
     }
+  },
+  "sensor": {
+    "temperature": {"name": "Temperatura"},
+    "humidity": {"name": "Wilgotność"},
+    "apparent_temperature": {"name": "Temperatura odczuwalna"},
+    "precipitation_probability": {"name": "Prawdopodobieństwo opadów"},
+    "precipitation_sum": {"name": "Opad (bieżąca godzina)"},
+    "precipitation_daily_sum": {"name": "Suma opadów (dzienna)"},
+    "precipitation_last_3h": {"name": "Opad (ostatnie 3h)"},
+    "wind_speed": {"name": "Prędkość wiatru"},
+    "wind_gust": {"name": "Porywy wiatru"},
+    "wind_bearing": {"name": "Kierunek wiatru"},
+    "pressure": {"name": "Ciśnienie"},
+    "visibility": {"name": "Widzialność"},
+    "dew_point": {"name": "Punkt rosy"},
+    "location": {"name": "Lokalizacja"},
+    "sunrise": {"name": "Wschód słońca"},
+    "sunset": {"name": "Zachód słońca"},
+    "uv_index": {"name": "Indeks UV"}
   }
 }

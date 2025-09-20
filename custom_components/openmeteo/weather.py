@@ -51,7 +51,11 @@ from .const import (
     MODE_TRACK,
 )
 from .coordinator import OpenMeteoDataUpdateCoordinator
-from .helpers import hourly_at_now as _hourly_at_now, maybe_update_device_name
+from .helpers import (
+    hourly_at_now as _hourly_at_now,
+    hourly_index_at_now as _hourly_index_at_now,
+    maybe_update_device_name,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -236,29 +240,8 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         self.async_write_ha_state()
 
     # -------------------------------------------------------------------------
-    # Helpers for forecasts and values
+    # Helpers for forecasts and values (centralized in helpers.py)
     # -------------------------------------------------------------------------
-    def _current_hour_index(self) -> int:
-        times = (self.coordinator.data or {}).get("hourly", {}).get("time") or []
-        if not isinstance(times, list):
-            return 0
-        now = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
-        for idx, ts in enumerate(times):
-            dt = dt_util.parse_datetime(ts)
-            if dt and dt_util.as_utc(dt) >= now:
-                return idx
-        return max(len(times) - 1, 0)
-
-    def _hourly_value(self, key: str, idx: int | None = None) -> float | None:
-        hourly = (self.coordinator.data or {}).get("hourly", {})
-        arr = hourly.get(key)
-        if not isinstance(arr, list) or not arr:
-            return None
-        if idx is None:
-            idx = self._current_hour_index()
-        if idx < len(arr):
-            return arr[idx]
-        return None
 
     def _map_daily_forecast(self) -> list[dict[str, Any]]:
         daily = (self.coordinator.data or {}).get("daily") or {}
@@ -368,7 +351,7 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
             _LOGGER.debug("Hourly forecast: 0 entries")
             return []
 
-        start_idx = self._current_hour_index()
+        start_idx = _hourly_index_at_now(self.coordinator.data or {}) or 0
         end_idx = min(len(times), start_idx + 72)
 
         result: list[dict[str, Any]] = []

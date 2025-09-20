@@ -125,5 +125,24 @@
       "missing_entity": "Tracking entity is required",
       "invalid_entity": "Entity has no GPS coordinates"
     }
+  },
+  "sensor": {
+    "temperature": {"name": "Temperature"},
+    "humidity": {"name": "Humidity"},
+    "apparent_temperature": {"name": "Apparent temperature"},
+    "precipitation_probability": {"name": "Precipitation probability"},
+    "precipitation_sum": {"name": "Precipitation (current hour)"},
+    "precipitation_daily_sum": {"name": "Daily precipitation sum"},
+    "precipitation_last_3h": {"name": "Precipitation (last 3h)"},
+    "wind_speed": {"name": "Wind speed"},
+    "wind_gust": {"name": "Wind gusts"},
+    "wind_bearing": {"name": "Wind direction"},
+    "pressure": {"name": "Pressure"},
+    "visibility": {"name": "Visibility"},
+    "dew_point": {"name": "Dew point"},
+    "location": {"name": "Location"},
+    "sunrise": {"name": "Sunrise"},
+    "sunset": {"name": "Sunset"},
+    "uv_index": {"name": "UV Index"}
   }
 }
