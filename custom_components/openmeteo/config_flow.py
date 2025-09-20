@@ -218,6 +218,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             query = (user_input.get("place_query") or "").strip()
             postal_code = (user_input.get("postal_code") or "").strip()
+            admin1_query = (user_input.get("admin1") or "").strip()
             # Determine country preference
             country_cfg = (self.hass.config.country or "").upper()
             country_ui = (user_input.get("country_code") or "").strip().upper()
@@ -234,6 +235,11 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # Optional narrowing: keep only selected country if provided
                 if country:
                     results = [r for r in results if (r.get("country_code") or "").upper() == country]
+
+                # Optional narrowing: filter by admin1/region if provided
+                if admin1_query:
+                    q = admin1_query.lower()
+                    results = [r for r in results if q in ((r.get("admin1") or "").lower())]
 
                 if not results and not errors:
                     errors["place_query"] = "no_results"
@@ -283,6 +289,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required("place_query", default=user_input.get("place_query") if user_input else ""): str,
             vol.Optional("postal_code", default=user_input.get("postal_code") if user_input else ""): str,
         }
+        schema_fields[vol.Optional("admin1", default=user_input.get("admin1") if user_input else "")] = str
         if not (self.hass.config.country or "").strip():
             schema_fields[vol.Optional("country_code", default=(user_input.get("country_code") if user_input else "PL"))] = str
 
