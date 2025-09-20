@@ -291,8 +291,8 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                     r["_state"] = info.get("state")
                         except Exception:
                             continue
-                        # throttle a bit to avoid 429
-                        await asyncio.sleep(0.2)
+                        # throttle to avoid Nominatim rate limits
+                        await asyncio.sleep(1.0)
                     self._search_zip = postal_code or None
                     return await self.async_step_pick_place()
 
