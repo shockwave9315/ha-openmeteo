@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 import asyncio
+import unicodedata
 
 import voluptuous as vol
 
@@ -227,7 +228,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["place_query"] = "required"
             else:
                 try:
-                    results = await async_forward_geocode(self.hass, query, count=50)
+                    results = await async_forward_geocode(self.hass, query, count=10)
                 except Exception:  # pragma: no cover – defensive
                     results = []
                     errors["base"] = "network_error"
@@ -238,8 +239,19 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 # Optional narrowing: filter by admin1/region if provided
                 if admin1_query:
-                    q = admin1_query.lower()
-                    results = [r for r in results if q in ((r.get("admin1") or "").lower())]
+                    def _norm(s: str) -> str:
+                        s = s.lower()
+                        s = unicodedata.normalize("NFKD", s)
+                        s = "".join(ch for ch in s if not unicodedata.combining(ch))
+                        return s
+                    qn = _norm(admin1_query)
+                    filtered = []
+                    for r in results:
+                        a1 = (r.get("admin1") or "")
+                        a1n = _norm(a1)
+                        if qn in a1n or a1n.startswith(qn[:5]):
+                            filtered.append(r)
+                    results = filtered
 
                 if not results and not errors:
                     errors["place_query"] = "no_results"
@@ -260,8 +272,8 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 )
                             except Exception:
                                 pass
-                    # Limit to top 50 and enrich with per-item postcode
-                    self._search_results = results[:50]
+                    # Limit to top 10 and enrich with per-item postcode
+                    self._search_results = results[:10]
                     # Try to fetch postcode for top results (best-effort, throttled)
                     for idx, r in enumerate(self._search_results):
                         if idx >= 15:  # avoid rate limits; enrich only top 15

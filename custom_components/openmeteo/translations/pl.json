@@ -29,7 +29,10 @@
         "title": "Open-Meteo",
         "description": "Wyszukaj miejscowość (tryb statyczny).",
         "data": {
-          "place_query": "Wpisz miejscowość"
+          "place_query": "Wpisz miejscowość",
+          "postal_code": "Kod pocztowy (opcjonalnie)",
+          "country_code": "Kraj (ISO-2, opcjonalnie)",
+          "admin1": "Województwo/region (opcjonalnie)"
         }
       },
       "pick_place": {
