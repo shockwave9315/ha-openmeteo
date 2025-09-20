@@ -185,6 +185,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._mode = MODE_STATIC
         self._prefill: dict[str, Any] = {}
         self._search_results: list[dict[str, Any]] = []
+        self._search_zip: str | None = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -251,6 +252,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 pass
                     # store and go to pick list (top 10 already)
                     self._search_results = results[:10]
+                    self._search_zip = postal_code or None
                     return await self.async_step_pick_place()
 
         # Build schema: always place_query; postal_code optional; country_code only if HA has no country
@@ -278,9 +280,15 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             lat = r.get("latitude")
             lon = r.get("longitude")
             try:
-                return f"{name}, {admin1}, {cc} ({float(lat):.4f}, {float(lon):.4f})"
+                base = f"{name}, {admin1}, {cc} ({float(lat):.4f}, {float(lon):.4f})"
+                if self._search_zip:
+                    return f"{base} • kod: {self._search_zip}"
+                return base
             except Exception:
-                return f"{name}, {admin1}, {cc}"
+                base = f"{name}, {admin1}, {cc}"
+                if self._search_zip:
+                    return f"{base} • kod: {self._search_zip}"
+                return base
 
         options = {str(idx): _label(r) for idx, r in enumerate(self._search_results)}
 
