@@ -302,7 +302,39 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required("place_query", default=user_input.get("place_query") if user_input else ""): str,
             vol.Optional("postal_code", default=user_input.get("postal_code") if user_input else ""): str,
         }
-        schema_fields[vol.Optional("admin1", default=user_input.get("admin1") if user_input else "")] = str
+        # If country is PL (from HA) or user selected PL in this form, show dropdown of voivodeships
+        user_country = (user_input.get("country_code") if user_input else "") or ""
+        user_country = user_country.strip().upper()
+        ha_country = (self.hass.config.country or "").strip().upper()
+        is_pl = (ha_country == "PL") or (user_country == "PL")
+
+        if is_pl:
+            voivodeships_pl = [
+                "Dolnośląskie",
+                "Kujawsko-pomorskie",
+                "Lubelskie",
+                "Lubuskie",
+                "Łódzkie",
+                "Małopolskie",
+                "Mazowieckie",
+                "Opolskie",
+                "Podkarpackie",
+                "Podlaskie",
+                "Pomorskie",
+                "Śląskie",
+                "Świętokrzyskie",
+                "Warmińsko-mazurskie",
+                "Wielkopolskie",
+                "Zachodniopomorskie",
+            ]
+            schema_fields[vol.Optional("admin1", default=user_input.get("admin1") if user_input else "")] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[{ "label": v, "value": v } for v in voivodeships_pl],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            )
+        else:
+            schema_fields[vol.Optional("admin1", default=user_input.get("admin1") if user_input else "")] = str
         if not (self.hass.config.country or "").strip():
             schema_fields[vol.Optional("country_code", default=(user_input.get("country_code") if user_input else "PL"))] = str
 
