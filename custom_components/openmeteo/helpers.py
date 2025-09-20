@@ -52,6 +52,54 @@ def _parse_hour(ts: str, tz) -> Optional[dt_util.dt.datetime]:
         return None
 
 
+async def async_reverse_postcode(
+    hass: HomeAssistant,
+    lat: float,
+    lon: float,
+    *,
+    language: str | None = None,
+) -> str | None:
+    """Reverse geocode a postal code using Nominatim (no API key).
+
+    Returns a postal code string or None.
+    """
+    try:
+        lat_f = float(lat)
+        lon_f = float(lon)
+    except Exception:
+        return None
+
+    lang = (language or getattr(hass.config, "language", None) or "en").lower()
+    url = "https://nominatim.openstreetmap.org/reverse"
+    params = {
+        "lat": f"{lat_f:.6f}",
+        "lon": f"{lon_f:.6f}",
+        "format": "json",
+        "addressdetails": 1,
+        "accept-language": lang,
+    }
+    headers = {"User-Agent": "ha-openmeteo/1.4 (https://github.com/shockwave9315/ha-openmeteo)"}
+
+    session = async_get_clientsession(hass)
+    try:
+        async with async_timeout.timeout(10):
+            resp = await session.get(url, params=params, headers=headers)
+            if resp.status != 200:
+                return None
+            data = await resp.json()
+    except Exception:
+        return None
+
+    try:
+        addr = (data or {}).get("address") or {}
+        pc = addr.get("postcode")
+        if isinstance(pc, str) and pc.strip():
+            return pc.strip()
+    except Exception:
+        pass
+    return None
+
+
 def hourly_index_at_now(data: dict) -> Optional[int]:
     """Return the index in hourly['time'] that matches the current hour (exact or nearest)."""
     if not isinstance(data, dict):
@@ -262,3 +310,27 @@ async def async_zip_to_coords(
         return (lat, lon)
     except Exception:
         return None
+
+
+def format_postal(country_code: str | None, postal: str | None) -> str | None:
+    """Format postal code nicely depending on country.
+
+    - PL: enforce NN-NNN
+    - others: return as-is (stripped) if non-empty
+    """
+    if not postal:
+        return None
+    cc = (country_code or "").upper()
+    p = postal.strip()
+    if not p:
+        return None
+    if cc == "PL":
+        # keep only digits and format NN-NNN if length==5
+        digits = "".join(ch for ch in p if ch.isdigit())
+        if len(digits) == 5:
+            return f"{digits[:2]}-{digits[2:]}"
+        # if already contains dash and looks fine, return as-is
+        if len(p) >= 5 and "-" in p:
+            return p
+        return p
+    return p

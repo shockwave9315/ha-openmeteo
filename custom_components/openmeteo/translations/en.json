@@ -47,11 +47,30 @@
           "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
         }
       }
+      ,
+      "search_place": {
+        "title": "Open-Meteo",
+        "description": "Search for a place (static mode).",
+        "data": {
+          "place_query": "Enter a place name",
+          "postal_code": "Postal code (optional)",
+          "country_code": "Country (ISO-2, optional)"
+        }
+      },
+      "pick_place": {
+        "title": "Open-Meteo",
+        "description": "Pick a place from the list.",
+        "data": {
+          "picked": "Select a place"
+        }
+      }
     },
     "error": {
       "missing_location": "Latitude and longitude are required",
       "missing_entity": "Tracking entity is required",
-      "invalid_entity": "Entity has no GPS coordinates"
+      "invalid_entity": "Entity has no GPS coordinates",
+      "no_results": "No results for the provided name",
+      "network_error": "Network error during search. Please try again."
     }
   },
   "options": {

@@ -37,6 +37,8 @@ from .helpers import (
     async_forward_geocode,  # new helper for onboarding
     async_zip_to_coords,
     haversine_km,
+    async_reverse_postcode,
+    format_postal,
 )
 
 
@@ -250,8 +252,20 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 )
                             except Exception:
                                 pass
-                    # store and go to pick list (top 10 already)
+                    # Limit to top 10 and enrich with per-item postcode
                     self._search_results = results[:10]
+                    # Try to fetch postcode for each result (best-effort)
+                    for r in self._search_results:
+                        try:
+                            pc = await async_reverse_postcode(
+                                self.hass,
+                                float(r.get("latitude")),
+                                float(r.get("longitude")),
+                            )
+                            if pc:
+                                r["postcode"] = pc
+                        except Exception:
+                            continue
                     self._search_zip = postal_code or None
                     return await self.async_step_pick_place()
 
@@ -279,15 +293,22 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             cc = (r.get("country_code") or "").upper()
             lat = r.get("latitude")
             lon = r.get("longitude")
+            pc = (r.get("postcode") or "").strip()
             try:
                 base = f"{name}, {admin1}, {cc} ({float(lat):.4f}, {float(lon):.4f})"
+                fpc = format_postal(cc, pc) if pc else None
+                if fpc:
+                    return f"{base} • kod: {fpc}"
                 if self._search_zip:
-                    return f"{base} • kod: {self._search_zip}"
+                    return f"{base} • kod: {format_postal(cc, self._search_zip) or self._search_zip}"
                 return base
             except Exception:
                 base = f"{name}, {admin1}, {cc}"
+                fpc = format_postal(cc, pc) if pc else None
+                if fpc:
+                    return f"{base} • kod: {fpc}"
                 if self._search_zip:
-                    return f"{base} • kod: {self._search_zip}"
+                    return f"{base} • kod: {format_postal(cc, self._search_zip) or self._search_zip}"
                 return base
 
         options = {str(idx): _label(r) for idx, r in enumerate(self._search_results)}
