@@ -48,8 +48,47 @@ def _parse_hour(ts: str, tz) -> Optional[dt_util.dt.datetime]:
             dt = dt.replace(tzinfo=tz)
         # Align to full hour
         return dt.replace(minute=0, second=0, microsecond=0)
+    
     except Exception:
         return None
+
+# --- Simple in-memory cache for reverse postcodes (rounded 3 decimals) ---
+_postcode_cache: dict[tuple[float, float], str] = {}
+
+
+def _pcache_key(lat: float, lon: float) -> tuple[float, float]:
+    return (round(float(lat), 3), round(float(lon), 3))
+
+
+async def async_reverse_postcode_cached(
+    hass: HomeAssistant,
+    lat: float,
+    lon: float,
+    *,
+    language: str | None = None,
+) -> str | None:
+    """Cached reverse postcode with fallbacks on Nominatim zoom levels."""
+    try:
+        key = _pcache_key(lat, lon)
+    except Exception:
+        key = None
+    if key and key in _postcode_cache:
+        return _postcode_cache[key]
+
+    # Try default zoom
+    pc = await async_reverse_postcode(hass, lat, lon, language=language)
+    # Try fallbacks if needed
+    if not pc:
+        for z in (14, 10):
+            try:
+                pc = await async_reverse_postcode(hass, lat, lon, language=language, zoom=z)
+            except Exception:
+                pc = None
+            if pc:
+                break
+    if key and pc:
+        _postcode_cache[key] = pc
+    return pc
 
 
 async def async_reverse_postcode(
@@ -58,6 +97,7 @@ async def async_reverse_postcode(
     lon: float,
     *,
     language: str | None = None,
+    zoom: int | None = None,
 ) -> str | None:
     """Reverse geocode a postal code using Nominatim (no API key).
 
@@ -78,6 +118,8 @@ async def async_reverse_postcode(
         "addressdetails": 1,
         "accept-language": lang,
     }
+    if isinstance(zoom, int):
+        params["zoom"] = zoom
     headers = {"User-Agent": "ha-openmeteo/1.4 (https://github.com/shockwave9315/ha-openmeteo)"}
 
     session = async_get_clientsession(hass)
@@ -223,7 +265,7 @@ async def async_forward_geocode(
     url = "https://geocoding-api.open-meteo.com/v1/search"
     params = {
         "name": name,
-        "count": max(1, min(int(count), 15)),
+        "count": max(1, min(int(count), 50)),
         "language": lang,
         "format": "json",
     }
