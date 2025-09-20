@@ -33,6 +33,9 @@ CONF_SCAN_INTERVAL = "scan_interval"
 CONF_MODE = "mode"
 CONF_ENTITY_ID = "entity_id"
 CONF_MIN_TRACK_INTERVAL = "min_track_interval"
+# New: update interval expressed in minutes (UI)
+CONF_UPDATE_INTERVAL_MIN = "update_interval_min"
+# Backward-compat: legacy seconds key
 CONF_UPDATE_INTERVAL = "update_interval"
 CONF_UNITS = "units"
 CONF_API_PROVIDER = "api_provider"
@@ -63,7 +66,8 @@ TRACKING_MODE_DEVICE = "device"
 DEFAULT_NAME = "Open-Meteo"
 # Default update interval in seconds. Historical configs may use scan_interval.
 DEFAULT_SCAN_INTERVAL = 600
-DEFAULT_UPDATE_INTERVAL = DEFAULT_SCAN_INTERVAL
+DEFAULT_UPDATE_INTERVAL = DEFAULT_SCAN_INTERVAL  # legacy seconds
+DEFAULT_UPDATE_INTERVAL_MIN = DEFAULT_SCAN_INTERVAL // 60  # minutes (10)
 DEFAULT_MIN_TRACK_INTERVAL = 15  # minutes
 DEFAULT_UNITS = "metric"
 DEFAULT_API_PROVIDER = "open_meteo"

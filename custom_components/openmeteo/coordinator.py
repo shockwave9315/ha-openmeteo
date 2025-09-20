@@ -113,14 +113,23 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def __init__(self, hass: HomeAssistant, entry) -> None:
         self.entry = entry
 
-        interval = entry.options.get(
-            CONF_UPDATE_INTERVAL,
-            entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
-        )
-        try:
-            interval = int(interval)
-        except (TypeError, ValueError):
-            interval = DEFAULT_UPDATE_INTERVAL
+        # Determine polling interval (seconds): prefer minutes-based setting
+        raw_min = entry.options.get("update_interval_min", entry.data.get("update_interval_min"))
+        if raw_min is not None:
+            try:
+                interval = int(raw_min) * 60
+            except (TypeError, ValueError):
+                interval = DEFAULT_UPDATE_INTERVAL
+        else:
+            # fallback to legacy seconds
+            raw_sec = entry.options.get(
+                CONF_UPDATE_INTERVAL,
+                entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+            )
+            try:
+                interval = int(raw_sec)
+            except (TypeError, ValueError):
+                interval = DEFAULT_UPDATE_INTERVAL
         if interval < 60:
             interval = 60
 

@@ -11,7 +11,7 @@
           "longitude": "Długość geograficzna",
           "entity_id": "Encja trackera",
           "min_track_interval": "Min. odstęp śledzenia (min)",
-          "update_interval": "Interwał aktualizacji (s)",
+          "update_interval_min": "Interwał aktualizacji (min)",
           "units": "Jednostki",
           "api_provider": "Dostawca API",
           "area_name_override": "Nazwa obszaru",
@@ -34,18 +34,18 @@
           "longitude": "Długość geograficzna",
           "entity_id": "Encja trackera",
           "min_track_interval": "Min. odstęp śledzenia (min)",
-          "update_interval": "Interwał aktualizacji (s)",
+          "update_interval_min": "Interwał aktualizacji (min)",
           "units": "Jednostki",
           "api_provider": "Dostawca API",
           "area_name_override": "Nazwa obszaru",
           "use_place_as_device_name": "Użyj nazwy miejsca jako nazwy urządzenia",
           "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_sec": "Odstęp zapisu ustawień (s)"
+          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
         },
         "data_description": {
           "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
           "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
-          "options_save_cooldown_sec": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
+          "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
         }
       }
     },
@@ -65,18 +65,18 @@
           "longitude": "Długość geograficzna",
           "entity_id": "Encja trackera",
           "min_track_interval": "Min. odstęp śledzenia (min)",
-          "update_interval": "Interwał aktualizacji (s)",
+          "update_interval_min": "Interwał aktualizacji (min)",
           "units": "Jednostki",
           "api_provider": "Dostawca API",
           "area_name_override": "Nazwa obszaru",
           "use_place_as_device_name": "Użyj nazwy miejsca jako nazwy urządzenia",
           "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_sec": "Odstęp zapisu ustawień (s)"
+          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
         },
         "data_description": {
           "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
           "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
-          "options_save_cooldown_sec": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
+          "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
         }
       }
 ,
@@ -88,16 +88,16 @@
           "longitude": "Długość geograficzna",
           "entity_id": "Encja trackera",
           "min_track_interval": "Min. odstęp śledzenia (min)",
-          "update_interval": "Interwał aktualizacji (s)",
+          "update_interval_min": "Interwał aktualizacji (min)",
           "units": "Jednostki",
           "api_provider": "Dostawca API",
           "area_name_override": "Nazwa obszaru",
           "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_sec": "Odstęp zapisu ustawień (s)"
+          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
         },
         "data_description": {
           "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
-          "options_save_cooldown_sec": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
+          "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
         }
       }
     }

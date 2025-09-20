@@ -19,7 +19,7 @@ from .const import (
     CONF_OPTIONS_SAVE_COOLDOWN_MIN,
     CONF_REVERSE_GEOCODE_COOLDOWN_MIN,
     CONF_UNITS,
-    CONF_UPDATE_INTERVAL,
+    CONF_UPDATE_INTERVAL_MIN,
     CONF_USE_PLACE_AS_DEVICE_NAME,
     DEFAULT_API_PROVIDER,
     DEFAULT_MIN_TRACK_INTERVAL,
@@ -42,6 +42,21 @@ def _build_schema(
     include_use_place: bool = True,
 ) -> vol.Schema:
     """Build a schema for the config and options flow."""
+
+    # Derive minutes-based defaults for UI fields
+    def _default_update_interval_min(d: dict[str, Any]) -> int:
+        val = d.get(CONF_UPDATE_INTERVAL_MIN)
+        if val is not None:
+            try:
+                return max(1, int(val))
+            except (TypeError, ValueError):
+                pass
+        # Fallback to legacy seconds
+        sec = d.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+        try:
+            return max(1, int(sec) // 60)
+        except (TypeError, ValueError):
+            return max(1, DEFAULT_UPDATE_INTERVAL // 60)
 
     if mode == MODE_TRACK:
         data: dict[Any, Any] = {
@@ -69,9 +84,9 @@ def _build_schema(
 
     extra = {
         vol.Required(
-            CONF_UPDATE_INTERVAL,
-            default=defaults.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
-        ): vol.All(vol.Coerce(int), vol.Range(min=60)),
+            CONF_UPDATE_INTERVAL_MIN,
+            default=_default_update_interval_min(defaults),
+        ): vol.All(vol.Coerce(int), vol.Range(min=1)),
         vol.Required(
             CONF_UNITS, default=defaults.get(CONF_UNITS, DEFAULT_UNITS)
         ): vol.In(["metric", "imperial"]),
