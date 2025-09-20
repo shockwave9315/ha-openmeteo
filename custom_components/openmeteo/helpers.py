@@ -10,6 +10,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import async_timeout
+import math
 
 from .const import DOMAIN
 
@@ -206,3 +207,58 @@ async def async_forward_geocode(
             continue
 
     return results
+
+
+def _deg2rad(x: float) -> float:
+    return x * math.pi / 180.0
+
+
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Distance (km) between two WGS84 points (approx)."""
+    R = 6371.0
+    dlat = _deg2rad(lat2 - lat1)
+    dlon = _deg2rad(lon2 - lon1)
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(_deg2rad(lat1)) * math.cos(_deg2rad(lat2)) * math.sin(dlon / 2) ** 2
+    )
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+
+async def async_zip_to_coords(
+    hass: HomeAssistant,
+    country_code: str,
+    postal_code: str,
+) -> tuple[float, float] | None:
+    """Resolve postal code to approximate coordinates using zippopotam.us.
+
+    Returns (lat, lon) or None.
+    """
+    if not country_code or not postal_code:
+        return None
+
+    cc = country_code.strip().upper()
+    zip_clean = postal_code.strip().replace(" ", "")
+
+    url = f"https://api.zippopotam.us/{cc}/{zip_clean}"
+    session = async_get_clientsession(hass)
+    try:
+        async with async_timeout.timeout(10):
+            resp = await session.get(url)
+            if resp.status != 200:
+                return None
+            data = await resp.json()
+    except Exception:
+        return None
+
+    places = (data or {}).get("places") or []
+    if not places:
+        return None
+    try:
+        # take first place center
+        lat = float(places[0].get("latitude"))
+        lon = float(places[0].get("longitude"))
+        return (lat, lon)
+    except Exception:
+        return None

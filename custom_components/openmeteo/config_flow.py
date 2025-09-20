@@ -33,7 +33,11 @@ from .const import (
     MODE_TRACK,
 )
 from .coordinator import async_reverse_geocode
-from .helpers import async_forward_geocode  # new helper for onboarding
+from .helpers import (
+    async_forward_geocode,  # new helper for onboarding
+    async_zip_to_coords,
+    haversine_km,
+)
 
 
 def _build_schema(
@@ -208,6 +212,11 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             query = (user_input.get("place_query") or "").strip()
+            postal_code = (user_input.get("postal_code") or "").strip()
+            # Determine country preference
+            country_cfg = (self.hass.config.country or "").upper()
+            country_ui = (user_input.get("country_code") or "").strip().upper()
+            country = country_cfg or country_ui
             if not query:
                 errors["place_query"] = "required"
             else:
@@ -217,19 +226,42 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     results = []
                     errors["base"] = "network_error"
 
-                # Optional narrowing: if HA country is PL, keep only PL
-                country = (self.hass.config.country or "").upper()
-                if country == "PL":
-                    results = [r for r in results if (r.get("country_code") or "").upper() == "PL"]
+                # Optional narrowing: keep only selected country if provided
+                if country:
+                    results = [r for r in results if (r.get("country_code") or "").upper() == country]
 
                 if not results and not errors:
                     errors["place_query"] = "no_results"
                 else:
-                    # store and go to pick list
+                    # Sort by distance to postal code center if provided and country known
+                    if postal_code and country:
+                        zip_center = await async_zip_to_coords(self.hass, country, postal_code)
+                        if zip_center is not None:
+                            zlat, zlon = zip_center
+                            try:
+                                results.sort(
+                                    key=lambda r: haversine_km(
+                                        float(r.get("latitude")),
+                                        float(r.get("longitude")),
+                                        float(zlat),
+                                        float(zlon),
+                                    )
+                                )
+                            except Exception:
+                                pass
+                    # store and go to pick list (top 10 already)
                     self._search_results = results[:10]
                     return await self.async_step_pick_place()
 
-        schema = vol.Schema({vol.Required("place_query", default=user_input.get("place_query") if user_input else ""): str})
+        # Build schema: always place_query; postal_code optional; country_code only if HA has no country
+        schema_fields: dict[Any, Any] = {
+            vol.Required("place_query", default=user_input.get("place_query") if user_input else ""): str,
+            vol.Optional("postal_code", default=user_input.get("postal_code") if user_input else ""): str,
+        }
+        if not (self.hass.config.country or "").strip():
+            schema_fields[vol.Optional("country_code", default=(user_input.get("country_code") if user_input else "PL"))] = str
+
+        schema = vol.Schema(schema_fields)
         return self.async_show_form(step_id="search_place", data_schema=schema, errors=errors)
 
     async def async_step_pick_place(
