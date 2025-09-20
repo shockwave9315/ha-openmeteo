@@ -255,6 +255,47 @@ async def async_best_effort_postcode_cached(
     return max(seen.items(), key=lambda kv: kv[1])[0], True
 
 
+async def async_prefer_user_zip_postcode(
+    hass: HomeAssistant,
+    lat: float,
+    lon: float,
+    *,
+    country_code: str | None,
+    postal_code: str | None,
+    language: str | None = None,
+    max_distance_km: float = 15.0,
+) -> tuple[str | None, bool]:
+    """Prefer user's postal code when it's geographically close; otherwise best-effort.
+
+    Returns (postcode, approx_flag). approx_flag is True when the result is inferred
+    (either user ZIP preference or best-effort neighborhood), False when it comes
+    from the exact point reverse geocode.
+    """
+    try:
+        latf = float(lat)
+        lonf = float(lon)
+    except Exception:
+        return None, False
+
+    # If we have a user ZIP and country, check proximity
+    cc = (country_code or "").strip().upper()
+    pc_in = (postal_code or "").strip()
+    if cc and pc_in:
+        center = await async_zip_to_coords(hass, cc, pc_in)
+        if center is not None:
+            zlat, zlon = center
+            try:
+                dist = haversine_km(latf, lonf, float(zlat), float(zlon))
+            except Exception:
+                dist = None
+            if dist is not None and dist <= max_distance_km:
+                # Close enough: prefer user's ZIP, mark as approx
+                return pc_in, True
+
+    # Otherwise, use best-effort postcode around the point
+    return await async_best_effort_postcode_cached(hass, latf, lonf, language=language)
+
+
 def hourly_index_at_now(data: dict) -> Optional[int]:
     """Return the index in hourly['time'] that matches the current hour (exact or nearest)."""
     if not isinstance(data, dict):

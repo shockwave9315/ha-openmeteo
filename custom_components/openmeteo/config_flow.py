@@ -42,6 +42,7 @@ from .helpers import (
     async_reverse_postcode,
     async_reverse_postcode_info_cached,
     async_best_effort_postcode_cached,
+    async_prefer_user_zip_postcode,
     format_postal,
 )
 
@@ -281,10 +282,12 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             break
                         try:
                             # Best-effort postcode around the point (center + small neighborhood)
-                            pc, approx = await async_best_effort_postcode_cached(
+                            pc, approx = await async_prefer_user_zip_postcode(
                                 self.hass,
                                 float(r.get("latitude")),
                                 float(r.get("longitude")),
+                                country_code=country,
+                                postal_code=postal_code,
                             )
                             if pc:
                                 r["postcode"] = pc
