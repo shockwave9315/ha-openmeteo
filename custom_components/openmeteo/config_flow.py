@@ -127,18 +127,20 @@ def _build_schema(
     lang_full = hass.config.language or "en"
     lang = lang_full.split("-")[0].lower()
 
-    translations_config = async_get_cached_translations(
-        hass, lang_full, "config", DOMAIN
+    translations_config: dict[str, str] = (
+        async_get_cached_translations(hass, lang_full, "config", DOMAIN) or {}
     )
-    translations_options = async_get_cached_translations(
-        hass, lang_full, "options", DOMAIN
+    translations_options: dict[str, str] = (
+        async_get_cached_translations(hass, lang_full, "options", DOMAIN) or {}
     )
     fallback_config: dict[str, str] = {}
     fallback_options: dict[str, str] = {}
     if lang_full.lower() != "en":
-        fallback_config = async_get_cached_translations(hass, "en", "config", DOMAIN)
-        fallback_options = async_get_cached_translations(
-            hass, "en", "options", DOMAIN
+        fallback_config = (
+            async_get_cached_translations(hass, "en", "config", DOMAIN) or {}
+        )
+        fallback_options = (
+            async_get_cached_translations(hass, "en", "options", DOMAIN) or {}
         )
 
     def localize(key: str) -> str:
