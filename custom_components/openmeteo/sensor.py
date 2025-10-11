@@ -319,7 +319,7 @@ AQ_SENSORS: dict[str, OpenMeteoSensorDescription] = {
         translation_key="carbon_monoxide",
         name="Tlenek węgla",
         native_unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
-        icon="mdi:molecule-co",
+        icon="mdi:molecule",
         device_class=SensorDeviceClass.CO,
         state_class=SensorStateClass.MEASUREMENT,
     ),
@@ -328,7 +328,7 @@ AQ_SENSORS: dict[str, OpenMeteoSensorDescription] = {
         translation_key="nitrogen_dioxide",
         name="Dwutlenek azotu",
         native_unit_of_measurement="µg/m³",
-        icon="mdi:chemical-weapon",
+        icon="mdi:molecule",
         device_class=SensorDeviceClass.NITROGEN_DIOXIDE,
         state_class=SensorStateClass.MEASUREMENT,
     ),
@@ -337,7 +337,7 @@ AQ_SENSORS: dict[str, OpenMeteoSensorDescription] = {
         translation_key="sulphur_dioxide",
         name="Dwutlenek siarki",
         native_unit_of_measurement="µg/m³",
-        icon="mdi:chemical-weapon",
+        icon="mdi:molecule",
         device_class=SensorDeviceClass.SULPHUR_DIOXIDE,
         state_class=SensorStateClass.MEASUREMENT,
     ),
@@ -687,7 +687,7 @@ class OpenMeteoAqSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Senso
 
         if self._sensor_type == "co":
             try:
-                return float(value) * CO_UGM3_TO_PPM_FACTOR
+                return round(float(value) * CO_UGM3_TO_PPM_FACTOR, 3)
             except (TypeError, ValueError):
                 return None
 
@@ -695,12 +695,14 @@ class OpenMeteoAqSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Senso
 
     @property
     def available(self) -> bool:
-        """Return True if entity is available."""
+        """Return True if entity is available and has valid data."""
         if not self.coordinator.last_update_success:
             return False
             
-        # Check if we have AQ data
-        return bool((self.coordinator.data or {}).get("aq") is not None)
+        # Check if we have AQ data and the specific key exists
+        aq_data = (self.coordinator.data or {}).get("aq", {})
+        hourly = aq_data.get("hourly", {})
+        return AQ_HOURLY_KEYS.get(self._sensor_type, "") in hourly
 
     @property
     def extra_state_attributes(self):

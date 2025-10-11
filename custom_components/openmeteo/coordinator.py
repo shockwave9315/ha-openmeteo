@@ -409,8 +409,11 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._last_geocode_at = now
                     loc_name = name or fallback_label
                 else:
+                    remaining = (self._last_geocode_at + self._rg_cooldown_td - now).total_seconds()
                     _LOGGER.debug(
-                        "Reverse geocode skipped due to cooldown; using fallback %s", fallback_label
+                        "Reverse geocode skipped due to cooldown (%.0fs remaining); using fallback %s",
+                        remaining,
+                        fallback_label
                     )
                     loc_name = fallback_label
             last_loc_ts = now.isoformat()
