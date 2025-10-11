@@ -24,7 +24,8 @@
           "preset_aq": "Air quality preset",
           "preset_keep": "Keep current selection",
           "preset_all": "Select all",
-          "preset_none": "Select none"
+          "preset_none": "Select none",
+          "preset_info": "Preset applied. Review the selection below and click Submit to save."
         },
         "data_description": {
           "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve place name from coordinates. Higher value = less battery/data usage.",
@@ -54,7 +55,8 @@
           "preset_aq": "Air quality preset",
           "preset_keep": "Keep current selection",
           "preset_all": "Select all",
-          "preset_none": "Select none"
+          "preset_none": "Select none",
+          "preset_info": "Preset applied. Review the selection below and click Submit to save."
         },
         "data_description": {
           "use_place_as_device_name": "When enabled, the device in the Device Registry will be named after the place (e.g. Radłów). When disabled, your own custom device name is kept.",
@@ -138,7 +140,8 @@
           "preset_aq": "Air quality preset",
           "preset_keep": "Keep current selection",
           "preset_all": "Select all",
-          "preset_none": "Select none"
+          "preset_none": "Select none",
+          "preset_info": "Preset applied. Review the selection below and click Submit to save."
         },
         "data_description": {
           "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve place name from coordinates. Higher value = less battery/data usage.",
@@ -167,7 +170,8 @@
           "preset_aq": "Air quality preset",
           "preset_keep": "Keep current selection",
           "preset_all": "Select all",
-          "preset_none": "Select none"
+          "preset_none": "Select none",
+          "preset_info": "Preset applied. Review the selection below and click Submit to save."
         },
         "data_description": {
           "use_place_as_device_name": "When enabled, the device in the Device Registry will be named after the place (e.g. Radłów). When disabled, your own custom device name is kept.",

@@ -25,7 +25,8 @@
           "preset_aq": "Preset (jakość powietrza)",
           "preset_keep": "Pozostaw wybór",
           "preset_all": "Zaznacz wszystkie",
-          "preset_none": "Odznacz wszystkie"
+          "preset_none": "Odznacz wszystkie",
+          "preset_info": "Zastosowano preset. Sprawdź zaznaczenia poniżej i kliknij Zatwierdź, aby zapisać."
         },
         "data_description": {
           "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
@@ -73,7 +74,8 @@
           "preset_aq": "Preset (jakość powietrza)",
           "preset_keep": "Pozostaw wybór",
           "preset_all": "Zaznacz wszystkie",
-          "preset_none": "Odznacz wszystkie"
+          "preset_none": "Odznacz wszystkie",
+          "preset_info": "Zastosowano preset. Sprawdź zaznaczenia poniżej i kliknij Zatwierdź, aby zapisać."
         },
         "data_description": {
           "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
@@ -142,7 +144,8 @@
           "preset_aq": "Preset (jakość powietrza)",
           "preset_keep": "Pozostaw wybór",
           "preset_all": "Zaznacz wszystkie",
-          "preset_none": "Odznacz wszystkie"
+          "preset_none": "Odznacz wszystkie",
+          "preset_info": "Zastosowano preset. Sprawdź zaznaczenia poniżej i kliknij Zatwierdź, aby zapisać."
         },
         "data_description": {
           "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
@@ -171,7 +174,8 @@
           "preset_aq": "Preset (jakość powietrza)",
           "preset_keep": "Pozostaw wybór",
           "preset_all": "Zaznacz wszystkie",
-          "preset_none": "Odznacz wszystkie"
+          "preset_none": "Odznacz wszystkie",
+          "preset_info": "Zastosowano preset. Sprawdź zaznaczenia poniżej i kliknij Zatwierdź, aby zapisać."
         },
         "data_description": {
           "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
