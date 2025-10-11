@@ -207,17 +207,26 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._tracked_entity_id: Optional[str] = None
         self._unsub_tracked: Optional[Callable[[], None]] = None
 
-        # Load last known coords/name from entry.options (persist across restarts)
+        # Load last known coords/name from entry options/data (persist across restarts)
         try:
+            persisted: dict[str, Any] | None = None
             if OPT_LAST_LAT in entry.options and OPT_LAST_LON in entry.options:
+                persisted = entry.options
+            elif OPT_LAST_LAT in entry.data and OPT_LAST_LON in entry.data:
+                persisted = entry.data
+
+            if persisted is not None:
                 self._cached = (
-                    float(entry.options[OPT_LAST_LAT]),
-                    float(entry.options[OPT_LAST_LON]),
+                    float(persisted[OPT_LAST_LAT]),
+                    float(persisted[OPT_LAST_LON]),
                 )
                 self._accepted_lat, self._accepted_lon = self._cached
                 self._accepted_at = dt_util.utcnow()
                 if not self.location_name:
-                    self.location_name = entry.options.get(OPT_LAST_LOCATION_NAME)
+                    self.location_name = (
+                        entry.options.get(OPT_LAST_LOCATION_NAME)
+                        or entry.data.get(OPT_LAST_LOCATION_NAME)
+                    )
         except Exception:
             # don't block startup on bad persisted values
             pass
@@ -467,21 +476,40 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # persist last accepted coords / location name in entry.options
             try:
                 opts = dict(self.entry.options)
-                need_save = False
+                data_map = dict(self.entry.data)
+                need_save_opts = False
+                need_save_data = False
                 if self._accepted_lat is not None and self._accepted_lon is not None:
-                    if opts.get(OPT_LAST_LAT) != self._accepted_lat or opts.get(OPT_LAST_LON) != self._accepted_lon:
+                    if (
+                        opts.get(OPT_LAST_LAT) != self._accepted_lat
+                        or opts.get(OPT_LAST_LON) != self._accepted_lon
+                    ):
                         opts[OPT_LAST_LAT] = self._accepted_lat
                         opts[OPT_LAST_LON] = self._accepted_lon
-                        need_save = True
-                if self.location_name and opts.get(OPT_LAST_LOCATION_NAME) != self.location_name:
-                    opts[OPT_LAST_LOCATION_NAME] = self.location_name
-                    need_save = True
-                if need_save:
+                        need_save_opts = True
+                    if (
+                        data_map.get(OPT_LAST_LAT) != self._accepted_lat
+                        or data_map.get(OPT_LAST_LON) != self._accepted_lon
+                    ):
+                        data_map[OPT_LAST_LAT] = self._accepted_lat
+                        data_map[OPT_LAST_LON] = self._accepted_lon
+                        need_save_data = True
+                if self.location_name:
+                    if opts.get(OPT_LAST_LOCATION_NAME) != self.location_name:
+                        opts[OPT_LAST_LOCATION_NAME] = self.location_name
+                        need_save_opts = True
+                    if data_map.get(OPT_LAST_LOCATION_NAME) != self.location_name:
+                        data_map[OPT_LAST_LOCATION_NAME] = self.location_name
+                        need_save_data = True
+                if need_save_opts or need_save_data:
                     # Zapisz natychmiast, jeśli w tej iteracji zmieniły się koordy.
                     if coords_changed or self._last_options_save_at is None or (
                         now - self._last_options_save_at >= self._opt_save_cooldown_td
                     ):
-                        self.async_update_entry_no_reload(options=opts)
+                        self.async_update_entry_no_reload(
+                            options=opts if need_save_opts else None,
+                            data=data_map if need_save_data else None,
+                        )
                         self._last_options_save_at = now
                     else:
                         _LOGGER.debug("Options save skipped due to cooldown")
