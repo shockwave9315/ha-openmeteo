@@ -7,7 +7,6 @@ from datetime import timedelta
 from pathlib import Path
 import sys
 
-from homeassistant import config_entries
 from homeassistant.util import dt as dt_util
 
 from pytest_homeassistant_custom_component.common import (
@@ -82,11 +81,7 @@ async def test_loads_last_coords_from_entry_data():
             )
             entry.add_to_hass(hass)
 
-            token = config_entries.current_entry.set(entry)
-            try:
-                coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
-            finally:
-                config_entries.current_entry.reset(token)
+            coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
 
             assert coordinator._cached == pytest.approx((A_LAT, A_LON))  # type: ignore[attr-defined]
             assert coordinator.location_name == "Saved place"
@@ -121,11 +116,7 @@ async def test_persists_last_coords_into_entry_data_and_options():
                 {"latitude": A_LAT, "longitude": A_LON},
             )
 
-            token = config_entries.current_entry.set(entry)
-            try:
-                coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
-            finally:
-                config_entries.current_entry.reset(token)
+            coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
 
             fake_session = _FakeSession()
 

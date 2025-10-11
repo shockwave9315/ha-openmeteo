@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import random
 from datetime import datetime, timedelta
@@ -9,6 +10,7 @@ from typing import Any, Callable, Optional
 
 import aiohttp
 from homeassistant.core import HomeAssistant
+
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -121,6 +123,11 @@ async def async_reverse_geocode(hass: HomeAssistant, lat: float, lon: float) -> 
     return None
 
 
+_COORDINATOR_ACCEPTS_CONFIG_ENTRY = "config_entry" in inspect.signature(
+    DataUpdateCoordinator.__init__
+).parameters
+
+
 class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Class to manage fetching Open-Meteo data and tracking coordinates."""
 
@@ -152,13 +159,17 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if interval < 60:
             interval = 60
 
-        super().__init__(
-            hass,
-            _LOGGER,
-            name="Open-Meteo",
-            update_method=self._async_update_data,
-            update_interval=timedelta(seconds=interval),
-        )
+        super_kwargs: dict[str, Any] = {
+            "hass": hass,
+            "logger": _LOGGER,
+            "name": "Open-Meteo",
+            "update_method": self._async_update_data,
+            "update_interval": timedelta(seconds=interval),
+        }
+        if _COORDINATOR_ACCEPTS_CONFIG_ENTRY:
+            super_kwargs["config_entry"] = entry
+
+        super().__init__(**super_kwargs)
 
         self._cached: tuple[float, float] | None = None
         self._accepted_lat: float | None = None
