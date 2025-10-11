@@ -219,15 +219,15 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
             self._attr_name = new_name
 
 
-    async def _maybe_update_device_registry_name(self) -> None:
-        """Update device name in registry if user hasn't overridden it."""
+    async def _maybe_update_entry_title(self) -> None:
+        """Update the Config Entry title to current place (mirrors device name)."""
         loc = (self.coordinator.data or {}).get("location_name")
-        new_name = str(loc) if loc else None
+        new_title = str(loc) if loc else None
         try:
-            await maybe_update_device_name(self.hass, self._config_entry, new_name)
+            if new_title and self._config_entry.title != new_title:
+                self.hass.config_entries.async_update_entry(self._config_entry, title=new_title)
         except Exception as ex:
-            # Do not crash entity update on registry errors
-            _LOGGER.debug("[openmeteo] Device name sync skipped: %s", ex)
+            _LOGGER.debug("[openmeteo] Entry title sync skipped: %s", ex)
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -246,15 +246,22 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         except Exception as ex:
             _LOGGER.debug("[openmeteo] Could not force weather entity_id: %s", ex)
 
+        # Initial sync of device name and entry title with current location
+        try:
+            self.hass.async_create_task(self._maybe_update_device_registry_name())
+            self.hass.async_create_task(self._maybe_update_entry_title())
+        except Exception:
+            pass
+            _LOGGER.debug("[openmeteo] Could not force weather entity_id: %s", ex)
+
     def _handle_coordinator_update(self) -> None:
         self._update_friendly_name()
         self.async_write_ha_state()
-        # Keep device name in sync with current location (no-op if user renamed)
         try:
             self.hass.async_create_task(self._maybe_update_device_registry_name())
+            self.hass.async_create_task(self._maybe_update_entry_title())
         except Exception:
             pass
-
     # -------------------------------------------------------------------------
     # Helpers for forecasts and values (centralized in helpers.py)
     # -------------------------------------------------------------------------
