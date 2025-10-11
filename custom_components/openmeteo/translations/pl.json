@@ -12,9 +12,7 @@
           "entity_id": "Encja trackera",
           "min_track_interval": "Min. odstęp śledzenia (min)",
           "update_interval_min": "Interwał aktualizacji (min)",
-          "select_all_weather": "Zaznacz wszystkie (pogoda)",
           "enabled_weather_sensors": "🌦️ Sensory pogody",
-          "select_all_aq": "Zaznacz wszystkie (jakość powietrza)",
           "enabled_aq_sensors": "💨 Sensory jakości powietrza",
           "enabled_sensors": "Sensory do utworzenia",
           "units": "Jednostki",
@@ -22,7 +20,12 @@
           "area_name_override": "Nazwa obszaru",
           "use_place_as_device_name": "Użyj nazwy miejsca jako nazwy urządzenia",
           "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
+          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)",
+          "preset_weather": "Preset (pogoda)",
+          "preset_aq": "Preset (jakość powietrza)",
+          "preset_keep": "Pozostaw wybór",
+          "preset_all": "Zaznacz wszystkie",
+          "preset_none": "Odznacz wszystkie"
         },
         "data_description": {
           "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
@@ -57,9 +60,7 @@
           "entity_id": "Encja trackera",
           "min_track_interval": "Min. odstęp śledzenia (min)",
           "update_interval_min": "Interwał aktualizacji (min)",
-          "select_all_weather": "Zaznacz wszystkie (pogoda)",
           "enabled_weather_sensors": "🌦️ Sensory pogody",
-          "select_all_aq": "Zaznacz wszystkie (jakość powietrza)",
           "enabled_aq_sensors": "💨 Sensory jakości powietrza",
           "enabled_sensors": "Sensory do utworzenia",
           "units": "Jednostki",
@@ -67,7 +68,12 @@
           "area_name_override": "Nazwa obszaru",
           "use_place_as_device_name": "Użyj nazwy miejsca jako nazwy urządzenia",
           "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
+          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)",
+          "preset_weather": "Preset (pogoda)",
+          "preset_aq": "Preset (jakość powietrza)",
+          "preset_keep": "Pozostaw wybór",
+          "preset_all": "Zaznacz wszystkie",
+          "preset_none": "Odznacz wszystkie"
         },
         "data_description": {
           "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
@@ -86,14 +92,30 @@
   },
   "entity": {
     "sensor": {
-      "pm2_5": { "name": "PM2.5" },
-      "pm10": { "name": "PM10" },
-      "carbon_monoxide": { "name": "Tlenek węgla" },
-      "nitrogen_dioxide": { "name": "Dwutlenek azotu" },
-      "sulphur_dioxide": { "name": "Dwutlenek siarki" },
-      "ozone": { "name": "Ozon" },
-      "us_aqi": { "name": "US AQI" },
-      "european_aqi": { "name": "Europejski AQI" }
+      "pm2_5": {
+        "name": "PM2.5"
+      },
+      "pm10": {
+        "name": "PM10"
+      },
+      "carbon_monoxide": {
+        "name": "Tlenek węgla"
+      },
+      "nitrogen_dioxide": {
+        "name": "Dwutlenek azotu"
+      },
+      "sulphur_dioxide": {
+        "name": "Dwutlenek siarki"
+      },
+      "ozone": {
+        "name": "Ozon"
+      },
+      "us_aqi": {
+        "name": "US AQI"
+      },
+      "european_aqi": {
+        "name": "Europejski AQI"
+      }
     }
   },
   "options": {
@@ -107,9 +129,7 @@
           "entity_id": "Encja trackera",
           "min_track_interval": "Min. odstęp śledzenia (min)",
           "update_interval_min": "Interwał aktualizacji (min)",
-          "select_all_weather": "Zaznacz wszystkie (pogoda)",
           "enabled_weather_sensors": "🌦️ Sensory pogody",
-          "select_all_aq": "Zaznacz wszystkie (jakość powietrza)",
           "enabled_aq_sensors": "💨 Sensory jakości powietrza",
           "enabled_sensors": "Sensory do utworzenia",
           "units": "Jednostki",
@@ -117,15 +137,19 @@
           "area_name_override": "Nazwa obszaru",
           "use_place_as_device_name": "Użyj nazwy miejsca jako nazwy urządzenia",
           "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
+          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)",
+          "preset_weather": "Preset (pogoda)",
+          "preset_aq": "Preset (jakość powietrza)",
+          "preset_keep": "Pozostaw wybór",
+          "preset_all": "Zaznacz wszystkie",
+          "preset_none": "Odznacz wszystkie"
         },
         "data_description": {
           "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
           "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
           "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
         }
-      }
-,
+      },
       "mode_details": {
         "title": "Opcje Open-Meteo",
         "data": {
@@ -135,24 +159,26 @@
           "entity_id": "Encja trackera",
           "min_track_interval": "Min. odstęp śledzenia (min)",
           "update_interval_min": "Interwał aktualizacji (min)",
-          "select_all_weather": "Zaznacz wszystkie (pogoda)",
           "enabled_weather_sensors": "🌦️ Sensory pogody",
-          "select_all_aq": "Zaznacz wszystkie (jakość powietrza)",
           "enabled_aq_sensors": "💨 Sensory jakości powietrza",
           "enabled_sensors": "Sensory do utworzenia",
           "units": "Jednostki",
           "api_provider": "Dostawca API",
           "area_name_override": "Nazwa obszaru",
           "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
+          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)",
+          "preset_weather": "Preset (pogoda)",
+          "preset_aq": "Preset (jakość powietrza)",
+          "preset_keep": "Pozostaw wybór",
+          "preset_all": "Zaznacz wszystkie",
+          "preset_none": "Odznacz wszystkie"
         },
         "data_description": {
           "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
           "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
         }
       }
-    }
-,
+    },
     "error": {
       "missing_location": "Wymagana szerokość i długość geograficzna",
       "missing_entity": "Wymagana encja do śledzenia",
@@ -160,22 +186,56 @@
     }
   },
   "sensor": {
-    "temperature": {"name": "Temperatura"},
-    "humidity": {"name": "Wilgotność"},
-    "apparent_temperature": {"name": "Temperatura odczuwalna"},
-    "precipitation_probability": {"name": "Prawdopodobieństwo opadów"},
-    "precipitation_sum": {"name": "Opad (bieżąca godzina)"},
-    "precipitation_daily_sum": {"name": "Suma opadów (dzienna)"},
-    "precipitation_last_3h": {"name": "Opad (ostatnie 3h)"},
-    "wind_speed": {"name": "Prędkość wiatru"},
-    "wind_gust": {"name": "Porywy wiatru"},
-    "wind_bearing": {"name": "Kierunek wiatru"},
-    "pressure": {"name": "Ciśnienie"},
-    "visibility": {"name": "Widzialność"},
-    "dew_point": {"name": "Punkt rosy"},
-    "location": {"name": "Lokalizacja"},
-    "sunrise": {"name": "Wschód słońca"},
-    "sunset": {"name": "Zachód słońca"},
-    "uv_index": {"name": "Indeks UV"}
+    "temperature": {
+      "name": "Temperatura"
+    },
+    "humidity": {
+      "name": "Wilgotność"
+    },
+    "apparent_temperature": {
+      "name": "Temperatura odczuwalna"
+    },
+    "precipitation_probability": {
+      "name": "Prawdopodobieństwo opadów"
+    },
+    "precipitation_sum": {
+      "name": "Opad (bieżąca godzina)"
+    },
+    "precipitation_daily_sum": {
+      "name": "Suma opadów (dzienna)"
+    },
+    "precipitation_last_3h": {
+      "name": "Opad (ostatnie 3h)"
+    },
+    "wind_speed": {
+      "name": "Prędkość wiatru"
+    },
+    "wind_gust": {
+      "name": "Porywy wiatru"
+    },
+    "wind_bearing": {
+      "name": "Kierunek wiatru"
+    },
+    "pressure": {
+      "name": "Ciśnienie"
+    },
+    "visibility": {
+      "name": "Widzialność"
+    },
+    "dew_point": {
+      "name": "Punkt rosy"
+    },
+    "location": {
+      "name": "Lokalizacja"
+    },
+    "sunrise": {
+      "name": "Wschód słońca"
+    },
+    "sunset": {
+      "name": "Zachód słońca"
+    },
+    "uv_index": {
+      "name": "Indeks UV"
+    }
   }
 }

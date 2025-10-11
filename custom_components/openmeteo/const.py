@@ -1,8 +1,6 @@
 """Constants for Open-Meteo integration."""
 from __future__ import annotations
 
-from typing import Final
-
 from homeassistant.components.weather import (
     ATTR_CONDITION_CLEAR_NIGHT,
     ATTR_CONDITION_CLOUDY,
@@ -169,6 +167,14 @@ CONF_ENABLED_SENSORS = "enabled_sensors"  # legacy (single list) – do not remo
 CONF_ENABLED_WEATHER_SENSORS = "enabled_weather_sensors"
 CONF_ENABLED_AQ_SENSORS = "enabled_aq_sensors"
 
+# Presets for bulk selection in config/options flow
+CONF_PRESET_WEATHER = "preset_weather"
+CONF_PRESET_AQ = "preset_aq"
+
+PRESET_KEEP = "keep"
+PRESET_ALL = "all"
+PRESET_NONE = "none"
+
 ALL_SENSOR_KEYS = [
     "temperature",
     "apparent_temperature",
@@ -267,6 +273,3 @@ SENSOR_LABELS = {
     "aqi_eu": {"pl": "EU AQI", "en": "EU AQI"},
     "location": {"pl": "Lokalizacja (lat,lon)", "en": "Location (lat,lon)"},
 }
-
-CONF_SELECT_ALL_WEATHER: Final = "select_all_weather"
-CONF_SELECT_ALL_AQ: Final = "select_all_aq"
