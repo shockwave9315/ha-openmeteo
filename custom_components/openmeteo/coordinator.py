@@ -596,3 +596,40 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await asyncio.sleep(1.5 ** attempt + random.random() / 2)
         
         raise UpdateFailed("Failed to fetch weather data after multiple attempts")
+
+    async def _fetch_air_quality(self, lat: float, lon: float) -> dict[str, Any] | None:
+        """Fetch air quality data from Open-Meteo Air Quality API."""
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "timezone": "auto",
+            "hourly": [
+                "pm2_5",
+                "pm10",
+                "carbon_monoxide",
+                "nitrogen_dioxide",
+                "sulphur_dioxide",
+                "ozone",
+                "us_aqi",
+                "european_aqi"
+            ],
+        }
+
+        session = async_get_clientsession(self.hass)
+        headers = {"User-Agent": HTTP_USER_AGENT}
+        
+        try:
+            async with session.get(
+                "https://air-quality-api.open-meteo.com/v1/air-quality",
+                params=params,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as resp:
+                if resp.status >= 400:
+                    text = await resp.text()
+                    _LOGGER.warning("Air Quality API error %d: %s", resp.status, text[:100])
+                    return None
+                return await resp.json()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+            _LOGGER.warning("Error fetching air quality data: %s", str(err))
+            return None
