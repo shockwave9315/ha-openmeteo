@@ -1,6 +1,8 @@
 """Constants for Open-Meteo integration."""
 from __future__ import annotations
 
+from typing import Final
+
 from homeassistant.components.weather import (
     ATTR_CONDITION_CLEAR_NIGHT,
     ATTR_CONDITION_CLOUDY,
@@ -265,3 +267,6 @@ SENSOR_LABELS = {
     "aqi_eu": {"pl": "EU AQI", "en": "EU AQI"},
     "location": {"pl": "Lokalizacja (lat,lon)", "en": "Location (lat,lon)"},
 }
+
+CONF_SELECT_ALL_WEATHER: Final = "select_all_weather"
+CONF_SELECT_ALL_AQ: Final = "select_all_aq"
