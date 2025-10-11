@@ -162,8 +162,10 @@ CONDITION_MAP = {
     99: ATTR_CONDITION_LIGHTNING_RAINY,  # Thunderstorm with heavy hail
 }
 
-# --- Sensor selection ---
-CONF_ENABLED_SENSORS = "enabled_sensors"
+# --- Sensor selection (grouped) ---
+CONF_ENABLED_SENSORS = "enabled_sensors"  # legacy (single list) – do not remove (compat)
+CONF_ENABLED_WEATHER_SENSORS = "enabled_weather_sensors"
+CONF_ENABLED_AQ_SENSORS = "enabled_aq_sensors"
 
 ALL_SENSOR_KEYS = [
     "temperature",
@@ -183,6 +185,7 @@ ALL_SENSOR_KEYS = [
     "sunset",
     "uv_index",
     "uv_index_max",
+    "location",
     "pm2_5",
     "pm10",
     "co",
@@ -191,7 +194,38 @@ ALL_SENSOR_KEYS = [
     "o3",
     "aqi_us",
     "aqi_eu",
+]
+
+WEATHER_SENSOR_KEYS = [
+    "temperature",
+    "apparent_temperature",
+    "humidity",
+    "pressure",
+    "dew_point",
+    "wind_speed",
+    "wind_gust",
+    "wind_bearing",
+    "precipitation_sum",
+    "precipitation_daily_sum",
+    "precipitation_last_3h",
+    "precipitation_probability",
+    "visibility",
+    "sunrise",
+    "sunset",
+    "uv_index",
+    "uv_index_max",
     "location",
+]
+
+AQ_SENSOR_KEYS = [
+    "pm2_5",
+    "pm10",
+    "co",
+    "no2",
+    "so2",
+    "o3",
+    "aqi_us",
+    "aqi_eu",
 ]
 
 SENSOR_LABELS = {

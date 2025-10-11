@@ -13,10 +13,12 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 
 from .const import (
-    ALL_SENSOR_KEYS,
+    AQ_SENSOR_KEYS,
     CONF_API_PROVIDER,
     CONF_AREA_NAME_OVERRIDE,
     CONF_ENABLED_SENSORS,
+    CONF_ENABLED_AQ_SENSORS,
+    CONF_ENABLED_WEATHER_SENSORS,
     CONF_ENTITY_ID,
     CONF_MIN_TRACK_INTERVAL,
     CONF_MODE,
@@ -36,6 +38,7 @@ from .const import (
     MODE_STATIC,
     MODE_TRACK,
     SENSOR_LABELS,
+    WEATHER_SENSOR_KEYS,
 )
 from .coordinator import async_reverse_geocode
 from .helpers import (
@@ -121,18 +124,54 @@ def _build_schema(
         d = SENSOR_LABELS.get(key) or {}
         return d.get(lang) or d.get("en") or key
 
-    options_labeled = [{"label": _label_for(k), "value": k} for k in ALL_SENSOR_KEYS]
+    weather_labeled = [
+        {"label": _label_for(k), "value": k} for k in WEATHER_SENSOR_KEYS
+    ]
+    aq_labeled = [{"label": _label_for(k), "value": k} for k in AQ_SENSOR_KEYS]
+
+    stored_weather = defaults.get(CONF_ENABLED_WEATHER_SENSORS)
+    stored_aq = defaults.get(CONF_ENABLED_AQ_SENSORS)
+
+    if isinstance(stored_weather, list) or isinstance(stored_aq, list):
+        def_sel_weather = (
+            stored_weather if isinstance(stored_weather, list) else WEATHER_SENSOR_KEYS
+        )
+        def_sel_aq = stored_aq if isinstance(stored_aq, list) else AQ_SENSOR_KEYS
+    else:
+        legacy = defaults.get(CONF_ENABLED_SENSORS)
+        if isinstance(legacy, list) and legacy:
+            legacy_set = set(legacy)
+            def_sel_weather = [
+                k for k in WEATHER_SENSOR_KEYS if k in legacy_set
+            ] or WEATHER_SENSOR_KEYS
+            def_sel_aq = [k for k in AQ_SENSOR_KEYS if k in legacy_set] or AQ_SENSOR_KEYS
+        else:
+            def_sel_weather = WEATHER_SENSOR_KEYS
+            def_sel_aq = AQ_SENSOR_KEYS
 
     extra[
         vol.Optional(
-            CONF_ENABLED_SENSORS,
-            default=defaults.get(CONF_ENABLED_SENSORS, ALL_SENSOR_KEYS),
+            CONF_ENABLED_WEATHER_SENSORS,
+            default=def_sel_weather,
         )
     ] = selector.SelectSelector(
         selector.SelectSelectorConfig(
-            options=options_labeled,
+            options=weather_labeled,
             multiple=True,
-            mode=selector.SelectSelectorMode.LIST,  # LIST = checkboxy
+            mode=selector.SelectSelectorMode.LIST,
+        )
+    )
+
+    extra[
+        vol.Optional(
+            CONF_ENABLED_AQ_SENSORS,
+            default=def_sel_aq,
+        )
+    ] = selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=aq_labeled,
+            multiple=True,
+            mode=selector.SelectSelectorMode.LIST,
         )
     )
     if include_use_place:
@@ -515,6 +554,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     new_options.pop(CONF_ENTITY_ID, None)
                     new_options.pop(CONF_MIN_TRACK_INTERVAL, None)
 
+                new_options.pop(CONF_ENABLED_SENSORS, None)
                 new_options.update(user_input)
                 new_options[CONF_MODE] = self._mode
 

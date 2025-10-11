@@ -46,7 +46,9 @@ from .const import (
     ALL_SENSOR_KEYS,
     AQ_HOURLY_KEYS,
     ATTRIBUTION,
+    CONF_ENABLED_AQ_SENSORS,
     CONF_ENABLED_SENSORS,
+    CONF_ENABLED_WEATHER_SENSORS,
     CONF_MODE,
     CONF_USE_PLACE_AS_DEVICE_NAME,
     DEFAULT_USE_PLACE_AS_DEVICE_NAME,
@@ -434,12 +436,40 @@ async def async_setup_entry(
         stored.get("coordinator") if isinstance(stored, dict) else stored
     )
 
-    enabled = config_entry.options.get(CONF_ENABLED_SENSORS)
-    if enabled is None:
-        enabled = config_entry.data.get(CONF_ENABLED_SENSORS)
-    if not isinstance(enabled, list) or not enabled:
-        enabled = ALL_SENSOR_KEYS[:]
-    enabled_set = set(enabled)
+    def _as_list(source: Mapping[str, Any] | None, key: str) -> list[str] | None:
+        if not source:
+            return None
+        value = source.get(key)
+        return value if isinstance(value, list) else None
+
+    options = config_entry.options or {}
+    data = config_entry.data or {}
+
+    enabled_weather = _as_list(options, CONF_ENABLED_WEATHER_SENSORS)
+    if enabled_weather is None:
+        enabled_weather = _as_list(data, CONF_ENABLED_WEATHER_SENSORS)
+    enabled_aq = _as_list(options, CONF_ENABLED_AQ_SENSORS)
+    if enabled_aq is None:
+        enabled_aq = _as_list(data, CONF_ENABLED_AQ_SENSORS)
+
+    if enabled_weather is None:
+        enabled_weather = []
+    if enabled_aq is None:
+        enabled_aq = []
+
+    if not (enabled_weather or enabled_aq):
+        legacy = options.get(CONF_ENABLED_SENSORS)
+        if not isinstance(legacy, list) or not legacy:
+            legacy = data.get(CONF_ENABLED_SENSORS)
+        if isinstance(legacy, list) and legacy:
+            combined = [k for k in legacy if k in ALL_SENSOR_KEYS]
+            enabled_weather = combined
+            enabled_aq = []
+        else:
+            enabled_weather = ALL_SENSOR_KEYS[:]
+            enabled_aq = []
+
+    enabled_set = set(enabled_weather) | set(enabled_aq)
 
     entities = []
     for sensor_type in SENSOR_TYPES:

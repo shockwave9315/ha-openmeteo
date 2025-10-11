@@ -1,3 +1,6 @@
+## 1.6.0a10
+- Grouped sensor selection (Weather vs AQ).
+
 ## 1.6.0a8
 - feat(config): Add selectable sensors (multi-select) in config/options.
 
