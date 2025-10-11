@@ -167,14 +167,9 @@ CONF_ENABLED_SENSORS = "enabled_sensors"  # legacy (single list) – do not remo
 CONF_ENABLED_WEATHER_SENSORS = "enabled_weather_sensors"
 CONF_ENABLED_AQ_SENSORS = "enabled_aq_sensors"
 
-# Presets for bulk selection in config/options flow
-CONF_PRESET_WEATHER = "preset_weather"
-CONF_PRESET_AQ = "preset_aq"
-CONF_PRESET_INFO = "preset_info"
-
-PRESET_KEEP = "keep"
-PRESET_ALL = "all"
-PRESET_NONE = "none"
+# Bulk selection toggles in config/options flow
+CONF_WEATHER_TOGGLE_ALL = "weather_toggle_all"
+CONF_AQ_TOGGLE_ALL = "aq_toggle_all"
 
 ALL_SENSOR_KEYS = [
     "temperature",
