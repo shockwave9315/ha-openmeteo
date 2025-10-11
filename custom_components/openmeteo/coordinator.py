@@ -56,11 +56,24 @@ async def async_reverse_geocode(hass: HomeAssistant, lat: float, lon: float) -> 
     Module-level to allow tests to patch this symbol.
     """
     session = async_get_clientsession(hass)
+    hass_lang = (getattr(hass.config, "language", None) or "").strip()
+    if hass_lang:
+        lang_param = hass_lang.split("-", 1)[0]
+        accept_language = hass_lang
+    else:
+        lang_param = "en"
+        accept_language = "en"
 
     # 1) Open-Meteo
     try:
         url = "https://geocoding-api.open-meteo.com/v1/reverse"
-        params = {"latitude": lat, "longitude": lon, "count": 1, "language": "pl", "format": "json"}
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "count": 1,
+            "language": lang_param,
+            "format": "json",
+        }
         async with session.get(url, params=params, timeout=10) as resp:
             if resp.status != 200:
                 raise RuntimeError(f"open-meteo geocoding http {resp.status}")
@@ -84,7 +97,7 @@ async def async_reverse_geocode(hass: HomeAssistant, lat: float, lon: float) -> 
             "lat": str(lat),
             "lon": str(lon),
             "zoom": "10",
-            "accept-language": "pl",
+            "accept-language": accept_language,
         }
         headers = {"User-Agent": "HomeAssistant-OpenMeteo/1.0 (+https://www.home-assistant.io)"}
         async with session.get(url, params=params, headers=headers, timeout=10) as resp:
@@ -153,6 +166,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_data: dict[str, Any] | None = None
         self._last_geocode_at: datetime | None = None
         self._last_options_save_at: datetime | None = None
+        self._suppress_next_reload = False
         # Cooldowns from options (fall back to defaults)
         try:
             rg_min = int(entry.options.get(
@@ -399,7 +413,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if loc_name and self._should_update_entry_title(loc_name, fallback_label, data):
             try:
-                self.hass.config_entries.async_update_entry(self.entry, title=loc_name)
+                self.async_update_entry_no_reload(title=loc_name)
             except Exception:
                 pass
 
@@ -482,7 +496,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         self._last_options_save_at is None
                         or now - self._last_options_save_at >= self._opt_save_cooldown_td
                     ):
-                        self.hass.config_entries.async_update_entry(self.entry, options=opts)
+                        self.async_update_entry_no_reload(options=opts)
                         self._last_options_save_at = now
                     else:
                         _LOGGER.debug("Options save skipped due to cooldown")
@@ -493,6 +507,30 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except UpdateFailed:
             if self._last_data is not None:
                 return self._last_data
+            raise
+
+    def consume_suppress_reload(self) -> bool:
+        """Return True exactly once if the next reload should be suppressed."""
+        if self._suppress_next_reload:
+            self._suppress_next_reload = False
+            return True
+        return False
+
+    def async_update_entry_no_reload(
+        self,
+        *,
+        data: dict[str, Any] | None = None,
+        options: dict[str, Any] | None = None,
+        title: str | None = None,
+    ) -> None:
+        """Update the config entry without triggering an automatic reload."""
+        self._suppress_next_reload = True
+        try:
+            self.hass.config_entries.async_update_entry(
+                self.entry, data=data, options=options, title=title
+            )
+        except Exception:
+            self._suppress_next_reload = False
             raise
 
     # Back-compat: wołane z __init__.py (track encji)
