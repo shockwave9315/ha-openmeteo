@@ -244,24 +244,23 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
                 )
                 reg.async_update_entity(self.entity_id, new_entity_id=desired)
         except Exception as ex:
-            _LOGGER.debug("[openmeteo] Could not force weather entity_id: %s", ex)
-
+            _LOGGER.debug("[openmeteo] Could not update entity_id: %s", ex)
+            
         # Initial sync of device name and entry title with current location
         try:
             self.hass.async_create_task(self._maybe_update_device_registry_name())
             self.hass.async_create_task(self._maybe_update_entry_title())
-        except Exception:
-            pass
-            _LOGGER.debug("[openmeteo] Could not force weather entity_id: %s", ex)
+        except Exception as ex:
+            _LOGGER.debug(
+                "[openmeteo] Could not update device registry or entry title: %s", 
+                ex,
+                exc_info=True
+            )
 
     def _handle_coordinator_update(self) -> None:
         self._update_friendly_name()
         self.async_write_ha_state()
-        try:
-            self.hass.async_create_task(self._maybe_update_device_registry_name())
-            self.hass.async_create_task(self._maybe_update_entry_title())
-        except Exception:
-            pass
+
     # -------------------------------------------------------------------------
     # Helpers for forecasts and values (centralized in helpers.py)
     # -------------------------------------------------------------------------
