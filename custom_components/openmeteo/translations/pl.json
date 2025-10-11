@@ -20,9 +20,7 @@
           "area_name_override": "Nazwa obszaru",
           "use_place_as_device_name": "Użyj nazwy miejsca jako nazwy urządzenia",
           "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)",
-          "weather_toggle_all": "Zaznacz wszystkie czujniki pogody",
-          "aq_toggle_all": "Zaznacz wszystkie czujniki jakości powietrza"
+          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
         },
         "data_description": {
           "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
@@ -65,9 +63,7 @@
           "area_name_override": "Nazwa obszaru",
           "use_place_as_device_name": "Użyj nazwy miejsca jako nazwy urządzenia",
           "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)",
-          "weather_toggle_all": "Zaznacz wszystkie czujniki pogody",
-          "aq_toggle_all": "Zaznacz wszystkie czujniki jakości powietrza"
+          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
         },
         "data_description": {
           "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
@@ -131,9 +127,7 @@
           "area_name_override": "Nazwa obszaru",
           "use_place_as_device_name": "Użyj nazwy miejsca jako nazwy urządzenia",
           "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)",
-          "weather_toggle_all": "Zaznacz wszystkie czujniki pogody",
-          "aq_toggle_all": "Zaznacz wszystkie czujniki jakości powietrza"
+          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
         },
         "data_description": {
           "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
@@ -157,9 +151,7 @@
           "api_provider": "Dostawca API",
           "area_name_override": "Nazwa obszaru",
           "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)",
-          "weather_toggle_all": "Zaznacz wszystkie czujniki pogody",
-          "aq_toggle_all": "Zaznacz wszystkie czujniki jakości powietrza"
+          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
         },
         "data_description": {
           "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
