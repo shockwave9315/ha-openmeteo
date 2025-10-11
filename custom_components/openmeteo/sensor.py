@@ -16,6 +16,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     DEGREE,
     PERCENTAGE,
+    UV_INDEX,
     UnitOfLength,
     UnitOfPrecipitationDepth,
     UnitOfPressure,
@@ -480,7 +481,7 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
         self._attr_has_entity_name = False
         self._attr_suggested_object_id = OBJECT_ID_PL.get("uv_index", "promieniowanie_uv")
         self._attr_unique_id = f"{config_entry.entry_id}:uv_index"
-        self._attr_native_unit_of_measurement = None
+        self._attr_native_unit_of_measurement = UV_INDEX
         self._attr_icon = "mdi:weather-sunny-alert"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_device_class = getattr(SensorDeviceClass, "UV_INDEX", None)
