@@ -81,6 +81,41 @@ DEFAULT_OPTIONS_SAVE_COOLDOWN_MIN = 1  # minute
 # Legacy default (seconds) retained for migration/back-compat only
 DEFAULT_OPTIONS_SAVE_COOLDOWN_SEC = 60  # seconds
 
+# -- Sensor selection option key --
+CONF_ENABLED_SENSORS = "enabled_sensors"
+
+# -- Full list of selectable sensors (weather + AQ) --
+ALL_SENSOR_KEYS = [
+    # Weather/current/hourly/daily
+    "temperature",
+    "apparent_temperature",
+    "humidity",
+    "pressure",
+    "dew_point",
+    "wind_speed",
+    "wind_gust",
+    "wind_bearing",
+    "precipitation_sum",
+    "precipitation_daily_sum",
+    "precipitation_last_3h",
+    "precipitation_probability",
+    "visibility",
+    "sunrise",
+    "sunset",
+    "location",
+    # UV (dedicated sensor class uses the same key)
+    "uv_index",
+    # Air Quality
+    "pm2_5",
+    "pm10",
+    "co",
+    "no2",
+    "so2",
+    "o3",
+    "aqi_us",
+    "aqi_eu",
+]
+
 DEFAULT_DAILY_VARIABLES = [
     "temperature_2m_max",
     "temperature_2m_min",

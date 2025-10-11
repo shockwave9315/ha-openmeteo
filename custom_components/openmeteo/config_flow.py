@@ -15,6 +15,7 @@ from homeassistant.helpers import selector
 from .const import (
     CONF_API_PROVIDER,
     CONF_AREA_NAME_OVERRIDE,
+    CONF_ENABLED_SENSORS,
     CONF_ENTITY_ID,
     CONF_MIN_TRACK_INTERVAL,
     CONF_MODE,
@@ -33,6 +34,7 @@ from .const import (
     DOMAIN,
     MODE_STATIC,
     MODE_TRACK,
+    ALL_SENSOR_KEYS,
 )
 from .coordinator import async_reverse_geocode
 from .helpers import (
@@ -112,6 +114,18 @@ def _build_schema(
             default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
         ): str,
     }
+    extra[
+        vol.Optional(
+            CONF_ENABLED_SENSORS,
+            default=defaults.get(CONF_ENABLED_SENSORS, ALL_SENSOR_KEYS),
+        )
+    ] = selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=ALL_SENSOR_KEYS,
+            multiple=True,
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
     if include_use_place:
         extra[vol.Required(
             CONF_USE_PLACE_AS_DEVICE_NAME,

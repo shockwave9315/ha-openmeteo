@@ -43,13 +43,15 @@ import logging
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
 from .const import (
-    CONF_MODE,
-    MODE_STATIC,
-    DOMAIN,
+    ALL_SENSOR_KEYS,
+    AQ_HOURLY_KEYS,
     ATTRIBUTION,
+    CONF_ENABLED_SENSORS,
+    CONF_MODE,
     CONF_USE_PLACE_AS_DEVICE_NAME,
     DEFAULT_USE_PLACE_AS_DEVICE_NAME,
-    AQ_HOURLY_KEYS,
+    DOMAIN,
+    MODE_STATIC,
 )
 
 # Conversion factor for carbon monoxide concentration reported in µg/m³.
@@ -432,18 +434,27 @@ async def async_setup_entry(
         stored.get("coordinator") if isinstance(stored, dict) else stored
     )
 
-    entities = [
-        OpenMeteoSensor(coordinator, config_entry, sensor_type)
-        for sensor_type in SENSOR_TYPES
-    ]
-    # Add UV sensor (not in SENSOR_TYPES to avoid duplication)
-    entities.append(OpenMeteoUvIndexSensor(coordinator, config_entry))
-    
-    # Add Air Quality sensors
-    entities.extend([
-        OpenMeteoAqSensor(coordinator, config_entry, sensor_type)
-        for sensor_type in AQ_SENSORS
-    ])
+    enabled = config_entry.options.get(CONF_ENABLED_SENSORS)
+    if enabled is None:
+        enabled = config_entry.data.get(CONF_ENABLED_SENSORS)
+    if not isinstance(enabled, list) or not enabled:
+        enabled = ALL_SENSOR_KEYS[:]
+    enabled_set = set(enabled)
+
+    entities = []
+    for sensor_type in SENSOR_TYPES:
+        if sensor_type not in enabled_set:
+            continue
+        entities.append(OpenMeteoSensor(coordinator, config_entry, sensor_type))
+
+    if "uv_index" in enabled_set:
+        # Add UV sensor (not in SENSOR_TYPES to avoid duplication)
+        entities.append(OpenMeteoUvIndexSensor(coordinator, config_entry))
+
+    for sensor_type in AQ_SENSORS:
+        if sensor_type not in enabled_set:
+            continue
+        entities.append(OpenMeteoAqSensor(coordinator, config_entry, sensor_type))
 
     # One-time migration of existing entities
     ent_reg = er.async_get(hass)

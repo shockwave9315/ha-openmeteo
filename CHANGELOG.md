@@ -1,3 +1,6 @@
+## 1.6.0a8
+- feat(config): Add selectable sensors (multi-select) in config/options.
+
 ## 1.4.72
 - feat(options): unify cooldown jednostki – `options_save_cooldown` w minutach (UI), z pełnym fallbackiem do legacy `*_sec`.
 - feat(i18n): tłumaczenia PL/EN zaktualizowane (etykiety + opisy) pod nowe pola.
