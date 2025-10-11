@@ -483,7 +483,7 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
         self._attr_native_unit_of_measurement = None
         self._attr_icon = "mdi:weather-sunny-alert"
         self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_device_class = SensorDeviceClass.UV_INDEX
+        self._attr_device_class = getattr(SensorDeviceClass, "UV_INDEX", None)
         self._attr_translation_key = "uv_index"
         # Explicit name to avoid blank label when has_entity_name is False
         self._attr_name = "Indeks UV"
