@@ -12,23 +12,25 @@
           "entity_id": "Tracker entity",
           "min_track_interval": "Min track interval (min)",
           "update_interval_min": "Update interval (min)",
-          "select_all_weather": "Select all (weather)",
           "enabled_weather_sensors": "🌦️ Weather sensors",
-          "select_all_aq": "Select all (air quality)",
           "enabled_aq_sensors": "💨 Air quality sensors",
           "enabled_sensors": "Sensors to create",
           "units": "Units",
           "api_provider": "API provider",
           "area_name_override": "Area name override",
           "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
-          "options_save_cooldown_min": "Options save cooldown (min)"
+          "options_save_cooldown_min": "Options save cooldown (min)",
+          "preset_weather": "Weather preset",
+          "preset_aq": "Air quality preset",
+          "preset_keep": "Keep current selection",
+          "preset_all": "Select all",
+          "preset_none": "Select none"
         },
         "data_description": {
           "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve place name from coordinates. Higher value = less battery/data usage.",
           "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
         }
-      }
-      ,
+      },
       "mode_details": {
         "title": "Open-Meteo",
         "description": "Fill in configuration details.",
@@ -39,9 +41,7 @@
           "entity_id": "Tracker entity",
           "min_track_interval": "Min track interval (min)",
           "update_interval_min": "Update interval (min)",
-          "select_all_weather": "Select all (weather)",
           "enabled_weather_sensors": "🌦️ Weather sensors",
-          "select_all_aq": "Select all (air quality)",
           "enabled_aq_sensors": "💨 Air quality sensors",
           "enabled_sensors": "Sensors to create",
           "units": "Units",
@@ -49,15 +49,19 @@
           "area_name_override": "Area name override",
           "use_place_as_device_name": "Use place name as device name",
           "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
-          "options_save_cooldown_min": "Options save cooldown (min)"
+          "options_save_cooldown_min": "Options save cooldown (min)",
+          "preset_weather": "Weather preset",
+          "preset_aq": "Air quality preset",
+          "preset_keep": "Keep current selection",
+          "preset_all": "Select all",
+          "preset_none": "Select none"
         },
         "data_description": {
           "use_place_as_device_name": "When enabled, the device in the Device Registry will be named after the place (e.g. Radłów). When disabled, your own custom device name is kept.",
           "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve a place name from coordinates. Higher value = less battery/data usage.",
           "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
         }
-      }
-      ,
+      },
       "search_place": {
         "title": "Open-Meteo",
         "description": "Search for a place (static mode).",
@@ -85,14 +89,30 @@
   },
   "entity": {
     "sensor": {
-      "pm2_5": { "name": "PM2.5" },
-      "pm10": { "name": "PM10" },
-      "carbon_monoxide": { "name": "Carbon Monoxide" },
-      "nitrogen_dioxide": { "name": "Nitrogen Dioxide" },
-      "sulphur_dioxide": { "name": "Sulphur Dioxide" },
-      "ozone": { "name": "Ozone" },
-      "us_aqi": { "name": "US AQI" },
-      "european_aqi": { "name": "European AQI" }
+      "pm2_5": {
+        "name": "PM2.5"
+      },
+      "pm10": {
+        "name": "PM10"
+      },
+      "carbon_monoxide": {
+        "name": "Carbon Monoxide"
+      },
+      "nitrogen_dioxide": {
+        "name": "Nitrogen Dioxide"
+      },
+      "sulphur_dioxide": {
+        "name": "Sulphur Dioxide"
+      },
+      "ozone": {
+        "name": "Ozone"
+      },
+      "us_aqi": {
+        "name": "US AQI"
+      },
+      "european_aqi": {
+        "name": "European AQI"
+      }
     }
   },
   "options": {
@@ -106,23 +126,25 @@
           "entity_id": "Tracker entity",
           "min_track_interval": "Min track interval (min)",
           "update_interval_min": "Update interval (min)",
-          "select_all_weather": "Select all (weather)",
           "enabled_weather_sensors": "🌦️ Weather sensors",
-          "select_all_aq": "Select all (air quality)",
           "enabled_aq_sensors": "💨 Air quality sensors",
           "enabled_sensors": "Sensors to create",
           "units": "Units",
           "api_provider": "API provider",
           "area_name_override": "Area name override",
           "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
-          "options_save_cooldown_min": "Options save cooldown (min)"
+          "options_save_cooldown_min": "Options save cooldown (min)",
+          "preset_weather": "Weather preset",
+          "preset_aq": "Air quality preset",
+          "preset_keep": "Keep current selection",
+          "preset_all": "Select all",
+          "preset_none": "Select none"
         },
         "data_description": {
           "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve place name from coordinates. Higher value = less battery/data usage.",
           "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
         }
-      }
-      ,
+      },
       "mode_details": {
         "title": "Open-Meteo options",
         "data": {
@@ -132,9 +154,7 @@
           "entity_id": "Tracker entity",
           "min_track_interval": "Min track interval (min)",
           "update_interval_min": "Update interval (min)",
-          "select_all_weather": "Select all (weather)",
           "enabled_weather_sensors": "🌦️ Weather sensors",
-          "select_all_aq": "Select all (air quality)",
           "enabled_aq_sensors": "💨 Air quality sensors",
           "enabled_sensors": "Sensors to create",
           "units": "Units",
@@ -142,7 +162,12 @@
           "area_name_override": "Area name override",
           "use_place_as_device_name": "Use place name as device name",
           "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
-          "options_save_cooldown_min": "Options save cooldown (min)"
+          "options_save_cooldown_min": "Options save cooldown (min)",
+          "preset_weather": "Weather preset",
+          "preset_aq": "Air quality preset",
+          "preset_keep": "Keep current selection",
+          "preset_all": "Select all",
+          "preset_none": "Select none"
         },
         "data_description": {
           "use_place_as_device_name": "When enabled, the device in the Device Registry will be named after the place (e.g. Radłów). When disabled, your own custom device name is kept.",
@@ -150,8 +175,7 @@
           "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
         }
       }
-    }
-,
+    },
     "error": {
       "missing_location": "Latitude and longitude are required",
       "missing_entity": "Tracking entity is required",
@@ -159,22 +183,56 @@
     }
   },
   "sensor": {
-    "temperature": {"name": "Temperature"},
-    "humidity": {"name": "Humidity"},
-    "apparent_temperature": {"name": "Apparent temperature"},
-    "precipitation_probability": {"name": "Precipitation probability"},
-    "precipitation_sum": {"name": "Precipitation (current hour)"},
-    "precipitation_daily_sum": {"name": "Daily precipitation sum"},
-    "precipitation_last_3h": {"name": "Precipitation (last 3h)"},
-    "wind_speed": {"name": "Wind speed"},
-    "wind_gust": {"name": "Wind gusts"},
-    "wind_bearing": {"name": "Wind direction"},
-    "pressure": {"name": "Pressure"},
-    "visibility": {"name": "Visibility"},
-    "dew_point": {"name": "Dew point"},
-    "location": {"name": "Location"},
-    "sunrise": {"name": "Sunrise"},
-    "sunset": {"name": "Sunset"},
-    "uv_index": {"name": "UV Index"}
+    "temperature": {
+      "name": "Temperature"
+    },
+    "humidity": {
+      "name": "Humidity"
+    },
+    "apparent_temperature": {
+      "name": "Apparent temperature"
+    },
+    "precipitation_probability": {
+      "name": "Precipitation probability"
+    },
+    "precipitation_sum": {
+      "name": "Precipitation (current hour)"
+    },
+    "precipitation_daily_sum": {
+      "name": "Daily precipitation sum"
+    },
+    "precipitation_last_3h": {
+      "name": "Precipitation (last 3h)"
+    },
+    "wind_speed": {
+      "name": "Wind speed"
+    },
+    "wind_gust": {
+      "name": "Wind gusts"
+    },
+    "wind_bearing": {
+      "name": "Wind direction"
+    },
+    "pressure": {
+      "name": "Pressure"
+    },
+    "visibility": {
+      "name": "Visibility"
+    },
+    "dew_point": {
+      "name": "Dew point"
+    },
+    "location": {
+      "name": "Location"
+    },
+    "sunrise": {
+      "name": "Sunrise"
+    },
+    "sunset": {
+      "name": "Sunset"
+    },
+    "uv_index": {
+      "name": "UV Index"
+    }
   }
 }
