@@ -477,10 +477,9 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     opts[OPT_LAST_LOCATION_NAME] = self.location_name
                     need_save = True
                 if need_save:
-                    # Debounce options persistence to reduce churn
-                    if (
-                        self._last_options_save_at is None
-                        or now - self._last_options_save_at >= self._opt_save_cooldown_td
+                    # Zapisz natychmiast, jeśli w tej iteracji zmieniły się koordy.
+                    if coords_changed or self._last_options_save_at is None or (
+                        now - self._last_options_save_at >= self._opt_save_cooldown_td
                     ):
                         self.async_update_entry_no_reload(options=opts)
                         self._last_options_save_at = now
