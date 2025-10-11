@@ -127,7 +127,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         name="Temperatura",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         icon="mdi:thermometer",
-        device_class="temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
         value_fn=lambda d: d.get("current_weather", {}).get("temperature"),
     ),
     "humidity": OpenMeteoSensorDescription(
@@ -136,7 +136,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         name="Wilgotność",
         native_unit_of_measurement=PERCENTAGE,
         icon="mdi:water-percent",
-        device_class="humidity",
+        device_class=SensorDeviceClass.HUMIDITY,
         value_fn=lambda d: _hourly_at_now(d, "relative_humidity_2m"),
     ),
     "apparent_temperature": OpenMeteoSensorDescription(
@@ -145,7 +145,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         name="Temperatura odczuwalna",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         icon="mdi:thermometer-alert",
-        device_class="temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
         value_fn=lambda d: _hourly_at_now(d, "apparent_temperature"),
     ),
     "precipitation_probability": OpenMeteoSensorDescription(
@@ -163,7 +163,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         name="Opad (bieżąca godzina)",
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         icon="mdi:cup-water",
-        device_class="precipitation",
+        device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda d: (_hourly_at_now(d, "precipitation") or 0)
         + (_hourly_at_now(d, "snowfall") or 0),
@@ -176,7 +176,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         name="Suma opadów (dzienna)",
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         icon="mdi:weather-pouring",
-        device_class="precipitation",
+        device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.TOTAL,
         value_fn=lambda d: _first_daily_value(d, "precipitation_sum"),
     ),
@@ -186,7 +186,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         name="Opad (ostatnie 3h)",
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         icon="mdi:weather-pouring",
-        device_class="precipitation",
+        device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda d: _hourly_sum_last_n(d, ["precipitation", "snowfall"], 3),
     ),
@@ -223,7 +223,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         name="Ciśnienie",
         native_unit_of_measurement=UnitOfPressure.HPA,
         icon="mdi:gauge",
-        device_class="pressure",
+        device_class=SensorDeviceClass.PRESSURE,
         value_fn=lambda d: _hourly_at_now(d, "pressure_msl"),
     ),
     "visibility": OpenMeteoSensorDescription(
@@ -241,7 +241,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         name="Punkt rosy",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         icon="mdi:water",
-        device_class="temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
         value_fn=lambda d: (d.get("current", {}) or {}).get("dewpoint_2m")
         or _hourly_at_now(d, "dewpoint_2m"),
     ),
@@ -265,7 +265,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         name="Wschód słońca",
         native_unit_of_measurement=None,
         icon="mdi:weather-sunset-up",
-        device_class="timestamp",
+        device_class=SensorDeviceClass.TIMESTAMP,
         value_fn=lambda d: _first_daily_dt(d, "sunrise"),
     ),
     "sunset": OpenMeteoSensorDescription(
@@ -274,7 +274,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         name="Zachód słońca",
         native_unit_of_measurement=None,
         icon="mdi:weather-sunset-down",
-        device_class="timestamp",
+        device_class=SensorDeviceClass.TIMESTAMP,
         value_fn=lambda d: _first_daily_dt(d, "sunset"),
     ),
     # UV: osobna klasa OpenMeteoUvIndexSensor
@@ -480,9 +480,10 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
         self._attr_has_entity_name = False
         self._attr_suggested_object_id = OBJECT_ID_PL.get("uv_index", "promieniowanie_uv")
         self._attr_unique_id = f"{config_entry.entry_id}:uv_index"
-        self._attr_native_unit_of_measurement = "UV Index"
+        self._attr_native_unit_of_measurement = None
         self._attr_icon = "mdi:weather-sunny-alert"
         self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_device_class = SensorDeviceClass.UV_INDEX
         self._attr_translation_key = "uv_index"
         # Explicit name to avoid blank label when has_entity_name is False
         self._attr_name = "Indeks UV"
