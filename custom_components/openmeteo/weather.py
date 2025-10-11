@@ -60,6 +60,47 @@ from .helpers import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _legacy_weather_object_ids(
+    config_entry: ConfigEntry, entry: er.RegistryEntry | None
+) -> set[str]:
+    """Return slugified legacy object_ids derived from titles/names."""
+
+    candidates: set[str] = set()
+    for candidate in (
+        config_entry.title,
+        (config_entry.data or {}).get(CONF_AREA_NAME_OVERRIDE),
+        (config_entry.options or {}).get(CONF_AREA_NAME_OVERRIDE),
+    ):
+        if candidate:
+            slug = slugify(str(candidate))
+            if slug:
+                candidates.add(slug)
+    if entry and entry.original_name:
+        slug = slugify(str(entry.original_name))
+        if slug:
+            candidates.add(slug)
+    return candidates
+
+
+def _should_normalize_weather_entity_id(
+    config_entry: ConfigEntry, entry: er.RegistryEntry
+) -> bool:
+    """Detect whether entity_id should be normalized to weather.open_meteo."""
+
+    if getattr(entry, "preferred_object_id", None):
+        return False
+
+    object_id = entry.entity_id.split(".", 1)[1] if "." in entry.entity_id else entry.entity_id
+    if object_id == "open_meteo":
+        return False
+
+    legacy_slugs = _legacy_weather_object_ids(config_entry, entry)
+    if not legacy_slugs:
+        return False
+
+    return object_id in legacy_slugs
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -80,14 +121,15 @@ async def async_setup_entry(
             suggested_object_id="open_meteo",
             config_entry=config_entry,
         )
-        desired = async_generate_entity_id("weather.{}", "open_meteo", hass, ent_reg)
-        if reg_entry.entity_id != desired:
-            _LOGGER.debug(
-                "[openmeteo] Pre-create: renaming weather entity_id %s -> %s",
-                reg_entry.entity_id,
-                desired,
-            )
-            ent_reg.async_update_entity(reg_entry.entity_id, new_entity_id=desired)
+        if _should_normalize_weather_entity_id(config_entry, reg_entry):
+            desired = async_generate_entity_id("weather.{}", "open_meteo", hass, ent_reg)
+            if reg_entry.entity_id != desired:
+                _LOGGER.debug(
+                    "[openmeteo] Pre-create: renaming weather entity_id %s -> %s",
+                    reg_entry.entity_id,
+                    desired,
+                )
+                ent_reg.async_update_entity(reg_entry.entity_id, new_entity_id=desired)
     except Exception as ex:
         _LOGGER.debug("[openmeteo] Pre-create weather entity failed: %s", ex)
     for entry in list(ent_reg.entities.values()):
@@ -124,20 +166,27 @@ async def async_migrate_weather_entry(
 
     new_uid = f"{config_entry.entry_id}-weather"
 
-    # Jeśli już jest ustawione poprawnie i entity_id jest zgodne, nic nie rób
-    if old_uid == new_uid and ent_id.endswith(".open_meteo"):
+    updates: dict[str, Any] = {}
+    if old_uid != new_uid:
+        updates["new_unique_id"] = new_uid
+
+    if _should_normalize_weather_entity_id(config_entry, entry):
+        reg = er.async_get(hass)
+        desired = async_generate_entity_id("weather.{}", "open_meteo", hass, reg)
+        if ent_id != desired:
+            updates["new_entity_id"] = desired
+
+    if not updates:
         return False
 
-    reg = er.async_get(hass)
-    new_entity_id = async_generate_entity_id("weather.{}", "open_meteo", hass, reg)
     _LOGGER.debug(
-        "[openmeteo] Weather migrating entity: %s -> %s, unique_id: %s -> %s",
+        "[openmeteo] Weather migrating entity: %s -> %s (unique_id: %s -> %s)",
         ent_id,
-        new_entity_id,
-        old_uid,
+        updates.get("new_entity_id", ent_id),
+        old_uid or "",
         new_uid,
     )
-    reg.async_update_entity(ent_id, new_unique_id=new_uid, new_entity_id=new_entity_id)
+    er.async_get(hass).async_update_entity(ent_id, **updates)
     return True
 
 
@@ -232,7 +281,7 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         new_title = str(loc) if loc else None
         try:
             if new_title and self._config_entry.title != new_title:
-                self.hass.config_entries.async_update_entry(self._config_entry, title=new_title)
+                self.coordinator.async_update_entry_no_reload(title=new_title)
         except Exception as ex:
             _LOGGER.debug("[openmeteo] Entry title sync skipped: %s", ex)
 
@@ -244,12 +293,18 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         # Wymuś stabilny entity_id: weather.open_meteo (z ewentualnym sufiksem, jeśli zajęte)
         try:
             reg = er.async_get(self.hass)
-            desired = async_generate_entity_id("weather.{}", "open_meteo", self.hass, reg)
-            if self.entity_id != desired:
-                _LOGGER.debug(
-                    "[openmeteo] Forcing weather entity_id %s -> %s", self.entity_id, desired
+            reg_entry = reg.async_get(self.entity_id)
+            if reg_entry and _should_normalize_weather_entity_id(self._config_entry, reg_entry):
+                desired = async_generate_entity_id(
+                    "weather.{}", "open_meteo", self.hass, reg
                 )
-                reg.async_update_entity(self.entity_id, new_entity_id=desired)
+                if self.entity_id != desired:
+                    _LOGGER.debug(
+                        "[openmeteo] Normalizing weather entity_id %s -> %s",
+                        self.entity_id,
+                        desired,
+                    )
+                    reg.async_update_entity(self.entity_id, new_entity_id=desired)
         except Exception as ex:
             _LOGGER.debug("[openmeteo] Could not update entity_id: %s", ex)
             

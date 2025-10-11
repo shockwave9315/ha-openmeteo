@@ -164,11 +164,12 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         icon="mdi:cup-water",
         device_class="precipitation",
+        state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda d: (_hourly_at_now(d, "precipitation") or 0)
         + (_hourly_at_now(d, "snowfall") or 0),
     ),
 
-        
+
     "precipitation_daily_sum": OpenMeteoSensorDescription(
         key="precipitation_daily_sum",
         translation_key="precipitation_daily_sum",
@@ -176,6 +177,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         icon="mdi:weather-pouring",
         device_class="precipitation",
+        state_class=SensorStateClass.TOTAL,
         value_fn=lambda d: _first_daily_value(d, "precipitation_sum"),
     ),
     "precipitation_last_3h": OpenMeteoSensorDescription(
@@ -185,6 +187,7 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
         icon="mdi:weather-pouring",
         device_class="precipitation",
+        state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda d: _hourly_sum_last_n(d, ["precipitation", "snowfall"], 3),
     ),
     "wind_speed": OpenMeteoSensorDescription(
