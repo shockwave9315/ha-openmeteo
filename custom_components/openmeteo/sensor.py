@@ -32,7 +32,12 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import async_generate_entity_id
-from .helpers import hourly_at_now as _hourly_at_now, hourly_sum_last_n as _hourly_sum_last_n, extra_attrs as _extra_attrs
+from .helpers import (
+    hourly_at_now as _hourly_at_now, 
+    hourly_sum_last_n as _hourly_sum_last_n, 
+    extra_attrs as _extra_attrs,
+    aq_hour_value as _aq_hour_value,
+)
 import logging
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
@@ -43,6 +48,7 @@ from .const import (
     ATTRIBUTION,
     CONF_USE_PLACE_AS_DEVICE_NAME,
     DEFAULT_USE_PLACE_AS_DEVICE_NAME,
+    AQ_HOURLY_KEYS,
 )
 
 # Polish slugs for sensor types
@@ -281,6 +287,82 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
     # UV: osobna klasa OpenMeteoUvIndexSensor
 }
 
+# Air Quality Sensors
+AQ_SENSORS: dict[str, OpenMeteoSensorDescription] = {
+    "pm2_5": OpenMeteoSensorDescription(
+        key="pm2_5",
+        translation_key="pm2_5",
+        name="PM2.5",
+        native_unit_of_measurement="µg/m³",
+        icon="mdi:blur",
+        device_class=SensorDeviceClass.PM25,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    "pm10": OpenMeteoSensorDescription(
+        key="pm10",
+        translation_key="pm10",
+        name="PM10",
+        native_unit_of_measurement="µg/m³",
+        icon="mdi:blur",
+        device_class=SensorDeviceClass.PM10,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    "co": OpenMeteoSensorDescription(
+        key="co",
+        translation_key="carbon_monoxide",
+        name="Tlenek węgla",
+        native_unit_of_measurement="µg/m³",
+        icon="mdi:molecule-co",
+        device_class=SensorDeviceClass.CO,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    "no2": OpenMeteoSensorDescription(
+        key="no2",
+        translation_key="nitrogen_dioxide",
+        name="Dwutlenek azotu",
+        native_unit_of_measurement="µg/m³",
+        icon="mdi:chemical-weapon",
+        device_class=SensorDeviceClass.NITROGEN_DIOXIDE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    "so2": OpenMeteoSensorDescription(
+        key="so2",
+        translation_key="sulphur_dioxide",
+        name="Dwutlenek siarki",
+        native_unit_of_measurement="µg/m³",
+        icon="mdi:chemical-weapon",
+        device_class=SensorDeviceClass.SULPHUR_DIOXIDE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    "o3": OpenMeteoSensorDescription(
+        key="o3",
+        translation_key="ozone",
+        name="Ozon",
+        native_unit_of_measurement="µg/m³",
+        icon="mdi:chemical-weapon",
+        device_class=SensorDeviceClass.OZONE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    "aqi_us": OpenMeteoSensorDescription(
+        key="aqi_us",
+        translation_key="us_aqi",
+        name="US AQI",
+        native_unit_of_measurement=None,
+        icon="mdi:gauge",
+        device_class=None,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    "aqi_eu": OpenMeteoSensorDescription(
+        key="aqi_eu",
+        translation_key="european_aqi",
+        name="European AQI",
+        native_unit_of_measurement=None,
+        icon="mdi:gauge",
+        device_class=None,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+}
+
 
 async def async_migrate_entry(hass, config_entry, entry: er.RegistryEntry) -> bool:
     """Migrate old unique_id/entity_id to the new scheme."""
@@ -347,10 +429,16 @@ async def async_setup_entry(
         OpenMeteoSensor(coordinator, config_entry, sensor_type)
         for sensor_type in SENSOR_TYPES
     ]
-    # Dedykowany sensor UV (bez duplikatu w SENSOR_TYPES)
+    # Add UV sensor (not in SENSOR_TYPES to avoid duplication)
     entities.append(OpenMeteoUvIndexSensor(coordinator, config_entry))
+    
+    # Add Air Quality sensors
+    entities.extend([
+        OpenMeteoAqSensor(coordinator, config_entry, sensor_type)
+        for sensor_type in AQ_SENSORS
+    ])
 
-    # Jednorazowa migracja istniejących encji
+    # One-time migration of existing entities
     ent_reg = er.async_get(hass)
     for entry in list(ent_reg.entities.values()):
         if entry.platform == "openmeteo" and entry.domain == "sensor" and entry.config_entry_id == config_entry.entry_id:
@@ -501,36 +589,18 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
         """Return the UV index (prefer current, else hourly@now)."""
         if not self.coordinator.data:
             return None
-        uv_now = (self.coordinator.data.get("current") or {}).get("uv_index")
-        if isinstance(uv_now, (int, float)):
-            return round(uv_now, 2)
-        uv_hourly = _hourly_at_now(self.coordinator.data, "uv_index")
-        return round(uv_hourly, 2) if isinstance(uv_hourly, (int, float)) else None
 
+        # Try current_weather first, fall back to hourly
+        uv = (self.coordinator.data.get("current_weather") or {}).get("uv_index")
+        if uv is not None:
+            return uv
+
+        return _hourly_at_now(self.coordinator.data, "uv_index")
 
     @property
     def extra_state_attributes(self):
         attrs = _extra_attrs(self.coordinator.data or {})
-        try:
-            store = (
-                self.hass.data.get(DOMAIN, {})
-                .get("entries", {})
-                .get(self._config_entry.entry_id, {})
-            )
-            src = store.get("src")
-            if src:
-                attrs["om_source"] = src
-
-            lat = store.get("lat", attrs.get("latitude"))
-            lon = store.get("lon", attrs.get("longitude"))
-            if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-                attrs["om_coords_used"] = f"{float(lat):.6f},{float(lon):.6f}"
-
-            place = (self.coordinator.data or {}).get("location_name") or store.get("place")
-            if place:
-                attrs["om_place_name"] = place
-        except Exception:
-            pass
+        attrs["attribution"] = ATTRIBUTION
         return attrs
 
     async def async_added_to_hass(self) -> None:
@@ -560,3 +630,86 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
     @callback
     def _handle_place_update(self) -> None:
         self.async_write_ha_state()
+
+
+class OpenMeteoAqSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorEntity):
+    """Air Quality sensor for Open-Meteo integration."""
+
+    def __init__(
+        self,
+        coordinator: OpenMeteoDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        sensor_type: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._sensor_type = sensor_type
+        self._config_entry = config_entry
+        self.entity_description = AQ_SENSORS[sensor_type]
+        
+        # Set entity attributes
+        self._attr_has_entity_name = False
+        self._attr_suggested_object_id = f"{sensor_type}_aq"
+        self._attr_unique_id = f"{config_entry.entry_id}:{sensor_type}_aq"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        
+        # Set device info
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, config_entry.entry_id)},
+            name=config_entry.title,
+            manufacturer="Open-Meteo",
+        )
+
+    @property
+    def native_value(self) -> float | int | None:
+        """Return the state of the sensor."""
+        if not self.coordinator.data:
+            return None
+            
+        value = _aq_hour_value(self.coordinator.data, AQ_HOURLY_KEYS[self._sensor_type])
+        
+        # Round AQI values to integers
+        if self._sensor_type in ("aqi_us", "aqi_eu") and value is not None:
+            try:
+                return round(float(value))
+            except (TypeError, ValueError):
+                return None
+                
+        return value
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        if not self.coordinator.last_update_success:
+            return False
+            
+        # Check if we have AQ data
+        return bool((self.coordinator.data or {}).get("aq") is not None)
+
+    @property
+    def extra_state_attributes(self):
+        """Return the state attributes."""
+        attrs = _extra_attrs(self.coordinator.data or {})
+        attrs["attribution"] = ATTRIBUTION
+        return attrs
+
+    async def async_added_to_hass(self) -> None:
+        """When entity is added to hass."""
+        await super().async_added_to_hass()
+        store = (
+            self.hass.data.get(DOMAIN, {})
+            .get("entries", {})
+            .setdefault(self._config_entry.entry_id, {})
+        )
+        store.setdefault("entities", []).append(self)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Run when entity will be removed from hass."""
+        store = (
+            self.hass.data.get(DOMAIN, {})
+            .get("entries", {})
+            .get(self._config_entry.entry_id)
+        )
+        if store and self in store.get("entities", []):
+            store["entities"].remove(self)
+        await super().async_will_remove_from_hass()

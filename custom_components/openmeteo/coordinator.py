@@ -429,60 +429,26 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed("No valid coordinates available")
         latitude, longitude = self._cached
 
-        params = {
-            "latitude": latitude,
-            "longitude": longitude,
-            "current_weather": "true",
-            "hourly": ",".join(DEFAULT_HOURLY_VARIABLES),
-            "daily": ",".join(DEFAULT_DAILY_VARIABLES),
-            "temperature_unit": "celsius",
-            "windspeed_unit": "kmh",
-            "precipitation_unit": "mm",
-            "timezone": "auto",
-            "timeformat": "iso8601",
-        }
-        params["current"] = ",".join(
-            [
-                "temperature_2m",
-                "relative_humidity_2m",
-                "dewpoint_2m",
-                "pressure_msl",
-                "wind_speed_10m",
-                "wind_direction_10m",
-                "wind_gusts_10m",
-                "weathercode",
-                "cloud_cover",
-                "precipitation",
-                "visibility",
-            ]
-        )
-
-        session = async_get_clientsession(self.hass)
-        headers = {"User-Agent": HTTP_USER_AGENT}
+        # Fetch weather data
         try:
-            for attempt in range(3):
-                try:
-                    async with session.get(
-                        URL,
-                        params=params,
-                        headers=headers,
-                        timeout=aiohttp.ClientTimeout(total=20),
-                    ) as resp:
-                        if resp.status >= 400:
-                            text = await resp.text()
-                            raise UpdateFailed(f"API error {resp.status}: {text[:100]}")
-                        api_data = await resp.json()
-                        self._last_data = api_data
-                        break
-                except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-                    if attempt == 2:
-                        raise UpdateFailed(f"Network error: {err}")
-                    await asyncio.sleep(1.5 ** attempt + random.random() / 2)
-            if self._last_data is None:
-                raise UpdateFailed("No data received")
+            weather_data = await self._fetch_weather_data(latitude, longitude)
+            self._last_data = weather_data
+            
+            # Add location metadata
             self._last_data["location"] = {"latitude": latitude, "longitude": longitude}
             self._last_data["location_name"] = loc_name
             self._last_data["last_location_update"] = last_loc_ts
+            
+            # Try to fetch air quality data
+            try:
+                aq_data = await self._fetch_air_quality(latitude, longitude)
+                if aq_data and 'hourly' in aq_data:
+                    self._last_data["aq"] = aq_data
+                    _LOGGER.debug("Successfully fetched air quality data")
+                else:
+                    _LOGGER.warning("No air quality data in API response")
+            except Exception as err:
+                _LOGGER.warning("Error fetching air quality data: %s", str(err), exc_info=True)
 
             # persist last accepted coords / location name in entry.options
             try:
@@ -580,3 +546,53 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsub_tracked = async_track_state_change_event(
             self.hass, [entity_id], _on_state_change
         )
+
+    async def _fetch_weather_data(self, latitude: float, longitude: float) -> dict[str, Any]:
+        """Fetch weather data from Open-Meteo API."""
+        params = {
+            "latitude": latitude,
+            "longitude": longitude,
+            "current_weather": "true",
+            "hourly": ",".join(DEFAULT_HOURLY_VARIABLES),
+            "daily": ",".join(DEFAULT_DAILY_VARIABLES),
+            "temperature_unit": "celsius",
+            "windspeed_unit": "kmh",
+            "precipitation_unit": "mm",
+            "timezone": "auto",
+            "timeformat": "iso8601",
+        }
+        params["current"] = ",".join([
+            "temperature_2m",
+            "relative_humidity_2m",
+            "dewpoint_2m",
+            "pressure_msl",
+            "wind_speed_10m",
+            "wind_direction_10m",
+            "wind_gusts_10m",
+            "weathercode",
+            "cloud_cover",
+            "precipitation",
+            "visibility",
+        ])
+
+        session = async_get_clientsession(self.hass)
+        headers = {"User-Agent": HTTP_USER_AGENT}
+        
+        for attempt in range(3):
+            try:
+                async with session.get(
+                    URL,
+                    params=params,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=20),
+                ) as resp:
+                    if resp.status >= 400:
+                        text = await resp.text()
+                        raise UpdateFailed(f"API error {resp.status}: {text[:100]}")
+                    return await resp.json()
+            except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+                if attempt == 2:
+                    raise UpdateFailed(f"Network error: {err}")
+                await asyncio.sleep(1.5 ** attempt + random.random() / 2)
+        
+        raise UpdateFailed("Failed to fetch weather data after multiple attempts")

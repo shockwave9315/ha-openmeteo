@@ -74,6 +74,18 @@
       "network_error": "Błąd sieci podczas wyszukiwania. Spróbuj ponownie."
     }
   },
+  "entity": {
+    "sensor": {
+      "pm2_5": { "name": "PM2.5" },
+      "pm10": { "name": "PM10" },
+      "carbon_monoxide": { "name": "Tlenek węgla" },
+      "nitrogen_dioxide": { "name": "Dwutlenek azotu" },
+      "sulphur_dioxide": { "name": "Dwutlenek siarki" },
+      "ozone": { "name": "Ozon" },
+      "us_aqi": { "name": "US AQI" },
+      "european_aqi": { "name": "Europejski AQI" }
+    }
+  },
   "options": {
     "step": {
       "init": {

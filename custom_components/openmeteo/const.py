@@ -111,6 +111,18 @@ DEFAULT_HOURLY_VARIABLES = [
     "uv_index",
 ]
 
+# Air Quality API keys mapping
+AQ_HOURLY_KEYS = {
+    "pm2_5": "pm2_5",
+    "pm10": "pm10",
+    "co": "carbon_monoxide",
+    "no2": "nitrogen_dioxide",
+    "so2": "sulphur_dioxide",
+    "o3": "ozone",
+    "aqi_us": "us_aqi",
+    "aqi_eu": "european_aqi",
+}
+
 # API
 URL = "https://api.open-meteo.com/v1/forecast"
 API_URL = URL  # alias dla starszych importów

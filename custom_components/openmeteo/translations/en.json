@@ -73,6 +73,18 @@
       "network_error": "Network error during search. Please try again."
     }
   },
+  "entity": {
+    "sensor": {
+      "pm2_5": { "name": "PM2.5" },
+      "pm10": { "name": "PM10" },
+      "carbon_monoxide": { "name": "Carbon Monoxide" },
+      "nitrogen_dioxide": { "name": "Nitrogen Dioxide" },
+      "sulphur_dioxide": { "name": "Sulphur Dioxide" },
+      "ozone": { "name": "Ozone" },
+      "us_aqi": { "name": "US AQI" },
+      "european_aqi": { "name": "European AQI" }
+    }
+  },
   "options": {
     "step": {
       "init": {

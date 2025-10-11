@@ -514,19 +514,41 @@ def format_postal(country_code: str | None, postal: str | None) -> str | None:
     - PL: enforce NN-NNN
     - others: return as-is (stripped) if non-empty
     """
-    if not postal:
+    if not country_code or not postal:
+        return postal.strip() if postal else None
+
+    country = (country_code or "").upper()
+    pc = postal.strip()
+
+    if country == "PL" and len(pc) >= 5:
+        # PL: ensure NN-NNN format (e.g., 00-001)
+        pc = pc.replace("-", "")
+        if len(pc) >= 5:
+            return f"{pc[:2]}-{pc[2:5]}"
+    return pc
+
+
+def aq_hour_value(data: dict, key: str) -> Any:
+    """Get air quality value for the current hour from the data structure.
+
+    Args:
+        data: The data dictionary containing 'aq' key with 'hourly' data
+        key: The air quality key to retrieve (e.g., 'pm2_5', 'pm10')
+
+    Returns:
+        The value for the current hour, or None if not available
+    """
+    aq = (data or {}).get("aq") or {}
+    hourly = aq.get("hourly") or {}
+    times = hourly.get("time") or []
+
+    # Use the same timezone and hour calculation as the main data
+    idx = hourly_index_at_now({"hourly": {"time": times}, "timezone": data.get("timezone")})
+    if idx is None:
         return None
-    cc = (country_code or "").upper()
-    p = postal.strip()
-    if not p:
+
+    values = hourly.get(key)
+    if not values or not isinstance(values, (list, tuple)) or idx >= len(values):
         return None
-    if cc == "PL":
-        # keep only digits and format NN-NNN if length==5
-        digits = "".join(ch for ch in p if ch.isdigit())
-        if len(digits) == 5:
-            return f"{digits[:2]}-{digits[2:]}"
-        # if already contains dash and looks fine, return as-is
-        if len(p) >= 5 and "-" in p:
-            return p
-        return p
-    return p
+
+    return values[idx]
