@@ -81,41 +81,6 @@ DEFAULT_OPTIONS_SAVE_COOLDOWN_MIN = 1  # minute
 # Legacy default (seconds) retained for migration/back-compat only
 DEFAULT_OPTIONS_SAVE_COOLDOWN_SEC = 60  # seconds
 
-# -- Sensor selection option key --
-CONF_ENABLED_SENSORS = "enabled_sensors"
-
-# -- Full list of selectable sensors (weather + AQ) --
-ALL_SENSOR_KEYS = [
-    # Weather/current/hourly/daily
-    "temperature",
-    "apparent_temperature",
-    "humidity",
-    "pressure",
-    "dew_point",
-    "wind_speed",
-    "wind_gust",
-    "wind_bearing",
-    "precipitation_sum",
-    "precipitation_daily_sum",
-    "precipitation_last_3h",
-    "precipitation_probability",
-    "visibility",
-    "sunrise",
-    "sunset",
-    "location",
-    # UV (dedicated sensor class uses the same key)
-    "uv_index",
-    # Air Quality
-    "pm2_5",
-    "pm10",
-    "co",
-    "no2",
-    "so2",
-    "o3",
-    "aqi_us",
-    "aqi_eu",
-]
-
 DEFAULT_DAILY_VARIABLES = [
     "temperature_2m_max",
     "temperature_2m_min",
@@ -195,4 +160,74 @@ CONDITION_MAP = {
     95: ATTR_CONDITION_LIGHTNING_RAINY,  # Thunderstorm
     96: ATTR_CONDITION_LIGHTNING_RAINY,  # Thunderstorm with slight hail
     99: ATTR_CONDITION_LIGHTNING_RAINY,  # Thunderstorm with heavy hail
+}
+
+# --- Sensor selection ---
+CONF_ENABLED_SENSORS = "enabled_sensors"
+
+ALL_SENSOR_KEYS = [
+    "temperature",
+    "apparent_temperature",
+    "humidity",
+    "pressure",
+    "dew_point",
+    "wind_speed",
+    "wind_gust",
+    "wind_bearing",
+    "precipitation_sum",
+    "precipitation_daily_sum",
+    "precipitation_last_3h",
+    "precipitation_probability",
+    "visibility",
+    "sunrise",
+    "sunset",
+    "uv_index",
+    "uv_index_max",
+    "pm2_5",
+    "pm10",
+    "co",
+    "no2",
+    "so2",
+    "o3",
+    "aqi_us",
+    "aqi_eu",
+    "location",
+]
+
+SENSOR_LABELS = {
+    "temperature": {"pl": "Temperatura", "en": "Temperature"},
+    "apparent_temperature": {"pl": "Temp. odczuwalna", "en": "Apparent temperature"},
+    "humidity": {"pl": "Wilgotność", "en": "Humidity"},
+    "pressure": {"pl": "Ciśnienie", "en": "Pressure"},
+    "dew_point": {"pl": "Punkt rosy", "en": "Dew point"},
+    "wind_speed": {"pl": "Prędkość wiatru", "en": "Wind speed"},
+    "wind_gust": {"pl": "Porywy wiatru", "en": "Wind gust"},
+    "wind_bearing": {"pl": "Kierunek wiatru", "en": "Wind bearing"},
+    "precipitation_sum": {"pl": "Opad (bieżąca godzina)", "en": "Precipitation (this hour)"},
+    "precipitation_daily_sum": {
+        "pl": "Suma opadów (dzienna)",
+        "en": "Precipitation (daily sum)",
+    },
+    "precipitation_last_3h": {
+        "pl": "Opad (ostatnie 3h)",
+        "en": "Precipitation (last 3h)",
+    },
+    "precipitation_probability": {
+        "pl": "Prawdopodobieństwo opadów",
+        "en": "Precipitation probability",
+    },
+    "visibility": {"pl": "Widzialność", "en": "Visibility"},
+    "sunrise": {"pl": "Wschód słońca", "en": "Sunrise"},
+    "sunset": {"pl": "Zachód słońca", "en": "Sunset"},
+    "uv_index": {"pl": "UV index", "en": "UV index"},
+    "uv_index_max": {"pl": "UV index (max)", "en": "UV index (max)"},
+    "pm2_5": {"pl": "PM2.5", "en": "PM2.5"},
+    "pm10": {"pl": "PM10", "en": "PM10"},
+    "co": {"pl": "Tlenek węgla (CO)", "en": "Carbon monoxide (CO)"},
+    "no2": {"pl": "Dwutlenek azotu (NO₂)", "en": "Nitrogen dioxide (NO₂)"},
+    "so2": {"pl": "Dwutlenek siarki (SO₂)", "en": "Sulphur dioxide (SO₂)"},
+    "o3": {"pl": "Ozon (O₃)", "en": "Ozone (O₃)"},
+    "aqi_us": {"pl": "US AQI", "en": "US AQI"},
+    "aqi_eu": {"pl": "EU AQI", "en": "EU AQI"},
+    "location": {"pl": "Lokalizacja (lat,lon)", "en": "Location (lat,lon)"},
 }

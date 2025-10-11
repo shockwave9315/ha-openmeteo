@@ -13,6 +13,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 
 from .const import (
+    ALL_SENSOR_KEYS,
     CONF_API_PROVIDER,
     CONF_AREA_NAME_OVERRIDE,
     CONF_ENABLED_SENSORS,
@@ -34,7 +35,7 @@ from .const import (
     DOMAIN,
     MODE_STATIC,
     MODE_TRACK,
-    ALL_SENSOR_KEYS,
+    SENSOR_LABELS,
 )
 from .coordinator import async_reverse_geocode
 from .helpers import (
@@ -114,6 +115,14 @@ def _build_schema(
             default=defaults.get(CONF_AREA_NAME_OVERRIDE, ""),
         ): str,
     }
+    lang = (hass.config.language or "en").split("-")[0].lower()
+
+    def _label_for(key: str) -> str:
+        d = SENSOR_LABELS.get(key) or {}
+        return d.get(lang) or d.get("en") or key
+
+    options_labeled = [{"label": _label_for(k), "value": k} for k in ALL_SENSOR_KEYS]
+
     extra[
         vol.Optional(
             CONF_ENABLED_SENSORS,
@@ -121,9 +130,9 @@ def _build_schema(
         )
     ] = selector.SelectSelector(
         selector.SelectSelectorConfig(
-            options=ALL_SENSOR_KEYS,
+            options=options_labeled,
             multiple=True,
-            mode=selector.SelectSelectorMode.DROPDOWN,
+            mode=selector.SelectSelectorMode.LIST,  # LIST = checkboxy
         )
     )
     if include_use_place:
