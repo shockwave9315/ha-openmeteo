@@ -34,6 +34,7 @@ from .const import (
     URL,
     DEFAULT_REVERSE_GEOCODE_COOLDOWN_MIN,
     DEFAULT_OPTIONS_SAVE_COOLDOWN_MIN,
+    HTTP_USER_AGENT,
 )
 
 # logger
@@ -64,6 +65,8 @@ async def async_reverse_geocode(hass: HomeAssistant, lat: float, lon: float) -> 
         lang_param = "en"
         accept_language = "en"
 
+    headers = {"User-Agent": HTTP_USER_AGENT}
+
     # 1) Open-Meteo
     try:
         url = "https://geocoding-api.open-meteo.com/v1/reverse"
@@ -74,7 +77,9 @@ async def async_reverse_geocode(hass: HomeAssistant, lat: float, lon: float) -> 
             "language": lang_param,
             "format": "json",
         }
-        async with session.get(url, params=params, timeout=10) as resp:
+        async with session.get(
+            url, params=params, headers=headers, timeout=10
+        ) as resp:
             if resp.status != 200:
                 raise RuntimeError(f"open-meteo geocoding http {resp.status}")
             js = await resp.json()
@@ -99,8 +104,9 @@ async def async_reverse_geocode(hass: HomeAssistant, lat: float, lon: float) -> 
             "zoom": "10",
             "accept-language": accept_language,
         }
-        headers = {"User-Agent": "HomeAssistant-OpenMeteo/1.0 (+https://www.home-assistant.io)"}
-        async with session.get(url, params=params, headers=headers, timeout=10) as resp:
+        async with session.get(
+            url, params=params, headers=headers, timeout=10
+        ) as resp:
             if resp.status != 200:
                 return None
             js = await resp.json()
@@ -236,26 +242,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     # Legacy helper (not used by update; kept for BC)
     async def _reverse_geocode(self, lat: float, lon: float) -> str | None:
-        url = (
-            "https://geocoding-api.open-meteo.com/v1/reverse"
-            f"?latitude={lat:.5f}&longitude={lon:.5f}&language=pl&format=json"
-        )
         try:
-            session = _ha_async_get_clientsession(self.hass)
-            async with session.get(url, timeout=10) as resp:
-                if resp.status != 200:
-                    return None
-                js = await resp.json()
-                results = js.get("results") or []
-                if not results:
-                    return None
-                r = results[0]
-                name = r.get("name") or r.get("admin2") or r.get("admin1")
-                country = r.get("country_code")
-                if name and country:
-                    return f"{name}, {country}"
-                return name
-
+            return await async_reverse_geocode(self.hass, float(lat), float(lon))
         except Exception:
             return None
 
@@ -450,9 +438,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         session = async_get_clientsession(self.hass)
-        headers = {
-            "User-Agent": "HomeAssistant-OpenMeteo/1.0 (+https://www.home-assistant.io)"
-        }
+        headers = {"User-Agent": HTTP_USER_AGENT}
         try:
             for attempt in range(3):
                 try:

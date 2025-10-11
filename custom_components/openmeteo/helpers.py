@@ -12,7 +12,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import async_timeout
 import math
 
-from .const import DOMAIN
+from .const import DOMAIN, HTTP_USER_AGENT
 
 
 async def maybe_update_device_name(
@@ -120,7 +120,7 @@ async def async_reverse_postcode(
     }
     if isinstance(zoom, int):
         params["zoom"] = zoom
-    headers = {"User-Agent": "ha-openmeteo/1.4 (https://github.com/shockwave9315/ha-openmeteo)"}
+    headers = {"User-Agent": HTTP_USER_AGENT}
 
     session = async_get_clientsession(hass)
     try:
@@ -171,7 +171,7 @@ async def async_reverse_postcode_info(
     }
     if isinstance(zoom, int):
         params["zoom"] = zoom
-    headers = {"User-Agent": "ha-openmeteo/1.4 (https://github.com/shockwave9315/ha-openmeteo)"}
+    headers = {"User-Agent": HTTP_USER_AGENT}
 
     session = async_get_clientsession(hass)
     try:

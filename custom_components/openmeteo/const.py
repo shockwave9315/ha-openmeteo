@@ -20,6 +20,9 @@ ATTRIBUTION = "Weather data provided by Open-Meteo"
 MANUFACTURER = "Open-Meteo"
 NAME = "Open-Meteo"
 
+# HTTP
+HTTP_USER_AGENT = "ha-openmeteo/1.4 (https://github.com/shockwave9315/ha-openmeteo)"
+
 """Configuration keys and defaults."""
 CONF_NAME = "name"
 CONF_DAILY_VARIABLES = "daily_variables"
