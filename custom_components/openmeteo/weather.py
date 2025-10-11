@@ -213,11 +213,18 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
 
     def _update_friendly_name(self) -> None:
         """Set friendly name to location name without impacting entity_id generation."""
-        loc = (self.coordinator.data or {}).get("location_name")
-        new_name = str(loc) if loc else (self._config_entry.title or "Open-Meteo")
-        if getattr(self, "_attr_name", None) != new_name:
-            self._attr_name = new_name
+        if (data := self.coordinator.data) and (loc := data.get("location_name")):
+            self._attr_name = str(loc)
 
+    async def _maybe_update_device_registry_name(self) -> None:
+        """Synchronize device name (Device Registry) with current location,
+        unless the user has manually overridden it in the UI."""
+        loc = (self.coordinator.data or {}).get("location_name")
+        new_name = str(loc) if loc else None
+        try:
+            await maybe_update_device_name(self.hass, self._config_entry, new_name)
+        except Exception as ex:
+            _LOGGER.debug("[openmeteo] Device name sync skipped: %s", ex)
 
     async def _maybe_update_entry_title(self) -> None:
         """Update the Config Entry title to current place (mirrors device name)."""
@@ -260,6 +267,11 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
     def _handle_coordinator_update(self) -> None:
         self._update_friendly_name()
         self.async_write_ha_state()
+        try:
+            self.hass.async_create_task(self._maybe_update_device_registry_name())
+            self.hass.async_create_task(self._maybe_update_entry_title())
+        except Exception:
+            pass
 
     # -------------------------------------------------------------------------
     # Helpers for forecasts and values (centralized in helpers.py)
