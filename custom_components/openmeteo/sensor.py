@@ -14,6 +14,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    CONCENTRATION_PARTS_PER_MILLION,
     DEGREE,
     PERCENTAGE,
     UV_INDEX,
@@ -50,6 +51,12 @@ from .const import (
     DEFAULT_USE_PLACE_AS_DEVICE_NAME,
     AQ_HOURLY_KEYS,
 )
+
+# Conversion factor for carbon monoxide concentration reported in µg/m³.
+# 24.45 is the molar volume of air at 25°C and 1 atm, and 28.01 is the molar
+# mass of carbon monoxide in g/mol. Dividing by 1000 converts µg to mg.
+CO_MOLAR_MASS = 28.01  # g/mol
+CO_UGM3_TO_PPM_FACTOR = 24.45 / (CO_MOLAR_MASS * 1000)
 
 # Polish slugs for sensor types
 OBJECT_ID_PL = {
@@ -311,7 +318,7 @@ AQ_SENSORS: dict[str, OpenMeteoSensorDescription] = {
         key="co",
         translation_key="carbon_monoxide",
         name="Tlenek węgla",
-        native_unit_of_measurement="µg/m³",
+        native_unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
         icon="mdi:molecule-co",
         device_class=SensorDeviceClass.CO,
         state_class=SensorStateClass.MEASUREMENT,
@@ -669,12 +676,21 @@ class OpenMeteoAqSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Senso
         value = _aq_hour_value(self.coordinator.data, AQ_HOURLY_KEYS[self._sensor_type])
         
         # Round AQI values to integers
-        if self._sensor_type in ("aqi_us", "aqi_eu") and value is not None:
+        if value is None:
+            return None
+
+        if self._sensor_type in ("aqi_us", "aqi_eu"):
             try:
                 return round(float(value))
             except (TypeError, ValueError):
                 return None
-                
+
+        if self._sensor_type == "co":
+            try:
+                return float(value) * CO_UGM3_TO_PPM_FACTOR
+            except (TypeError, ValueError):
+                return None
+
         return value
 
     @property
