@@ -1,9 +1,9 @@
 """Config and options flows for the Open-Meteo integration."""
 from __future__ import annotations
 
-from typing import Any
 import asyncio
 import unicodedata
+from typing import Any
 
 import voluptuous as vol
 
@@ -16,14 +16,16 @@ from .const import (
     AQ_SENSOR_KEYS,
     CONF_API_PROVIDER,
     CONF_AREA_NAME_OVERRIDE,
-    CONF_ENABLED_SENSORS,
     CONF_ENABLED_AQ_SENSORS,
+    CONF_ENABLED_SENSORS,
     CONF_ENABLED_WEATHER_SENSORS,
     CONF_ENTITY_ID,
     CONF_MIN_TRACK_INTERVAL,
     CONF_MODE,
     CONF_OPTIONS_SAVE_COOLDOWN_MIN,
     CONF_REVERSE_GEOCODE_COOLDOWN_MIN,
+    CONF_SELECT_ALL_AQ,
+    CONF_SELECT_ALL_WEATHER,
     CONF_UNITS,
     CONF_UPDATE_INTERVAL,  # legacy seconds key (fallback)
     CONF_UPDATE_INTERVAL_MIN,
@@ -51,6 +53,17 @@ from .helpers import (
     async_prefer_user_zip_postcode,
     format_postal,
 )
+
+
+def _apply_select_all(user_input: dict[str, Any]) -> None:
+    """Normalize select-all toggles into full lists and drop helper keys."""
+
+    if user_input.get(CONF_SELECT_ALL_WEATHER):
+        user_input[CONF_ENABLED_WEATHER_SENSORS] = WEATHER_SENSOR_KEYS[:]
+    if user_input.get(CONF_SELECT_ALL_AQ):
+        user_input[CONF_ENABLED_AQ_SENSORS] = AQ_SENSOR_KEYS[:]
+    user_input.pop(CONF_SELECT_ALL_WEATHER, None)
+    user_input.pop(CONF_SELECT_ALL_AQ, None)
 
 
 def _build_schema(
@@ -149,6 +162,7 @@ def _build_schema(
             def_sel_weather = WEATHER_SENSOR_KEYS
             def_sel_aq = AQ_SENSOR_KEYS
 
+    extra[vol.Optional(CONF_SELECT_ALL_WEATHER, default=False)] = bool
     extra[
         vol.Optional(
             CONF_ENABLED_WEATHER_SENSORS,
@@ -162,6 +176,7 @@ def _build_schema(
         )
     )
 
+    extra[vol.Optional(CONF_SELECT_ALL_AQ, default=False)] = bool
     extra[
         vol.Optional(
             CONF_ENABLED_AQ_SENSORS,
@@ -479,6 +494,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors[CONF_LONGITUDE] = "required"
 
             if not errors:
+                _apply_select_all(user_input)
                 data = {**user_input, CONF_MODE: self._mode}
                 title = await _async_guess_title(self.hass, self._mode, data)
                 return self.async_create_entry(title=title, data=data)
@@ -555,6 +571,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     new_options.pop(CONF_MIN_TRACK_INTERVAL, None)
 
                 new_options.pop(CONF_ENABLED_SENSORS, None)
+                _apply_select_all(user_input)
                 new_options.update(user_input)
                 new_options[CONF_MODE] = self._mode
 
