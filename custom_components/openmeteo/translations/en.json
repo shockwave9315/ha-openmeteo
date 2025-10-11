@@ -20,12 +20,8 @@
           "area_name_override": "Area name override",
           "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
           "options_save_cooldown_min": "Options save cooldown (min)",
-          "preset_weather": "Weather preset",
-          "preset_aq": "Air quality preset",
-          "preset_keep": "Keep current selection",
-          "preset_all": "Select all",
-          "preset_none": "Select none",
-          "preset_info": "Preset applied. Review the selection below and click Submit to save."
+          "weather_toggle_all": "Select all weather sensors",
+          "aq_toggle_all": "Select all air quality sensors"
         },
         "data_description": {
           "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve place name from coordinates. Higher value = less battery/data usage.",
@@ -51,12 +47,8 @@
           "use_place_as_device_name": "Use place name as device name",
           "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
           "options_save_cooldown_min": "Options save cooldown (min)",
-          "preset_weather": "Weather preset",
-          "preset_aq": "Air quality preset",
-          "preset_keep": "Keep current selection",
-          "preset_all": "Select all",
-          "preset_none": "Select none",
-          "preset_info": "Preset applied. Review the selection below and click Submit to save."
+          "weather_toggle_all": "Select all weather sensors",
+          "aq_toggle_all": "Select all air quality sensors"
         },
         "data_description": {
           "use_place_as_device_name": "When enabled, the device in the Device Registry will be named after the place (e.g. Radłów). When disabled, your own custom device name is kept.",
@@ -136,12 +128,8 @@
           "area_name_override": "Area name override",
           "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
           "options_save_cooldown_min": "Options save cooldown (min)",
-          "preset_weather": "Weather preset",
-          "preset_aq": "Air quality preset",
-          "preset_keep": "Keep current selection",
-          "preset_all": "Select all",
-          "preset_none": "Select none",
-          "preset_info": "Preset applied. Review the selection below and click Submit to save."
+          "weather_toggle_all": "Select all weather sensors",
+          "aq_toggle_all": "Select all air quality sensors"
         },
         "data_description": {
           "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve place name from coordinates. Higher value = less battery/data usage.",
@@ -166,12 +154,8 @@
           "use_place_as_device_name": "Use place name as device name",
           "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
           "options_save_cooldown_min": "Options save cooldown (min)",
-          "preset_weather": "Weather preset",
-          "preset_aq": "Air quality preset",
-          "preset_keep": "Keep current selection",
-          "preset_all": "Select all",
-          "preset_none": "Select none",
-          "preset_info": "Preset applied. Review the selection below and click Submit to save."
+          "weather_toggle_all": "Select all weather sensors",
+          "aq_toggle_all": "Select all air quality sensors"
         },
         "data_description": {
           "use_place_as_device_name": "When enabled, the device in the Device Registry will be named after the place (e.g. Radłów). When disabled, your own custom device name is kept.",

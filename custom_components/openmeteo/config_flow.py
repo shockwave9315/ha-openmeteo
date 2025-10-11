@@ -24,14 +24,13 @@ from .const import (
     CONF_MIN_TRACK_INTERVAL,
     CONF_MODE,
     CONF_OPTIONS_SAVE_COOLDOWN_MIN,
-    CONF_PRESET_AQ,
-    CONF_PRESET_INFO,
-    CONF_PRESET_WEATHER,
     CONF_REVERSE_GEOCODE_COOLDOWN_MIN,
     CONF_UNITS,
     CONF_UPDATE_INTERVAL,  # legacy seconds key (fallback)
     CONF_UPDATE_INTERVAL_MIN,
     CONF_USE_PLACE_AS_DEVICE_NAME,
+    CONF_WEATHER_TOGGLE_ALL,
+    CONF_AQ_TOGGLE_ALL,
     DEFAULT_API_PROVIDER,
     DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_OPTIONS_SAVE_COOLDOWN_MIN,
@@ -41,9 +40,6 @@ from .const import (
     DOMAIN,
     MODE_STATIC,
     MODE_TRACK,
-    PRESET_ALL,
-    PRESET_KEEP,
-    PRESET_NONE,
     SENSOR_LABELS,
     WEATHER_SENSOR_KEYS,
 )
@@ -67,7 +63,8 @@ def _build_schema(
     include_use_place: bool = True,
     tmp_weather_sel: list[str] | None = None,
     tmp_aq_sel: list[str] | None = None,
-    show_preset_info: bool = False,
+    weather_toggle_all: bool | None = None,
+    aq_toggle_all: bool | None = None,
 ) -> vol.Schema:
     """Build a schema for the config and options flow."""
 
@@ -162,12 +159,8 @@ def _build_schema(
             if full_key in fallback_config:
                 return fallback_config[full_key]
         fallback_map = {
-            "preset_keep": "Keep current selection",
-            "preset_all": "Select all",
-            "preset_none": "Select none",
-            "preset_weather": "Weather preset",
-            "preset_aq": "Air quality preset",
-            "preset_info": "Preset applied. Review the selection below and click Submit to save.",
+            "weather_toggle_all": "Select all weather sensors",
+            "aq_toggle_all": "Select all air quality sensors",
         }
         return fallback_map.get(key, key)
 
@@ -209,27 +202,14 @@ def _build_schema(
         else:
             def_sel_aq = AQ_SENSOR_KEYS
 
-    preset_options = [
-        {
-            "label": localize("preset_keep"),
-            "value": PRESET_KEEP,
-        },
-        {
-            "label": localize("preset_all"),
-            "value": PRESET_ALL,
-        },
-        {
-            "label": localize("preset_none"),
-            "value": PRESET_NONE,
-        },
-    ]
-    extra[vol.Optional(CONF_PRESET_WEATHER, default=PRESET_KEEP)] = (
-        selector.SelectSelector(
-            selector.SelectSelectorConfig(
-                options=preset_options,
-                multiple=False,
-                mode=selector.SelectSelectorMode.DROPDOWN,
-            )
+    if weather_toggle_all is None:
+        weather_toggle_all = len(def_sel_weather) == len(WEATHER_SENSOR_KEYS)
+    if aq_toggle_all is None:
+        aq_toggle_all = len(def_sel_aq) == len(AQ_SENSOR_KEYS)
+
+    extra[vol.Required(CONF_WEATHER_TOGGLE_ALL, default=weather_toggle_all)] = (
+        selector.BooleanSelector(
+            selector.BooleanSelectorConfig(translation_key="weather_toggle_all")
         )
     )
     extra[
@@ -244,14 +224,9 @@ def _build_schema(
             mode=selector.SelectSelectorMode.LIST,
         )
     )
-
-    extra[vol.Optional(CONF_PRESET_AQ, default=PRESET_KEEP)] = (
-        selector.SelectSelector(
-            selector.SelectSelectorConfig(
-                options=preset_options,
-                multiple=False,
-                mode=selector.SelectSelectorMode.DROPDOWN,
-            )
+    extra[vol.Required(CONF_AQ_TOGGLE_ALL, default=aq_toggle_all)] = (
+        selector.BooleanSelector(
+            selector.BooleanSelectorConfig(translation_key="aq_toggle_all")
         )
     )
     extra[
@@ -266,15 +241,6 @@ def _build_schema(
             mode=selector.SelectSelectorMode.LIST,
         )
     )
-    if show_preset_info:
-        extra[vol.Optional(CONF_PRESET_INFO, default=localize("preset_info"))] = (
-            selector.TextSelector(
-                selector.TextSelectorConfig(
-                    type=selector.TextSelectorType.TEXT,
-                    multiline=True,
-                )
-            )
-        )
     if include_use_place:
         extra[vol.Required(
             CONF_USE_PLACE_AS_DEVICE_NAME,
@@ -358,14 +324,16 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._search_zip: str | None = None
         self._tmp_weather_sel: list[str] | None = None
         self._tmp_aq_sel: list[str] | None = None
-        self._show_preset_info = False
+        self._weather_toggle_all: bool | None = None
+        self._aq_toggle_all: bool | None = None
 
-    def _reset_preset_state(self) -> None:
-        """Reset temporary preset selections and info flag."""
+    def _reset_selection_state(self) -> None:
+        """Reset temporary bulk selection state for the flow."""
 
         self._tmp_weather_sel = None
         self._tmp_aq_sel = None
-        self._show_preset_info = False
+        self._weather_toggle_all = None
+        self._aq_toggle_all = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -373,7 +341,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Initial step asking for operating mode."""
 
         if user_input is None:
-            self._reset_preset_state()
+            self._reset_selection_state()
 
         if user_input is not None:
             self._mode = user_input[CONF_MODE]
@@ -392,9 +360,6 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Static onboarding: ask for a place name to forward‑geocode."""
 
         assert self._mode == MODE_STATIC
-
-        if user_input is None:
-            self._show_preset_info = False
 
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -530,9 +495,6 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         assert self._mode == MODE_STATIC
 
-        if user_input is None:
-            self._show_preset_info = False
-
         def _label(r: dict[str, Any]) -> str:
             name = r.get("name") or "?"
             admin1 = r.get("admin1") or r.get("admin2") or ""
@@ -580,11 +542,9 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.FlowResult:
         """Collect details specific to the chosen mode."""
 
-        if user_input is None:
-            self._show_preset_info = False
-
         errors: dict[str, str] = {}
         defaults = dict(self._prefill)
+
         if user_input is not None:
             user_input = dict(user_input)
             defaults.update(
@@ -595,15 +555,11 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     not in {
                         CONF_ENABLED_WEATHER_SENSORS,
                         CONF_ENABLED_AQ_SENSORS,
-                        CONF_PRESET_WEATHER,
-                        CONF_PRESET_AQ,
-                        CONF_PRESET_INFO,
+                        CONF_WEATHER_TOGGLE_ALL,
+                        CONF_AQ_TOGGLE_ALL,
                     }
                 }
             )
-
-            preset_w = user_input.get(CONF_PRESET_WEATHER, PRESET_KEEP)
-            preset_a = user_input.get(CONF_PRESET_AQ, PRESET_KEEP)
 
             stored_weather_default = defaults.get(CONF_ENABLED_WEATHER_SENSORS)
             if isinstance(stored_weather_default, list):
@@ -622,52 +578,57 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             cur_weather = list(weather_raw or [])
             cur_aq = list(aq_raw or [])
 
-            if preset_w == PRESET_ALL:
-                self._tmp_weather_sel = WEATHER_SENSOR_KEYS[:]
-            elif preset_w == PRESET_NONE:
-                self._tmp_weather_sel = []
+            prev_weather_toggle = (
+                self._weather_toggle_all
+                if self._weather_toggle_all is not None
+                else len(
+                    self._tmp_weather_sel
+                    if self._tmp_weather_sel is not None
+                    else fallback_weather
+                )
+                == len(WEATHER_SENSOR_KEYS)
+            )
+            prev_aq_toggle = (
+                self._aq_toggle_all
+                if self._aq_toggle_all is not None
+                else len(
+                    self._tmp_aq_sel if self._tmp_aq_sel is not None else fallback_aq
+                )
+                == len(AQ_SENSOR_KEYS)
+            )
+
+            weather_toggle = user_input.get(CONF_WEATHER_TOGGLE_ALL)
+            aq_toggle = user_input.get(CONF_AQ_TOGGLE_ALL)
+
+            if weather_toggle is None:
+                weather_toggle = prev_weather_toggle
+            if aq_toggle is None:
+                aq_toggle = prev_aq_toggle
+
+            if weather_toggle != prev_weather_toggle:
+                self._tmp_weather_sel = (
+                    WEATHER_SENSOR_KEYS[:] if weather_toggle else []
+                )
             else:
                 if weather_raw is not None:
                     self._tmp_weather_sel = cur_weather
                 elif self._tmp_weather_sel is None:
                     self._tmp_weather_sel = list(fallback_weather)
 
-            if preset_a == PRESET_ALL:
-                self._tmp_aq_sel = AQ_SENSOR_KEYS[:]
-            elif preset_a == PRESET_NONE:
-                self._tmp_aq_sel = []
+            if aq_toggle != prev_aq_toggle:
+                self._tmp_aq_sel = AQ_SENSOR_KEYS[:] if aq_toggle else []
             else:
                 if aq_raw is not None:
                     self._tmp_aq_sel = cur_aq
                 elif self._tmp_aq_sel is None:
                     self._tmp_aq_sel = list(fallback_aq)
 
-            if preset_w != PRESET_KEEP or preset_a != PRESET_KEEP:
-                self._show_preset_info = True
-                defaults_with_tmp = dict(defaults)
-                defaults_with_tmp[CONF_ENABLED_WEATHER_SENSORS] = (
-                    self._tmp_weather_sel or WEATHER_SENSOR_KEYS
-                )
-                defaults_with_tmp[CONF_ENABLED_AQ_SENSORS] = (
-                    self._tmp_aq_sel or AQ_SENSOR_KEYS
-                )
-                user_input[CONF_PRESET_WEATHER] = PRESET_KEEP
-                user_input[CONF_PRESET_AQ] = PRESET_KEEP
-                user_input.pop(CONF_PRESET_INFO, None)
-                schema = _build_schema(
-                    self.hass,
-                    self._mode,
-                    defaults_with_tmp,
-                    include_use_place=self._mode == MODE_TRACK,
-                    tmp_weather_sel=self._tmp_weather_sel,
-                    tmp_aq_sel=self._tmp_aq_sel,
-                    show_preset_info=self._show_preset_info,
-                )
-                return self.async_show_form(
-                    step_id="mode_details", data_schema=schema, errors={}
-                )
-
-            self._show_preset_info = False
+            self._weather_toggle_all = (
+                len(self._tmp_weather_sel or []) == len(WEATHER_SENSOR_KEYS)
+            )
+            self._aq_toggle_all = (
+                len(self._tmp_aq_sel or []) == len(AQ_SENSOR_KEYS)
+            )
 
             if self._mode == MODE_TRACK:
                 entity = user_input.get(CONF_ENTITY_ID)
@@ -700,14 +661,18 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 user_input[CONF_ENABLED_WEATHER_SENSORS] = final_weather
                 user_input[CONF_ENABLED_AQ_SENSORS] = final_aq
-                user_input.pop(CONF_PRESET_INFO, None)
-                user_input.pop(CONF_PRESET_WEATHER, None)
-                user_input.pop(CONF_PRESET_AQ, None)
+                user_input.pop(CONF_WEATHER_TOGGLE_ALL, None)
+                user_input.pop(CONF_AQ_TOGGLE_ALL, None)
 
                 data = {**user_input, CONF_MODE: self._mode}
                 title = await _async_guess_title(self.hass, self._mode, data)
-                self._reset_preset_state()
+                self._reset_selection_state()
                 return self.async_create_entry(title=title, data=data)
+
+        if self._tmp_weather_sel is not None:
+            defaults[CONF_ENABLED_WEATHER_SENSORS] = list(self._tmp_weather_sel)
+        if self._tmp_aq_sel is not None:
+            defaults[CONF_ENABLED_AQ_SENSORS] = list(self._tmp_aq_sel)
 
         schema = _build_schema(
             self.hass,
@@ -716,7 +681,8 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             include_use_place=self._mode == MODE_TRACK,
             tmp_weather_sel=self._tmp_weather_sel,
             tmp_aq_sel=self._tmp_aq_sel,
-            show_preset_info=self._show_preset_info,
+            weather_toggle_all=self._weather_toggle_all,
+            aq_toggle_all=self._aq_toggle_all,
         )
         return self.async_show_form(
             step_id="mode_details", data_schema=schema, errors=errors
@@ -739,14 +705,16 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
         self._mode = merged.get(CONF_MODE, MODE_STATIC)
         self._tmp_weather_sel: list[str] | None = None
         self._tmp_aq_sel: list[str] | None = None
-        self._show_preset_info = False
+        self._weather_toggle_all: bool | None = None
+        self._aq_toggle_all: bool | None = None
 
-    def _reset_preset_state(self) -> None:
-        """Reset temporary preset selections for options flow."""
+    def _reset_selection_state(self) -> None:
+        """Reset temporary bulk selection state for the options flow."""
 
         self._tmp_weather_sel = None
         self._tmp_aq_sel = None
-        self._show_preset_info = False
+        self._weather_toggle_all = None
+        self._aq_toggle_all = None
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -754,7 +722,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
         """First step of the options flow: choose mode."""
 
         if user_input is None:
-            self._reset_preset_state()
+            self._reset_selection_state()
 
         if user_input is not None:
             self._mode = user_input[CONF_MODE]
@@ -770,9 +738,6 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.FlowResult:
         """Collect mode-specific options."""
 
-        if user_input is None:
-            self._show_preset_info = False
-
         merged_defaults = {**self._entry.data, **self._entry.options}
         defaults = dict(merged_defaults)
         errors: dict[str, str] = {}
@@ -787,15 +752,11 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     not in {
                         CONF_ENABLED_WEATHER_SENSORS,
                         CONF_ENABLED_AQ_SENSORS,
-                        CONF_PRESET_WEATHER,
-                        CONF_PRESET_AQ,
-                        CONF_PRESET_INFO,
+                        CONF_WEATHER_TOGGLE_ALL,
+                        CONF_AQ_TOGGLE_ALL,
                     }
                 }
             )
-
-            preset_w = user_input.get(CONF_PRESET_WEATHER, PRESET_KEEP)
-            preset_a = user_input.get(CONF_PRESET_AQ, PRESET_KEEP)
 
             stored_weather_default = defaults.get(CONF_ENABLED_WEATHER_SENSORS)
             if isinstance(stored_weather_default, list):
@@ -814,52 +775,57 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
             cur_weather = list(weather_raw or [])
             cur_aq = list(aq_raw or [])
 
-            if preset_w == PRESET_ALL:
-                self._tmp_weather_sel = WEATHER_SENSOR_KEYS[:]
-            elif preset_w == PRESET_NONE:
-                self._tmp_weather_sel = []
+            prev_weather_toggle = (
+                self._weather_toggle_all
+                if self._weather_toggle_all is not None
+                else len(
+                    self._tmp_weather_sel
+                    if self._tmp_weather_sel is not None
+                    else fallback_weather
+                )
+                == len(WEATHER_SENSOR_KEYS)
+            )
+            prev_aq_toggle = (
+                self._aq_toggle_all
+                if self._aq_toggle_all is not None
+                else len(
+                    self._tmp_aq_sel if self._tmp_aq_sel is not None else fallback_aq
+                )
+                == len(AQ_SENSOR_KEYS)
+            )
+
+            weather_toggle = user_input.get(CONF_WEATHER_TOGGLE_ALL)
+            aq_toggle = user_input.get(CONF_AQ_TOGGLE_ALL)
+
+            if weather_toggle is None:
+                weather_toggle = prev_weather_toggle
+            if aq_toggle is None:
+                aq_toggle = prev_aq_toggle
+
+            if weather_toggle != prev_weather_toggle:
+                self._tmp_weather_sel = (
+                    WEATHER_SENSOR_KEYS[:] if weather_toggle else []
+                )
             else:
                 if weather_raw is not None:
                     self._tmp_weather_sel = cur_weather
                 elif self._tmp_weather_sel is None:
                     self._tmp_weather_sel = list(fallback_weather)
 
-            if preset_a == PRESET_ALL:
-                self._tmp_aq_sel = AQ_SENSOR_KEYS[:]
-            elif preset_a == PRESET_NONE:
-                self._tmp_aq_sel = []
+            if aq_toggle != prev_aq_toggle:
+                self._tmp_aq_sel = AQ_SENSOR_KEYS[:] if aq_toggle else []
             else:
                 if aq_raw is not None:
                     self._tmp_aq_sel = cur_aq
                 elif self._tmp_aq_sel is None:
                     self._tmp_aq_sel = list(fallback_aq)
 
-            if preset_w != PRESET_KEEP or preset_a != PRESET_KEEP:
-                self._show_preset_info = True
-                defaults_with_tmp = dict(defaults)
-                defaults_with_tmp[CONF_ENABLED_WEATHER_SENSORS] = (
-                    self._tmp_weather_sel or WEATHER_SENSOR_KEYS
-                )
-                defaults_with_tmp[CONF_ENABLED_AQ_SENSORS] = (
-                    self._tmp_aq_sel or AQ_SENSOR_KEYS
-                )
-                user_input[CONF_PRESET_WEATHER] = PRESET_KEEP
-                user_input[CONF_PRESET_AQ] = PRESET_KEEP
-                user_input.pop(CONF_PRESET_INFO, None)
-                schema = _build_schema(
-                    self.hass,
-                    self._mode,
-                    defaults_with_tmp,
-                    include_use_place=self._mode == MODE_TRACK,
-                    tmp_weather_sel=self._tmp_weather_sel,
-                    tmp_aq_sel=self._tmp_aq_sel,
-                    show_preset_info=self._show_preset_info,
-                )
-                return self.async_show_form(
-                    step_id="mode_details", data_schema=schema, errors={}
-                )
-
-            self._show_preset_info = False
+            self._weather_toggle_all = (
+                len(self._tmp_weather_sel or []) == len(WEATHER_SENSOR_KEYS)
+            )
+            self._aq_toggle_all = (
+                len(self._tmp_aq_sel or []) == len(AQ_SENSOR_KEYS)
+            )
 
             if self._mode == MODE_TRACK:
                 if not user_input.get(CONF_ENTITY_ID):
@@ -898,15 +864,19 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
 
                 user_input[CONF_ENABLED_WEATHER_SENSORS] = final_weather
                 user_input[CONF_ENABLED_AQ_SENSORS] = final_aq
-                user_input.pop(CONF_PRESET_INFO, None)
-                user_input.pop(CONF_PRESET_WEATHER, None)
-                user_input.pop(CONF_PRESET_AQ, None)
+                user_input.pop(CONF_WEATHER_TOGGLE_ALL, None)
+                user_input.pop(CONF_AQ_TOGGLE_ALL, None)
 
                 new_options.update(user_input)
                 new_options[CONF_MODE] = self._mode
-                self._reset_preset_state()
+                self._reset_selection_state()
 
                 return self.async_create_entry(title="", data=new_options)
+
+        if self._tmp_weather_sel is not None:
+            defaults[CONF_ENABLED_WEATHER_SENSORS] = list(self._tmp_weather_sel)
+        if self._tmp_aq_sel is not None:
+            defaults[CONF_ENABLED_AQ_SENSORS] = list(self._tmp_aq_sel)
 
         schema = _build_schema(
             self.hass,
@@ -915,7 +885,8 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
             include_use_place=self._mode == MODE_TRACK,
             tmp_weather_sel=self._tmp_weather_sel,
             tmp_aq_sel=self._tmp_aq_sel,
-            show_preset_info=self._show_preset_info,
+            weather_toggle_all=self._weather_toggle_all,
+            aq_toggle_all=self._aq_toggle_all,
         )
         return self.async_show_form(
             step_id="mode_details", data_schema=schema, errors=errors
