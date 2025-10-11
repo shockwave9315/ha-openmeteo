@@ -132,6 +132,7 @@ async def async_setup_entry(
                 ent_reg.async_update_entity(reg_entry.entity_id, new_entity_id=desired)
     except Exception as ex:
         _LOGGER.debug("[openmeteo] Pre-create weather entity failed: %s", ex)
+
     for entry in list(
         er.async_entries_for_config_entry(ent_reg, config_entry.entry_id)
     ):
