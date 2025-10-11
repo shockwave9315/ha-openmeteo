@@ -218,6 +218,17 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         if getattr(self, "_attr_name", None) != new_name:
             self._attr_name = new_name
 
+
+    async def _maybe_update_device_registry_name(self) -> None:
+        """Update device name in registry if user hasn't overridden it."""
+        loc = (self.coordinator.data or {}).get("location_name")
+        new_name = str(loc) if loc else None
+        try:
+            await maybe_update_device_name(self.hass, self._config_entry, new_name)
+        except Exception as ex:
+            # Do not crash entity update on registry errors
+            _LOGGER.debug("[openmeteo] Device name sync skipped: %s", ex)
+
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self._update_device_name()
@@ -238,6 +249,11 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
     def _handle_coordinator_update(self) -> None:
         self._update_friendly_name()
         self.async_write_ha_state()
+        # Keep device name in sync with current location (no-op if user renamed)
+        try:
+            self.hass.async_create_task(self._maybe_update_device_registry_name())
+        except Exception:
+            pass
 
     # -------------------------------------------------------------------------
     # Helpers for forecasts and values (centralized in helpers.py)
