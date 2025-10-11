@@ -132,19 +132,20 @@ async def async_setup_entry(
                 ent_reg.async_update_entity(reg_entry.entity_id, new_entity_id=desired)
     except Exception as ex:
         _LOGGER.debug("[openmeteo] Pre-create weather entity failed: %s", ex)
-    for entry in list(ent_reg.entities.values()):
-        if entry.platform == DOMAIN and entry.domain == "weather" and entry.config_entry_id == config_entry.entry_id:
-            try:
-                _LOGGER.debug(
-                    "[openmeteo] Weather migration check: entity_id=%s, unique_id=%s",
-                    entry.entity_id,
-                    entry.unique_id,
-                )
-                await async_migrate_weather_entry(hass, config_entry, entry)  # type: ignore[arg-type]
-            except Exception as ex:
-                # Bezpiecznie ignorujemy pojedyncze błędy migracji
-                _LOGGER.debug("[openmeteo] Weather migration error for %s: %s", entry.entity_id, ex)
-                pass
+    for entry in er.async_entries_for_config_entry(ent_reg, config_entry.entry_id):
+        if entry.domain != "weather" or entry.platform != DOMAIN:
+            continue
+        try:
+            _LOGGER.debug(
+                "[openmeteo] Weather migration check: entity_id=%s, unique_id=%s",
+                entry.entity_id,
+                entry.unique_id,
+            )
+            await async_migrate_weather_entry(hass, config_entry, entry)  # type: ignore[arg-type]
+        except Exception as ex:
+            # Bezpiecznie ignorujemy pojedyncze błędy migracji
+            _LOGGER.debug("[openmeteo] Weather migration error for %s: %s", entry.entity_id, ex)
+            pass
 
     async_add_entities([OpenMeteoWeather(coordinator, config_entry)])
 
