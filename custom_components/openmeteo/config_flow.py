@@ -25,6 +25,7 @@ from .const import (
     CONF_MODE,
     CONF_OPTIONS_SAVE_COOLDOWN_MIN,
     CONF_PRESET_AQ,
+    CONF_PRESET_INFO,
     CONF_PRESET_WEATHER,
     CONF_REVERSE_GEOCODE_COOLDOWN_MIN,
     CONF_UNITS,
@@ -66,6 +67,7 @@ def _build_schema(
     include_use_place: bool = True,
     tmp_weather_sel: list[str] | None = None,
     tmp_aq_sel: list[str] | None = None,
+    show_preset_info: bool = False,
 ) -> vol.Schema:
     """Build a schema for the config and options flow."""
 
@@ -165,6 +167,7 @@ def _build_schema(
             "preset_none": "Select none",
             "preset_weather": "Weather preset",
             "preset_aq": "Air quality preset",
+            "preset_info": "Preset applied. Review the selection below and click Submit to save.",
         }
         return fallback_map.get(key, key)
 
@@ -263,6 +266,15 @@ def _build_schema(
             mode=selector.SelectSelectorMode.LIST,
         )
     )
+    if show_preset_info:
+        extra[vol.Optional(CONF_PRESET_INFO, default=localize("preset_info"))] = (
+            selector.TextSelector(
+                selector.TextSelectorConfig(
+                    type=selector.TextSelectorType.TEXT,
+                    multiline=True,
+                )
+            )
+        )
     if include_use_place:
         extra[vol.Required(
             CONF_USE_PLACE_AS_DEVICE_NAME,
@@ -346,11 +358,22 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._search_zip: str | None = None
         self._tmp_weather_sel: list[str] | None = None
         self._tmp_aq_sel: list[str] | None = None
+        self._show_preset_info = False
+
+    def _reset_preset_state(self) -> None:
+        """Reset temporary preset selections and info flag."""
+
+        self._tmp_weather_sel = None
+        self._tmp_aq_sel = None
+        self._show_preset_info = False
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
         """Initial step asking for operating mode."""
+
+        if user_input is None:
+            self._reset_preset_state()
 
         if user_input is not None:
             self._mode = user_input[CONF_MODE]
@@ -369,6 +392,9 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Static onboarding: ask for a place name to forward‑geocode."""
 
         assert self._mode == MODE_STATIC
+
+        if user_input is None:
+            self._show_preset_info = False
 
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -504,6 +530,9 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         assert self._mode == MODE_STATIC
 
+        if user_input is None:
+            self._show_preset_info = False
+
         def _label(r: dict[str, Any]) -> str:
             name = r.get("name") or "?"
             admin1 = r.get("admin1") or r.get("admin2") or ""
@@ -551,10 +580,27 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.FlowResult:
         """Collect details specific to the chosen mode."""
 
+        if user_input is None:
+            self._show_preset_info = False
+
         errors: dict[str, str] = {}
         defaults = dict(self._prefill)
         if user_input is not None:
-            defaults.update(user_input)
+            user_input = dict(user_input)
+            defaults.update(
+                {
+                    k: v
+                    for k, v in user_input.items()
+                    if k
+                    not in {
+                        CONF_ENABLED_WEATHER_SENSORS,
+                        CONF_ENABLED_AQ_SENSORS,
+                        CONF_PRESET_WEATHER,
+                        CONF_PRESET_AQ,
+                        CONF_PRESET_INFO,
+                    }
+                }
+            )
 
             preset_w = user_input.get(CONF_PRESET_WEATHER, PRESET_KEEP)
             preset_a = user_input.get(CONF_PRESET_AQ, PRESET_KEEP)
@@ -573,33 +619,41 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             weather_raw = user_input.get(CONF_ENABLED_WEATHER_SENSORS)
             aq_raw = user_input.get(CONF_ENABLED_AQ_SENSORS)
-            cur_weather = list(weather_raw) if weather_raw is not None else None
-            cur_aq = list(aq_raw) if aq_raw is not None else None
+            cur_weather = list(weather_raw or [])
+            cur_aq = list(aq_raw or [])
 
             if preset_w == PRESET_ALL:
                 self._tmp_weather_sel = WEATHER_SENSOR_KEYS[:]
             elif preset_w == PRESET_NONE:
                 self._tmp_weather_sel = []
-            elif cur_weather is not None:
-                self._tmp_weather_sel = cur_weather
+            else:
+                if weather_raw is not None:
+                    self._tmp_weather_sel = cur_weather
+                elif self._tmp_weather_sel is None:
+                    self._tmp_weather_sel = list(fallback_weather)
 
             if preset_a == PRESET_ALL:
                 self._tmp_aq_sel = AQ_SENSOR_KEYS[:]
             elif preset_a == PRESET_NONE:
                 self._tmp_aq_sel = []
-            elif cur_aq is not None:
-                self._tmp_aq_sel = cur_aq
+            else:
+                if aq_raw is not None:
+                    self._tmp_aq_sel = cur_aq
+                elif self._tmp_aq_sel is None:
+                    self._tmp_aq_sel = list(fallback_aq)
 
             if preset_w != PRESET_KEEP or preset_a != PRESET_KEEP:
+                self._show_preset_info = True
                 defaults_with_tmp = dict(defaults)
-                defaults_with_tmp[CONF_PRESET_WEATHER] = PRESET_KEEP
-                defaults_with_tmp[CONF_PRESET_AQ] = PRESET_KEEP
                 defaults_with_tmp[CONF_ENABLED_WEATHER_SENSORS] = (
-                    self._tmp_weather_sel if self._tmp_weather_sel is not None else WEATHER_SENSOR_KEYS
+                    self._tmp_weather_sel or WEATHER_SENSOR_KEYS
                 )
                 defaults_with_tmp[CONF_ENABLED_AQ_SENSORS] = (
-                    self._tmp_aq_sel if self._tmp_aq_sel is not None else AQ_SENSOR_KEYS
+                    self._tmp_aq_sel or AQ_SENSOR_KEYS
                 )
+                user_input[CONF_PRESET_WEATHER] = PRESET_KEEP
+                user_input[CONF_PRESET_AQ] = PRESET_KEEP
+                user_input.pop(CONF_PRESET_INFO, None)
                 schema = _build_schema(
                     self.hass,
                     self._mode,
@@ -607,15 +661,13 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     include_use_place=self._mode == MODE_TRACK,
                     tmp_weather_sel=self._tmp_weather_sel,
                     tmp_aq_sel=self._tmp_aq_sel,
+                    show_preset_info=self._show_preset_info,
                 )
                 return self.async_show_form(
                     step_id="mode_details", data_schema=schema, errors={}
                 )
 
-            if cur_weather is not None:
-                self._tmp_weather_sel = cur_weather
-            if cur_aq is not None:
-                self._tmp_aq_sel = cur_aq
+            self._show_preset_info = False
 
             if self._mode == MODE_TRACK:
                 entity = user_input.get(CONF_ENTITY_ID)
@@ -632,34 +684,29 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors[CONF_LONGITUDE] = "required"
 
             if not errors:
-                final_weather = (
-                    list(cur_weather)
-                    if cur_weather is not None
-                    else (
-                        list(self._tmp_weather_sel)
-                        if self._tmp_weather_sel is not None
-                        else list(fallback_weather)
-                    )
-                )
-                final_aq = (
-                    list(cur_aq)
-                    if cur_aq is not None
-                    else (
-                        list(self._tmp_aq_sel)
-                        if self._tmp_aq_sel is not None
-                        else list(fallback_aq)
-                    )
-                )
+                if self._tmp_weather_sel is not None:
+                    final_weather = list(self._tmp_weather_sel)
+                elif weather_raw is not None:
+                    final_weather = cur_weather
+                else:
+                    final_weather = list(fallback_weather)
+
+                if self._tmp_aq_sel is not None:
+                    final_aq = list(self._tmp_aq_sel)
+                elif aq_raw is not None:
+                    final_aq = cur_aq
+                else:
+                    final_aq = list(fallback_aq)
 
                 user_input[CONF_ENABLED_WEATHER_SENSORS] = final_weather
                 user_input[CONF_ENABLED_AQ_SENSORS] = final_aq
+                user_input.pop(CONF_PRESET_INFO, None)
                 user_input.pop(CONF_PRESET_WEATHER, None)
                 user_input.pop(CONF_PRESET_AQ, None)
 
                 data = {**user_input, CONF_MODE: self._mode}
                 title = await _async_guess_title(self.hass, self._mode, data)
-                self._tmp_weather_sel = None
-                self._tmp_aq_sel = None
+                self._reset_preset_state()
                 return self.async_create_entry(title=title, data=data)
 
         schema = _build_schema(
@@ -669,6 +716,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             include_use_place=self._mode == MODE_TRACK,
             tmp_weather_sel=self._tmp_weather_sel,
             tmp_aq_sel=self._tmp_aq_sel,
+            show_preset_info=self._show_preset_info,
         )
         return self.async_show_form(
             step_id="mode_details", data_schema=schema, errors=errors
@@ -691,11 +739,22 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
         self._mode = merged.get(CONF_MODE, MODE_STATIC)
         self._tmp_weather_sel: list[str] | None = None
         self._tmp_aq_sel: list[str] | None = None
+        self._show_preset_info = False
+
+    def _reset_preset_state(self) -> None:
+        """Reset temporary preset selections for options flow."""
+
+        self._tmp_weather_sel = None
+        self._tmp_aq_sel = None
+        self._show_preset_info = False
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
         """First step of the options flow: choose mode."""
+
+        if user_input is None:
+            self._reset_preset_state()
 
         if user_input is not None:
             self._mode = user_input[CONF_MODE]
@@ -711,12 +770,29 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.FlowResult:
         """Collect mode-specific options."""
 
+        if user_input is None:
+            self._show_preset_info = False
+
         merged_defaults = {**self._entry.data, **self._entry.options}
         defaults = dict(merged_defaults)
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            defaults.update(user_input)
+            user_input = dict(user_input)
+            defaults.update(
+                {
+                    k: v
+                    for k, v in user_input.items()
+                    if k
+                    not in {
+                        CONF_ENABLED_WEATHER_SENSORS,
+                        CONF_ENABLED_AQ_SENSORS,
+                        CONF_PRESET_WEATHER,
+                        CONF_PRESET_AQ,
+                        CONF_PRESET_INFO,
+                    }
+                }
+            )
 
             preset_w = user_input.get(CONF_PRESET_WEATHER, PRESET_KEEP)
             preset_a = user_input.get(CONF_PRESET_AQ, PRESET_KEEP)
@@ -735,33 +811,41 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
 
             weather_raw = user_input.get(CONF_ENABLED_WEATHER_SENSORS)
             aq_raw = user_input.get(CONF_ENABLED_AQ_SENSORS)
-            cur_weather = list(weather_raw) if weather_raw is not None else None
-            cur_aq = list(aq_raw) if aq_raw is not None else None
+            cur_weather = list(weather_raw or [])
+            cur_aq = list(aq_raw or [])
 
             if preset_w == PRESET_ALL:
                 self._tmp_weather_sel = WEATHER_SENSOR_KEYS[:]
             elif preset_w == PRESET_NONE:
                 self._tmp_weather_sel = []
-            elif cur_weather is not None:
-                self._tmp_weather_sel = cur_weather
+            else:
+                if weather_raw is not None:
+                    self._tmp_weather_sel = cur_weather
+                elif self._tmp_weather_sel is None:
+                    self._tmp_weather_sel = list(fallback_weather)
 
             if preset_a == PRESET_ALL:
                 self._tmp_aq_sel = AQ_SENSOR_KEYS[:]
             elif preset_a == PRESET_NONE:
                 self._tmp_aq_sel = []
-            elif cur_aq is not None:
-                self._tmp_aq_sel = cur_aq
+            else:
+                if aq_raw is not None:
+                    self._tmp_aq_sel = cur_aq
+                elif self._tmp_aq_sel is None:
+                    self._tmp_aq_sel = list(fallback_aq)
 
             if preset_w != PRESET_KEEP or preset_a != PRESET_KEEP:
+                self._show_preset_info = True
                 defaults_with_tmp = dict(defaults)
-                defaults_with_tmp[CONF_PRESET_WEATHER] = PRESET_KEEP
-                defaults_with_tmp[CONF_PRESET_AQ] = PRESET_KEEP
                 defaults_with_tmp[CONF_ENABLED_WEATHER_SENSORS] = (
-                    self._tmp_weather_sel if self._tmp_weather_sel is not None else WEATHER_SENSOR_KEYS
+                    self._tmp_weather_sel or WEATHER_SENSOR_KEYS
                 )
                 defaults_with_tmp[CONF_ENABLED_AQ_SENSORS] = (
-                    self._tmp_aq_sel if self._tmp_aq_sel is not None else AQ_SENSOR_KEYS
+                    self._tmp_aq_sel or AQ_SENSOR_KEYS
                 )
+                user_input[CONF_PRESET_WEATHER] = PRESET_KEEP
+                user_input[CONF_PRESET_AQ] = PRESET_KEEP
+                user_input.pop(CONF_PRESET_INFO, None)
                 schema = _build_schema(
                     self.hass,
                     self._mode,
@@ -769,15 +853,13 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
                     include_use_place=self._mode == MODE_TRACK,
                     tmp_weather_sel=self._tmp_weather_sel,
                     tmp_aq_sel=self._tmp_aq_sel,
+                    show_preset_info=self._show_preset_info,
                 )
                 return self.async_show_form(
                     step_id="mode_details", data_schema=schema, errors={}
                 )
 
-            if cur_weather is not None:
-                self._tmp_weather_sel = cur_weather
-            if cur_aq is not None:
-                self._tmp_aq_sel = cur_aq
+            self._show_preset_info = False
 
             if self._mode == MODE_TRACK:
                 if not user_input.get(CONF_ENTITY_ID):
@@ -800,34 +882,29 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
 
                 new_options.pop(CONF_ENABLED_SENSORS, None)
 
-                final_weather = (
-                    list(cur_weather)
-                    if cur_weather is not None
-                    else (
-                        list(self._tmp_weather_sel)
-                        if self._tmp_weather_sel is not None
-                        else list(fallback_weather)
-                    )
-                )
-                final_aq = (
-                    list(cur_aq)
-                    if cur_aq is not None
-                    else (
-                        list(self._tmp_aq_sel)
-                        if self._tmp_aq_sel is not None
-                        else list(fallback_aq)
-                    )
-                )
+                if self._tmp_weather_sel is not None:
+                    final_weather = list(self._tmp_weather_sel)
+                elif weather_raw is not None:
+                    final_weather = cur_weather
+                else:
+                    final_weather = list(fallback_weather)
+
+                if self._tmp_aq_sel is not None:
+                    final_aq = list(self._tmp_aq_sel)
+                elif aq_raw is not None:
+                    final_aq = cur_aq
+                else:
+                    final_aq = list(fallback_aq)
 
                 user_input[CONF_ENABLED_WEATHER_SENSORS] = final_weather
                 user_input[CONF_ENABLED_AQ_SENSORS] = final_aq
+                user_input.pop(CONF_PRESET_INFO, None)
                 user_input.pop(CONF_PRESET_WEATHER, None)
                 user_input.pop(CONF_PRESET_AQ, None)
 
                 new_options.update(user_input)
                 new_options[CONF_MODE] = self._mode
-                self._tmp_weather_sel = None
-                self._tmp_aq_sel = None
+                self._reset_preset_state()
 
                 return self.async_create_entry(title="", data=new_options)
 
@@ -838,6 +915,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
             include_use_place=self._mode == MODE_TRACK,
             tmp_weather_sel=self._tmp_weather_sel,
             tmp_aq_sel=self._tmp_aq_sel,
+            show_preset_info=self._show_preset_info,
         )
         return self.async_show_form(
             step_id="mode_details", data_schema=schema, errors=errors

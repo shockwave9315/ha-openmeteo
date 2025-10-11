@@ -170,6 +170,7 @@ CONF_ENABLED_AQ_SENSORS = "enabled_aq_sensors"
 # Presets for bulk selection in config/options flow
 CONF_PRESET_WEATHER = "preset_weather"
 CONF_PRESET_AQ = "preset_aq"
+CONF_PRESET_INFO = "preset_info"
 
 PRESET_KEEP = "keep"
 PRESET_ALL = "all"
