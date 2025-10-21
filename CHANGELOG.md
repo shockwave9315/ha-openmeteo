@@ -1,3 +1,13 @@
+## 1.6.0a18
+- refactor(coordinator): Add comprehensive type hints to improve type safety
+- refactor(coordinator): Split long `_async_update_data` method into smaller, focused helper methods:
+  - `_update_coordinates_from_tracker()` - GPS tracking coordinate updates
+  - `_update_coordinates_static()` - Static mode coordinate updates
+  - `_update_location_name()` - Reverse geocoding with cooldown logic
+- improve(error-handling): Replace broad `except Exception` with specific exception types
+- improve(docs): Add detailed docstrings explaining retry logic, backoff timing, and cooldowns
+- improve(docs): Document magic numbers and exponential backoff formula in retry logic
+
 ## 1.6.0a10
 - Grouped sensor selection (Weather vs AQ).
 
