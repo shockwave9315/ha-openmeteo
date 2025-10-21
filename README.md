@@ -1,6 +1,6 @@
 # 🌤️ Open-Meteo for Home Assistant
 
-![Version](https://img.shields.io/badge/version-1.6.0a18-blue)
+![Version](https://img.shields.io/badge/version-1.6.0-blue)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green)
 ![HACS](https://img.shields.io/badge/HACS-Custom-orange)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024+-blue)

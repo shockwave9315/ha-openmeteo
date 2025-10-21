@@ -1,3 +1,48 @@
+## 1.6.0 🎉
+
+**First stable release of 1.6.x series!**
+
+This release brings significant code quality improvements, better type safety, and completely modernized documentation.
+
+### ✨ What's New
+- **Production-ready code:** Comprehensive refactoring with type hints and better error handling
+- **Modern documentation:** Complete README rewrite with examples, FAQ, and troubleshooting
+- **Better maintainability:** Split complex functions into focused, testable methods
+- **Improved reliability:** Specific exception handling and detailed logging
+
+### 🔧 Technical Improvements
+- Added comprehensive type hints throughout coordinator module (ConfigEntry, return types, args)
+- Refactored 200+ line `_async_update_data` into 4 focused helper methods:
+  - `_update_coordinates_from_tracker()` - GPS tracking coordinate updates
+  - `_update_coordinates_static()` - Static mode coordinate updates
+  - `_update_location_name()` - Reverse geocoding with cooldown logic
+- Replaced broad `except Exception` with specific exception types (aiohttp.ClientError, asyncio.TimeoutError, etc.)
+- Added detailed docstrings explaining retry logic, backoff timing, and cooldowns
+- Documented magic numbers and exponential backoff formula (1.5^n + jitter)
+
+### 📚 Documentation Overhaul
+- Complete README.md rewrite with modern structure and badges
+- Added comprehensive sensor tables (17 weather + 8 air quality sensors)
+- Included collapsible sections for better navigation
+- Added FAQ/troubleshooting section with common issues
+- Documented performance optimizations and battery saving tips
+- Included Lovelace card examples (basic + advanced)
+
+### 🐛 Bug Fixes
+- Improved GPS tracking fallback behavior
+- Better handling of missing air quality data
+- More robust network error recovery
+
+### 📦 Changed Files
+- `coordinator.py` - Refactored and type-hinted
+- `manifest.json` - Version 1.6.0
+- `const.py` - Updated user agent
+- `CHANGELOG.md` - Release notes
+- `README.md` - Complete rewrite
+
+---
+
+
 ## 1.6.0a18
 - refactor(coordinator): Add comprehensive type hints to improve type safety
 - refactor(coordinator): Split long `_async_update_data` method into smaller, focused helper methods:

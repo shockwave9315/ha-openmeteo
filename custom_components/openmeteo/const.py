@@ -21,7 +21,7 @@ MANUFACTURER = "Open-Meteo"
 NAME = "Open-Meteo"
 
 # HTTP
-HTTP_USER_AGENT = "ha-openmeteo/1.6.0a18 (https://github.com/shockwave9315/ha-openmeteo)"
+HTTP_USER_AGENT = "ha-openmeteo/1.6.0 (https://github.com/shockwave9315/ha-openmeteo)"
 
 """Configuration keys and defaults."""
 CONF_NAME = "name"
