@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, Optional
 
 import aiohttp
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -137,13 +136,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     REVERSE_GEOCODE_COOLDOWN = timedelta(minutes=10)
     OPTIONS_SAVE_COOLDOWN = timedelta(seconds=60)
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        """Initialize the coordinator with Home Assistant and config entry.
-
-        Args:
-            hass: Home Assistant instance
-            entry: ConfigEntry containing integration configuration
-        """
+    def __init__(self, hass: HomeAssistant, entry) -> None:
         self.entry = entry
 
         # Determine polling interval (seconds): prefer minutes-based setting
@@ -275,163 +268,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return None
 
     def _coords_fallback(self, lat: float, lon: float) -> str:
-        """Generate a fallback location name from coordinates."""
         return f"{lat:.2f},{lon:.2f}"
-
-    async def _update_coordinates_from_tracker(
-        self, data: dict[str, Any], now: datetime, min_track: int
-    ) -> tuple[float | None, float | None, bool]:
-        """Update coordinates from tracked entity (MODE_TRACK).
-
-        Args:
-            data: Merged config data and options
-            now: Current UTC time
-            min_track: Minimum tracking interval in minutes
-
-        Returns:
-            Tuple of (latitude, longitude, coords_changed)
-        """
-        ent_id = data.get(CONF_ENTITY_ID) or data.get(CONF_TRACKED_ENTITY_ID)
-        state = self.hass.states.get(ent_id) if ent_id else None
-        coords_changed = False
-        lat = lon = None
-
-        if state and "latitude" in state.attributes and "longitude" in state.attributes:
-            try:
-                lat = float(state.attributes["latitude"])
-                lon = float(state.attributes["longitude"])
-                if (
-                    self._cached is None
-                    or (
-                        abs(lat - self._cached[0]) > self.EPS
-                        or abs(lon - self._cached[1]) > self.EPS
-                    )
-                    and (
-                        self._accepted_at is None
-                        or now - self._accepted_at >= timedelta(minutes=min_track)
-                    )
-                ):
-                    self._cached = (lat, lon)
-                    self._accepted_lat = lat
-                    self._accepted_lon = lon
-                    self._accepted_at = now
-                    coords_changed = True
-                self._warned_missing = False
-            except (TypeError, ValueError) as ex:
-                _LOGGER.debug("Failed to parse GPS coordinates from %s: %s", ent_id, ex)
-        else:
-            # Tracker not ready - use persisted/cached coords
-            using_persisted = OPT_LAST_LAT in data and OPT_LAST_LON in data
-
-            if not self._warned_missing:
-                if using_persisted or self._cached is not None:
-                    _LOGGER.debug(
-                        "Tracked entity %s not ready; using last known coordinates",
-                        ent_id,
-                    )
-                else:
-                    _LOGGER.warning(
-                        "Tracked entity %s missing or lacks GPS attributes; using configured coordinates",
-                        ent_id,
-                    )
-                self._warned_missing = True
-
-            if self._cached is None:
-                lat = float(
-                    data.get(OPT_LAST_LAT, data.get(CONF_LATITUDE, self.hass.config.latitude))
-                )
-                lon = float(
-                    data.get(OPT_LAST_LON, data.get(CONF_LONGITUDE, self.hass.config.longitude))
-                )
-                self._cached = (lat, lon)
-                self._accepted_lat = lat
-                self._accepted_lon = lon
-                self._accepted_at = now if self._accepted_at is None else self._accepted_at
-                coords_changed = True
-
-        return lat, lon, coords_changed
-
-    async def _update_coordinates_static(
-        self, data: dict[str, Any], now: datetime
-    ) -> tuple[float, float, bool]:
-        """Update coordinates for static mode (MODE_STATIC).
-
-        Args:
-            data: Merged config data and options
-            now: Current UTC time
-
-        Returns:
-            Tuple of (latitude, longitude, coords_changed)
-        """
-        lat = float(data.get(CONF_LATITUDE, self.hass.config.latitude))
-        lon = float(data.get(CONF_LONGITUDE, self.hass.config.longitude))
-        coords_changed = False
-
-        if (
-            self._cached is None
-            or abs(lat - self._cached[0]) > self.EPS
-            or abs(lon - self._cached[1]) > self.EPS
-        ):
-            self._cached = (lat, lon)
-            self._accepted_lat = lat
-            self._accepted_lon = lon
-            self._accepted_at = now if self._accepted_at is None else self._accepted_at
-            coords_changed = True
-        elif self._accepted_at is None:
-            self._accepted_at = now
-
-        return lat, lon, coords_changed
-
-    async def _update_location_name(
-        self,
-        lat: float,
-        lon: float,
-        data: dict[str, Any],
-        now: datetime,
-        prev_name: str | None,
-        coords_changed: bool,
-    ) -> str:
-        """Update location name via reverse geocoding (with cooldown).
-
-        Args:
-            lat: Latitude
-            lon: Longitude
-            data: Merged config data and options
-            now: Current UTC time
-            prev_name: Previous location name
-            coords_changed: Whether coordinates have changed
-
-        Returns:
-            Updated location name
-        """
-        fallback_label = self._coords_fallback(lat, lon)
-        needs_loc_refresh = coords_changed or not prev_name or prev_name == fallback_label
-
-        if not needs_loc_refresh:
-            return prev_name if prev_name else fallback_label
-
-        # Check for user override first
-        if data.get(CONF_AREA_NAME_OVERRIDE):
-            return data.get(CONF_AREA_NAME_OVERRIDE)
-
-        # Apply cooldown to avoid excessive reverse-geocoding
-        allow_geocode = (
-            self._last_geocode_at is None
-            or now - self._last_geocode_at >= self._rg_cooldown_td
-        )
-        if allow_geocode:
-            name = await async_reverse_geocode(self.hass, lat, lon)
-            self._last_geocode_at = now
-            return name or fallback_label
-
-        # Cooldown active - use fallback
-        remaining = (self._last_geocode_at + self._rg_cooldown_td - now).total_seconds()
-        _LOGGER.debug(
-            "Reverse geocode skipped due to cooldown (%.0fs remaining); using fallback %s",
-            remaining,
-            fallback_label,
-        )
-        return fallback_label
 
     def _should_update_entry_title(
         self, new_title: str, fallback: str | None, data: dict[str, Any]
@@ -462,20 +299,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return False
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch weather data from API.
-
-        This is the main coordinator update method that:
-        1. Updates GPS coordinates (tracking or static mode)
-        2. Updates location name via reverse geocoding (with cooldown)
-        3. Fetches weather and air quality data
-        4. Persists location data to config entry
-
-        Returns:
-            Dictionary with weather, air quality, and location metadata
-
-        Raises:
-            UpdateFailed: If no valid coordinates or API fetch fails
-        """
         data = {**self.entry.data, **self.entry.options}
         mode = self._current_mode()
         min_track = int(data.get(CONF_MIN_TRACK_INTERVAL, DEFAULT_MIN_TRACK_INTERVAL))
@@ -483,37 +306,127 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         prev_name = self.data.get("location_name") if self.data else None
         prev_loc_ts = self.data.get("last_location_update") if self.data else None
+        coords_changed = False
 
-        # Step 1: Update coordinates based on mode
         if mode == MODE_TRACK:
-            lat, lon, coords_changed = await self._update_coordinates_from_tracker(
-                data, now, min_track
-            )
-        else:
-            lat, lon, coords_changed = await self._update_coordinates_static(data, now)
+            ent_id = data.get(CONF_ENTITY_ID) or data.get(CONF_TRACKED_ENTITY_ID)
+            state = self.hass.states.get(ent_id) if ent_id else None
 
-        # Ensure we have valid coordinates
-        if lat is None or lon is None:
+            if state and "latitude" in state.attributes and "longitude" in state.attributes:
+                try:
+                    lat = float(state.attributes["latitude"])
+                    lon = float(state.attributes["longitude"])
+                    if (
+                        self._cached is None
+                        or (
+                            abs(lat - self._cached[0]) > self.EPS
+                            or abs(lon - self._cached[1]) > self.EPS
+                        )
+                        and (
+                            self._accepted_at is None
+                            or now - self._accepted_at >= timedelta(minutes=min_track)
+                        )
+                    ):
+                        self._cached = (lat, lon)
+                        self._accepted_lat = lat
+                        self._accepted_lon = lon
+                        self._accepted_at = now
+                        coords_changed = True
+                    self._warned_missing = False
+                except (TypeError, ValueError):
+                    pass
+            else:
+                # Tracker jeszcze nie gotowy — użyj zapamiętanych koordów; w ostateczności konfig.
+                using_persisted = OPT_LAST_LAT in data and OPT_LAST_LON in data
+
+                if not self._warned_missing:
+                    if using_persisted or self._cached is not None:
+                        _LOGGER.debug(
+                            "Tracked entity %s not ready; using last known coordinates",
+                            ent_id,
+                        )
+                    else:
+                        _LOGGER.warning(
+                            "Tracked entity %s missing or lacks GPS attributes; using configured coordinates",
+                            ent_id,
+                        )
+                    self._warned_missing = True
+
+                if self._cached is None:
+                    lat = float(
+                        data.get(OPT_LAST_LAT, data.get(CONF_LATITUDE, self.hass.config.latitude))
+                    )
+                    lon = float(
+                        data.get(OPT_LAST_LON, data.get(CONF_LONGITUDE, self.hass.config.longitude))
+                    )
+                    self._cached = (lat, lon)
+                    self._accepted_lat = lat
+                    self._accepted_lon = lon
+                    self._accepted_at = now if self._accepted_at is None else self._accepted_at
+                    coords_changed = True
+
+        else:
+            lat = float(data.get(CONF_LATITUDE, self.hass.config.latitude))
+            lon = float(data.get(CONF_LONGITUDE, self.hass.config.longitude))
+            if (
+                self._cached is None
+                or abs(lat - self._cached[0]) > self.EPS
+                or abs(lon - self._cached[1]) > self.EPS
+            ):
+                self._cached = (lat, lon)
+                self._accepted_lat = lat
+                self._accepted_lon = lon
+                self._accepted_at = now if self._accepted_at is None else self._accepted_at
+                coords_changed = True
+            elif self._accepted_at is None:
+                self._accepted_at = now
+
+        # Location name
+        loc_name = prev_name
+        last_loc_ts = prev_loc_ts
+        # Ensure we have lat/lon for naming even if tracker state not yet provided
+        try:
+            _ = lat; _ = lon
+        except NameError:
             if self._cached is not None:
                 lat, lon = self._cached
             else:
                 lat = float(data.get(OPT_LAST_LAT, data.get(CONF_LATITUDE, self.hass.config.latitude)))
                 lon = float(data.get(OPT_LAST_LON, data.get(CONF_LONGITUDE, self.hass.config.longitude)))
-
-        # Step 2: Update location name
-        loc_name = await self._update_location_name(
-            lat, lon, data, now, prev_name, coords_changed
-        )
-        last_loc_ts = now.isoformat() if coords_changed else prev_loc_ts
-        self.location_name = loc_name
-
-        # Step 3: Update config entry title if needed
         fallback_label = self._coords_fallback(lat, lon)
+        needs_loc_refresh = coords_changed or not prev_name or prev_name == fallback_label
+        if needs_loc_refresh:
+            if data.get(CONF_AREA_NAME_OVERRIDE):
+                loc_name = data.get(CONF_AREA_NAME_OVERRIDE)
+            else:
+                # Apply cooldown to avoid excessive reverse-geocoding
+                allow_geocode = (
+                    self._last_geocode_at is None
+                    or now - self._last_geocode_at >= self._rg_cooldown_td
+                )
+                if allow_geocode:
+                    name = await async_reverse_geocode(self.hass, lat, lon)
+                    self._last_geocode_at = now
+                    loc_name = name or fallback_label
+                else:
+                    remaining = (self._last_geocode_at + self._rg_cooldown_td - now).total_seconds()
+                    _LOGGER.debug(
+                        "Reverse geocode skipped due to cooldown (%.0fs remaining); using fallback %s",
+                        remaining,
+                        fallback_label
+                    )
+                    loc_name = fallback_label
+            last_loc_ts = now.isoformat()
+            self.location_name = loc_name
+
+        elif self.location_name:
+            loc_name = self.location_name
+
         if loc_name and self._should_update_entry_title(loc_name, fallback_label, data):
             try:
                 self.async_update_entry_no_reload(title=loc_name)
-            except (ValueError, KeyError) as ex:
-                _LOGGER.debug("Failed to update entry title: %s", ex)
+            except Exception:
+                pass
 
         if not self._cached:
             raise UpdateFailed("No valid coordinates available")
@@ -529,7 +442,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._last_data["location_name"] = loc_name
             self._last_data["last_location_update"] = last_loc_ts
             
-            # Try to fetch air quality data (best-effort, non-critical)
+            # Try to fetch air quality data
             try:
                 aq_data = await self._fetch_air_quality(latitude, longitude)
                 if aq_data and 'hourly' in aq_data:
@@ -537,12 +450,10 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     _LOGGER.debug("Successfully fetched air quality data")
                 else:
                     _LOGGER.warning("No air quality data in API response")
-            except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-                _LOGGER.warning("Network error fetching air quality data: %s", err)
-            except (KeyError, ValueError, TypeError) as err:
-                _LOGGER.warning("Invalid air quality data format: %s", err)
+            except Exception as err:
+                _LOGGER.warning("Error fetching air quality data: %s", str(err), exc_info=True)
 
-            # Step 4: Persist last accepted coords / location name (with cooldown)
+            # persist last accepted coords / location name in entry.options
             try:
                 opts = dict(self.entry.options)
                 data_map = dict(self.entry.data)
@@ -571,7 +482,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         data_map[OPT_LAST_LOCATION_NAME] = self.location_name
                         need_save_data = True
                 if need_save_opts or need_save_data:
-                    # Save immediately if coords changed; otherwise respect cooldown
+                    # Zapisz natychmiast, jeśli w tej iteracji zmieniły się koordy.
                     if coords_changed or self._last_options_save_at is None or (
                         now - self._last_options_save_at >= self._opt_save_cooldown_td
                     ):
@@ -582,8 +493,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         self._last_options_save_at = now
                     else:
                         _LOGGER.debug("Options save skipped due to cooldown")
-            except (ValueError, KeyError, AttributeError) as ex:
-                _LOGGER.debug("Failed to persist location data to config entry: %s", ex)
+            except Exception:
+                pass
 
             return self._last_data
         except UpdateFailed:
@@ -640,18 +551,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def _fetch_weather_data(self, latitude: float, longitude: float) -> dict[str, Any]:
-        """Fetch weather data from Open-Meteo API with retry logic.
-
-        Args:
-            latitude: Latitude coordinate
-            longitude: Longitude coordinate
-
-        Returns:
-            Dictionary with weather data from API
-
-        Raises:
-            UpdateFailed: If API returns error or network failures after retries
-        """
+        """Fetch weather data from Open-Meteo API."""
         params = {
             "latitude": latitude,
             "longitude": longitude,
@@ -680,44 +580,28 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         session = async_get_clientsession(self.hass)
         headers = {"User-Agent": HTTP_USER_AGENT}
-
-        # Retry up to 3 times with exponential backoff
-        MAX_RETRIES = 3
-        for attempt in range(MAX_RETRIES):
+        
+        for attempt in range(3):
             try:
                 async with session.get(
                     URL,
                     params=params,
                     headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=20),  # 20s total timeout per request
+                    timeout=aiohttp.ClientTimeout(total=20),
                 ) as resp:
                     if resp.status >= 400:
                         text = await resp.text()
                         raise UpdateFailed(f"API error {resp.status}: {text[:100]}")
                     return await resp.json()
             except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-                if attempt == MAX_RETRIES - 1:  # Last attempt
+                if attempt == 2:
                     raise UpdateFailed(f"Network error: {err}")
-                # Exponential backoff: 1.5^0 + jitter, 1.5^1 + jitter, 1.5^2 + jitter
-                # = ~1s, ~1.5s, ~2.25s with random jitter to avoid thundering herd
-                backoff = 1.5 ** attempt + random.random() / 2
-                await asyncio.sleep(backoff)
-
+                await asyncio.sleep(1.5 ** attempt + random.random() / 2)
+        
         raise UpdateFailed("Failed to fetch weather data after multiple attempts")
 
     async def _fetch_air_quality(self, lat: float, lon: float) -> dict[str, Any] | None:
-        """Fetch air quality data from Open-Meteo Air Quality API (best-effort).
-
-        Args:
-            lat: Latitude coordinate
-            lon: Longitude coordinate
-
-        Returns:
-            Dictionary with air quality data, or None if unavailable/error
-
-        Note:
-            This is a best-effort fetch. Failures are logged but don't raise exceptions.
-        """
+        """Fetch air quality data from Open-Meteo Air Quality API."""
         params = {
             "latitude": lat,
             "longitude": lon,
@@ -736,13 +620,13 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         session = async_get_clientsession(self.hass)
         headers = {"User-Agent": HTTP_USER_AGENT}
-
+        
         try:
             async with session.get(
                 "https://air-quality-api.open-meteo.com/v1/air-quality",
                 params=params,
                 headers=headers,
-                timeout=aiohttp.ClientTimeout(total=30),  # 30s timeout for AQ API
+                timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
                 if resp.status >= 400:
                     text = await resp.text()
@@ -750,5 +634,5 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     return None
                 return await resp.json()
         except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-            _LOGGER.warning("Network error fetching air quality data: %s", err)
+            _LOGGER.warning("Error fetching air quality data: %s", str(err))
             return None
