@@ -1,6 +1,6 @@
 # 🌤️ Open-Meteo for Home Assistant
 
-![Version](https://img.shields.io/badge/version-1.6.0-blue)
+![Version](https://img.shields.io/badge/version-1.6.0a19-orange)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green)
 ![HACS](https://img.shields.io/badge/HACS-Custom-orange)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024+-blue)
@@ -122,6 +122,113 @@ Pogoda śledzi Twoją lokalizację w czasie rzeczywistym!
 | O₃ | Ozon | µg/m³ |
 | US AQI | Indeks jakości powietrza (USA) | - |
 | EU AQI | Indeks jakości powietrza (EU) | - |
+
+### ⚡ Sensory fotowoltaiki (PV) - **OPCJONALNE**
+
+**⚠️ Alpha - Wymaga testów w rzeczywistych warunkach**
+
+<details>
+<summary><b>📊 Kliknij, aby zobaczyć sensory PV</b></summary>
+
+Funkcjonalność prognozowania produkcji PV pozwala automatycznie uruchamiać urządzenia AGD (pralka, zmywarka, suszarka) gdy jest wystarczająca produkcja energii słonecznej.
+
+**Konfiguracja:**
+1. W opcjach integracji włącz "Włącz przewidywanie produkcji PV"
+2. Podaj parametry instalacji:
+   - Moc instalacji (kWp)
+   - Azymut paneli (180° = południe)
+   - Nachylenie paneli (35° optymalne dla Polski)
+   - Współczynnik sprawności (0.85 typowo)
+
+**7 Sensorów prognozy:**
+
+| Sensor | Opis | Jednostka |
+|--------|------|-----------|
+| ☀️ Produkcja PV (teraz) | Aktualne szacowanie produkcji | kW |
+| 📈 Prognoza PV 1h | Prognoza na następną godzinę | kWh |
+| 📈 Prognoza PV 3h | Suma produkcji w ciągu 3h | kWh |
+| 📈 Prognoza PV 6h | Suma produkcji w ciągu 6h | kWh |
+| 📈 Prognoza PV dziś | Suma do końca dnia | kWh |
+| ⬇️ Min. produkcja PV 3h | Minimum w ciągu 3h | kW |
+| 📊 Śr. produkcja PV 3h | Średnia w ciągu 3h | kW |
+
+**1 Binary Sensor (automatyzacje):**
+
+| Sensor | Opis | Wartość |
+|--------|------|---------|
+| 🔌 Gotowe do uruchomienia AGD | Czy uruchomić urządzenia? | ON/OFF |
+
+**Atrybuty binary sensor:**
+- `avg_production_w` - Średnia produkcja w następnych 3h (W)
+- `min_production_w` - Minimalna produkcja w następnych 3h (W)
+- `total_3h_kwh` - Całkowita energia w 3h (kWh)
+- `confidence` - Poziom pewności (high/medium/low)
+- `reasoning` - Wyjaśnienie decyzji
+
+**Warunki włączenia:**
+- Średnia produkcja w ciągu 3h ≥ 1000W
+- Minimalna produkcja w ciągu 3h ≥ 600W (60% średniej)
+
+**Przykładowa automatyzacja:**
+
+```yaml
+automation:
+  - alias: "Uruchom pralkę gdy PV gotowe"
+    description: "Automatyczne uruchomienie pralki przy wystarczającej produkcji PV"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.pv_gotowe_agd
+        to: "on"
+        for: "00:05:00"  # Potwierdź przez 5 min
+    condition:
+      - condition: time
+        after: "10:00"
+        before: "14:00"
+      - condition: state
+        entity_id: input_boolean.pralka_czeka
+        state: "on"
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id: switch.pralka_smartthings
+      - service: notify.mobile_app
+        data:
+          message: "Pralka uruchomiona - produkcja PV: {{ state_attr('binary_sensor.pv_gotowe_agd', 'avg_production_w') }}W"
+```
+
+**Sekwencyjne uruchamianie urządzeń:**
+
+```yaml
+automation:
+  - alias: "Sekwencja AGD z PV"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.pv_gotowe_agd
+        to: "on"
+    action:
+      # 1. Pralka (1.5h)
+      - service: switch.turn_on
+        target:
+          entity_id: switch.pralka
+      - delay: "01:30:00"
+      # 2. Zmywarka (2h)
+      - service: switch.turn_on
+        target:
+          entity_id: switch.zmywarka
+      - delay: "02:00:00"
+      # 3. Suszarka (1.5h)
+      - service: switch.turn_on
+        target:
+          entity_id: switch.suszarka
+```
+
+**Uwagi:**
+- Wymaga testowania z rzeczywistą instalacją PV
+- Wartości progowe (1000W/600W) można dostosować do swoich potrzeb
+- Nocą (< 6:00, > 20:00) produkcja = 0
+- Gdy brak danych promieniowania, sensory zwracają 0 z błędem w atrybutach
+
+</details>
 
 ---
 

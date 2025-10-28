@@ -19,7 +19,12 @@
           "api_provider": "API provider",
           "area_name_override": "Area name override",
           "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
-          "options_save_cooldown_min": "Options save cooldown (min)"
+          "options_save_cooldown_min": "Options save cooldown (min)",
+          "pv_enabled": "Enable PV production forecasting",
+          "pv_power_kwp": "PV installation power (kWp)",
+          "pv_azimuth": "Panel azimuth (0-360°, 180=south)",
+          "pv_tilt": "Panel tilt (0-90°)",
+          "pv_efficiency": "System efficiency (0.5-1.0)"
         },
         "data_description": {
           "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve place name from coordinates. Higher value = less battery/data usage.",
@@ -44,12 +49,22 @@
           "area_name_override": "Area name override",
           "use_place_as_device_name": "Use place name as device name",
           "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
-          "options_save_cooldown_min": "Options save cooldown (min)"
+          "options_save_cooldown_min": "Options save cooldown (min)",
+          "pv_enabled": "Enable PV production forecasting",
+          "pv_power_kwp": "PV installation power (kWp)",
+          "pv_azimuth": "Panel azimuth (0-360°, 180=south)",
+          "pv_tilt": "Panel tilt (0-90°)",
+          "pv_efficiency": "System efficiency (0.5-1.0)"
         },
         "data_description": {
           "use_place_as_device_name": "When enabled, the device in the Device Registry will be named after the place (e.g. Radłów). When disabled, your own custom device name is kept.",
           "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve a place name from coordinates. Higher value = less battery/data usage.",
-          "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
+          "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes.",
+          "pv_enabled": "Enable solar production forecasting based on radiation forecast. PV sensors will be available after enabling.",
+          "pv_power_kwp": "Nominal peak power of the photovoltaic installation in kiloWatts (kWp). E.g. 5.0 for a 5 kWp system.",
+          "pv_azimuth": "Panel orientation: 0°=north, 90°=east, 180°=south, 270°=west. Optimal for most locations: 180° (south).",
+          "pv_tilt": "Panel tilt angle from horizontal. Optimal: latitude angle ±15°.",
+          "pv_efficiency": "Overall system efficiency (panels + inverter + losses). Typical: 0.75-0.90."
         }
       },
       "search_place": {
@@ -123,7 +138,12 @@
           "api_provider": "API provider",
           "area_name_override": "Area name override",
           "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
-          "options_save_cooldown_min": "Options save cooldown (min)"
+          "options_save_cooldown_min": "Options save cooldown (min)",
+          "pv_enabled": "Enable PV production forecasting",
+          "pv_power_kwp": "PV installation power (kWp)",
+          "pv_azimuth": "Panel azimuth (0-360°, 180=south)",
+          "pv_tilt": "Panel tilt (0-90°)",
+          "pv_efficiency": "System efficiency (0.5-1.0)"
         },
         "data_description": {
           "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve place name from coordinates. Higher value = less battery/data usage.",
@@ -147,12 +167,22 @@
           "area_name_override": "Area name override",
           "use_place_as_device_name": "Use place name as device name",
           "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
-          "options_save_cooldown_min": "Options save cooldown (min)"
+          "options_save_cooldown_min": "Options save cooldown (min)",
+          "pv_enabled": "Enable PV production forecasting",
+          "pv_power_kwp": "PV installation power (kWp)",
+          "pv_azimuth": "Panel azimuth (0-360°, 180=south)",
+          "pv_tilt": "Panel tilt (0-90°)",
+          "pv_efficiency": "System efficiency (0.5-1.0)"
         },
         "data_description": {
           "use_place_as_device_name": "When enabled, the device in the Device Registry will be named after the place (e.g. Radłów). When disabled, your own custom device name is kept.",
           "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve a place name from coordinates. Higher value = less battery/data usage.",
-          "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
+          "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes.",
+          "pv_enabled": "Enable solar production forecasting based on radiation forecast. PV sensors will be available after enabling.",
+          "pv_power_kwp": "Nominal peak power of the photovoltaic installation in kiloWatts (kWp). E.g. 5.0 for a 5 kWp system.",
+          "pv_azimuth": "Panel orientation: 0°=north, 90°=east, 180°=south, 270°=west. Optimal for most locations: 180° (south).",
+          "pv_tilt": "Panel tilt angle from horizontal. Optimal: latitude angle ±15°.",
+          "pv_efficiency": "Overall system efficiency (panels + inverter + losses). Typical: 0.75-0.90."
         }
       }
     },
@@ -213,6 +243,32 @@
     },
     "uv_index": {
       "name": "UV Index"
+    },
+    "pv_current_estimate": {
+      "name": "PV production (now)"
+    },
+    "pv_forecast_1h": {
+      "name": "PV forecast 1h"
+    },
+    "pv_forecast_3h": {
+      "name": "PV forecast 3h"
+    },
+    "pv_forecast_6h": {
+      "name": "PV forecast 6h"
+    },
+    "pv_forecast_today": {
+      "name": "PV forecast today"
+    },
+    "pv_min_next_3h": {
+      "name": "Min PV production 3h"
+    },
+    "pv_avg_next_3h": {
+      "name": "Avg PV production 3h"
+    }
+  },
+  "binary_sensor": {
+    "pv_appliances_ready": {
+      "name": "Appliances ready"
     }
   }
 }

@@ -1,3 +1,81 @@
+## 1.6.0a19 ⚡ **ALPHA - PV Forecasting**
+
+**⚠️ Alpha Release - Requires Testing**
+
+This alpha release introduces **optional PV (photovoltaic) production forecasting** functionality. This feature is experimental and requires real-world testing.
+
+### ✨ What's New
+- **PV Production Forecasting:** Calculate solar power production forecasts based on solar radiation data from Open-Meteo API
+- **Smart Appliance Automation:** Binary sensor that indicates when there's sufficient PV production to run appliances (washing machine, dishwasher, dryer)
+- **7 New PV Sensors:**
+  - `sensor.pv_produkcja_teraz` - Current PV production estimate (kW)
+  - `sensor.pv_prognoza_1h` - 1-hour forecast (kWh)
+  - `sensor.pv_prognoza_3h` - 3-hour forecast (kWh)
+  - `sensor.pv_prognoza_6h` - 6-hour forecast (kWh)
+  - `sensor.pv_prognoza_dzis` - Today's forecast until end of day (kWh)
+  - `sensor.pv_min_3h` - Minimum production in next 3 hours (kW)
+  - `sensor.pv_sr_3h` - Average production in next 3 hours (kW)
+- **1 New Binary Sensor:**
+  - `binary_sensor.pv_gotowe_agd` - "Appliances Ready" - ON when avg production ≥ 1000W and min ≥ 600W over next 3h
+  - Includes detailed attributes: `avg_production_w`, `min_production_w`, `total_3h_kwh`, `confidence`, `reasoning`
+
+### 🔧 Configuration Options
+New optional PV configuration section in config flow:
+- **pv_enabled** (bool) - Enable PV forecasting (default: False)
+- **pv_power_kwp** (float) - Installation power in kWp (default: 5.0, range: 0.5-50)
+- **pv_azimuth** (int) - Panel azimuth in degrees (default: 180=south, range: 0-360)
+- **pv_tilt** (int) - Panel tilt angle (default: 35°, range: 0-90)
+- **pv_efficiency** (float) - System efficiency (default: 0.85, range: 0.5-1.0)
+
+### 🌤️ New API Parameters
+Extended hourly forecast with solar radiation parameters:
+- `direct_radiation` - Direct solar radiation (W/m²)
+- `diffuse_radiation` - Diffuse solar radiation (W/m²)
+- `direct_normal_irradiance` - DNI (W/m²)
+- `shortwave_radiation` - GHI - Global Horizontal Irradiance (W/m²)
+- `sunshine_duration` - Duration of sunshine (seconds)
+
+### 📦 Technical Details
+- **New file:** `binary_sensor.py` - Platform for PV appliances ready binary sensor
+- **Modified:** `coordinator.py` - Added `_calculate_pv_production()` method (263 lines) with graceful degradation
+- **Modified:** `sensor.py` - Added 7 PV sensor definitions
+- **Modified:** `config_flow.py` - Added PV configuration section
+- **Modified:** `const.py` - Extended `DEFAULT_HOURLY_VARIABLES`, added PV constants
+- **Modified:** `pl.json`, `en.json` - Added PV translations and descriptions
+
+### ⚠️ Important Notes
+- **REQUIRES TESTING** - This feature needs validation with real PV installations
+- **Backward Compatible** - When `pv_enabled = False` (default), no changes to existing behavior
+- **Graceful Degradation** - If radiation data is unavailable, sensors return 0 with error indication
+- **Night Detection** - Production is 0 when sun is down (hour < 6 or > 20, or sunshine_duration = 0)
+
+### 🎯 Use Case
+Example automation using the new binary sensor:
+```yaml
+automation:
+  - alias: "Run washing machine when PV is ready"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.pv_gotowe_agd
+        to: "on"
+    condition:
+      - condition: time
+        after: "10:00"
+        before: "14:00"
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id: switch.washing_machine
+```
+
+### 📝 TODO for Stable Release
+- [ ] Real-world testing with actual PV installations
+- [ ] Validation of production calculation accuracy
+- [ ] User feedback on appliances ready thresholds
+- [ ] Documentation update with automation examples
+
+---
+
 ## 1.6.0 🎉
 
 **First stable release of 1.6.x series!**

@@ -23,6 +23,8 @@ from homeassistant.const import (
     UnitOfPressure,
     UnitOfSpeed,
     UnitOfTemperature,
+    UnitOfPower,
+    UnitOfEnergy,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -88,6 +90,15 @@ OBJECT_ID_PL = {
     "temperature_max": "temperatura_maksymalna",
     "apparent_temperature_min": "odczuwalna_temperatura_minimalna",
     "apparent_temperature_max": "odczuwalna_temperatura_maksymalna",
+    # PV sensors
+    "pv_current_estimate": "pv_produkcja_teraz",
+    "pv_forecast_1h": "pv_prognoza_1h",
+    "pv_forecast_3h": "pv_prognoza_3h",
+    "pv_forecast_6h": "pv_prognoza_6h",
+    "pv_forecast_today": "pv_prognoza_dzis",
+    "pv_min_next_3h": "pv_min_3h",
+    "pv_avg_next_3h": "pv_sr_3h",
+    "pv_appliances_ready": "pv_gotowe_agd",
 }
 
 
@@ -295,7 +306,79 @@ SENSOR_TYPES: dict[str, OpenMeteoSensorDescription] = {
         device_class=SensorDeviceClass.TIMESTAMP,
         value_fn=lambda d: _first_daily_dt(d, "sunset"),
     ),
+    # PV (Photovoltaic) Sensors - solar production forecasting
+    "pv_current_estimate": OpenMeteoSensorDescription(
+        key="pv_current_estimate",
+        translation_key="pv_current_estimate",
+        name="Produkcja PV (teraz)",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        icon="mdi:solar-power",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: d.get("pv", {}).get("current_estimate_kw"),
+    ),
+    "pv_forecast_1h": OpenMeteoSensorDescription(
+        key="pv_forecast_1h",
+        translation_key="pv_forecast_1h",
+        name="Prognoza PV 1h",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        icon="mdi:solar-power-variant",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        value_fn=lambda d: d.get("pv", {}).get("forecast_1h_kwh"),
+    ),
+    "pv_forecast_3h": OpenMeteoSensorDescription(
+        key="pv_forecast_3h",
+        translation_key="pv_forecast_3h",
+        name="Prognoza PV 3h",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        icon="mdi:solar-power-variant",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        value_fn=lambda d: d.get("pv", {}).get("forecast_3h_kwh"),
+    ),
+    "pv_forecast_6h": OpenMeteoSensorDescription(
+        key="pv_forecast_6h",
+        translation_key="pv_forecast_6h",
+        name="Prognoza PV 6h",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        icon="mdi:solar-power-variant",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        value_fn=lambda d: d.get("pv", {}).get("forecast_6h_kwh"),
+    ),
+    "pv_forecast_today": OpenMeteoSensorDescription(
+        key="pv_forecast_today",
+        translation_key="pv_forecast_today",
+        name="Prognoza PV dziś",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        icon="mdi:solar-panel",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        value_fn=lambda d: d.get("pv", {}).get("forecast_today_kwh"),
+    ),
+    "pv_min_next_3h": OpenMeteoSensorDescription(
+        key="pv_min_next_3h",
+        translation_key="pv_min_next_3h",
+        name="Min. produkcja PV 3h",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        icon="mdi:solar-power-variant-outline",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: d.get("pv", {}).get("min_next_3h_kw"),
+    ),
+    "pv_avg_next_3h": OpenMeteoSensorDescription(
+        key="pv_avg_next_3h",
+        translation_key="pv_avg_next_3h",
+        name="Śr. produkcja PV 3h",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        icon="mdi:solar-power-variant-outline",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: d.get("pv", {}).get("avg_next_3h_kw"),
+    ),
     # UV: osobna klasa OpenMeteoUvIndexSensor
+    # Note: pv_appliances_ready is a binary_sensor, implemented as OpenMeteoPvAppliancesSensor class below
 }
 
 # Air Quality Sensors

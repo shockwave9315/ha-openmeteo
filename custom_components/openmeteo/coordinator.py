@@ -542,6 +542,46 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except (KeyError, ValueError, TypeError) as err:
                 _LOGGER.warning("Invalid air quality data format: %s", err)
 
+            # Calculate PV production forecast (if enabled)
+            from .const import (
+                CONF_PV_ENABLED,
+                CONF_PV_POWER_KWP,
+                CONF_PV_AZIMUTH,
+                CONF_PV_TILT,
+                CONF_PV_EFFICIENCY,
+                DEFAULT_PV_ENABLED,
+                DEFAULT_PV_POWER_KWP,
+                DEFAULT_PV_AZIMUTH,
+                DEFAULT_PV_TILT,
+                DEFAULT_PV_EFFICIENCY,
+            )
+
+            pv_enabled = data.get(CONF_PV_ENABLED, DEFAULT_PV_ENABLED)
+            if pv_enabled:
+                _LOGGER.info("PV forecasting is enabled, calculating production")
+                try:
+                    pv_config = {
+                        CONF_PV_POWER_KWP: data.get(CONF_PV_POWER_KWP, DEFAULT_PV_POWER_KWP),
+                        CONF_PV_AZIMUTH: data.get(CONF_PV_AZIMUTH, DEFAULT_PV_AZIMUTH),
+                        CONF_PV_TILT: data.get(CONF_PV_TILT, DEFAULT_PV_TILT),
+                        CONF_PV_EFFICIENCY: data.get(CONF_PV_EFFICIENCY, DEFAULT_PV_EFFICIENCY),
+                    }
+                    pv_data = self._calculate_pv_production(
+                        weather_data.get("hourly", {}),
+                        pv_config,
+                        weather_data.get("timezone", "UTC"),
+                    )
+                    self._last_data["pv"] = pv_data
+                    _LOGGER.debug(
+                        "PV production calculated: current=%.2f kW, ready=%s",
+                        pv_data.get("current_estimate_kw", 0),
+                        pv_data.get("appliances_ready", False),
+                    )
+                except Exception as err:
+                    _LOGGER.warning("Failed to calculate PV production: %s", err, exc_info=True)
+            else:
+                _LOGGER.debug("PV forecasting is disabled")
+
             # Step 4: Persist last accepted coords / location name (with cooldown)
             try:
                 opts = dict(self.entry.options)
@@ -752,3 +792,267 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             _LOGGER.warning("Network error fetching air quality data: %s", err)
             return None
+
+    def _calculate_pv_production(
+        self,
+        hourly_data: dict[str, Any],
+        pv_config: dict[str, Any],
+        timezone_str: str,
+    ) -> dict[str, Any]:
+        """Calculate PV production forecast based on solar radiation data.
+
+        Args:
+            hourly_data: Hourly weather data from API (contains radiation arrays)
+            pv_config: PV configuration dict with keys: pv_power_kwp, pv_efficiency, etc.
+            timezone_str: Timezone string from API response (e.g., "Europe/Warsaw")
+
+        Returns:
+            Dictionary containing:
+                - current_estimate_kw: Current hour production estimate (kW)
+                - forecast_1h_kwh: Next hour production (kWh)
+                - forecast_3h_kwh: Sum of next 3 hours (kWh)
+                - forecast_6h_kwh: Sum of next 6 hours (kWh)
+                - forecast_today_kwh: Sum until end of day (kWh)
+                - min_next_3h_kw: Minimum production in next 3h (kW)
+                - avg_next_3h_kw: Average production in next 3h (kW)
+                - appliances_ready: Boolean - can run appliances now?
+                - appliances_ready_attrs: Dict with reasoning details
+
+        Example input:
+            hourly_data = {
+                "time": ["2025-10-28T00:00", "2025-10-28T01:00", ...],
+                "shortwave_radiation": [0, 0, 0, 45, 120, 350, ...],  # W/m²
+                "direct_radiation": [0, 0, 0, 30, 80, 250, ...],
+                "diffuse_radiation": [0, 0, 0, 15, 40, 100, ...],
+                "sunshine_duration": [0, 0, 0, 1800, 3200, 3600, ...],  # seconds
+            }
+            pv_config = {"pv_power_kwp": 5.0, "pv_efficiency": 0.85}
+            timezone_str = "Europe/Warsaw"
+
+        Example output:
+            {
+                "current_estimate_kw": 0.85,
+                "forecast_1h_kwh": 1.2,
+                "forecast_3h_kwh": 4.5,
+                "appliances_ready": True,
+                "appliances_ready_attrs": {
+                    "avg_production_w": 1500,
+                    "min_production_w": 850,
+                    "confidence": "high",
+                    "reasoning": "Average production 1500W ≥ 1000W and minimum 850W ≥ 600W"
+                }
+            }
+
+        Note:
+            # REQUIRES TESTING in real-world conditions with actual solar radiation data
+        """
+        from .const import (
+            CONF_PV_POWER_KWP,
+            CONF_PV_EFFICIENCY,
+            DEFAULT_PV_POWER_KWP,
+            DEFAULT_PV_EFFICIENCY,
+        )
+
+        try:
+            # Determine timezone (with fallback to UTC)
+            try:
+                import pytz
+                tz = pytz.timezone(timezone_str) if timezone_str else dt_util.UTC
+            except Exception:
+                tz = dt_util.UTC
+                _LOGGER.debug("Using UTC timezone as fallback for PV calculations")
+
+            now = dt_util.now(tz)
+
+            # Extract PV configuration
+            power_kwp = float(pv_config.get(CONF_PV_POWER_KWP, DEFAULT_PV_POWER_KWP))
+            efficiency = float(pv_config.get(CONF_PV_EFFICIENCY, DEFAULT_PV_EFFICIENCY))
+
+            _LOGGER.debug(
+                "Calculating PV production: power=%.1f kWp, efficiency=%.2f, timezone=%s",
+                power_kwp,
+                efficiency,
+                timezone_str,
+            )
+
+            # Extract hourly arrays from API response
+            times = hourly_data.get("time", [])
+            shortwave = hourly_data.get("shortwave_radiation", [])
+            direct = hourly_data.get("direct_radiation", [])
+            diffuse = hourly_data.get("diffuse_radiation", [])
+            sunshine = hourly_data.get("sunshine_duration", [])
+
+            if not times:
+                _LOGGER.warning("No time data in hourly forecast for PV calculations")
+                raise ValueError("No time data available")
+
+            # Calculate production for each forecast hour
+            production_kw = []
+            for i, time_str in enumerate(times):
+                try:
+                    # Parse timestamp and localize to timezone
+                    dt = dt_util.parse_datetime(time_str)
+                    if dt and dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=tz)
+
+                    hour = dt.hour if dt else 0
+
+                    # Determine solar irradiance (W/m²)
+                    # Prefer shortwave_radiation (GHI), fallback to sum of direct+diffuse
+                    if i < len(shortwave) and shortwave[i] is not None:
+                        irradiance = float(shortwave[i])
+                    elif i < len(direct) and i < len(diffuse):
+                        d = float(direct[i]) if direct[i] is not None else 0
+                        f = float(diffuse[i]) if diffuse[i] is not None else 0
+                        irradiance = d + f
+                    else:
+                        irradiance = 0
+
+                    # Night detection: check sunshine duration and hour range
+                    sun_duration = sunshine[i] if i < len(sunshine) and sunshine[i] is not None else 0
+                    is_night = (hour < 6 or hour > 20) or sun_duration == 0
+
+                    if is_night or irradiance < 1:
+                        # No production at night or with negligible irradiance
+                        prod = 0.0
+                    else:
+                        # Production formula: (irradiance / 1000) * power_kwp * efficiency
+                        # Irradiance is in W/m², so divide by 1000 to get kW/m²
+                        prod = (irradiance / 1000.0) * power_kwp * efficiency
+                        prod = max(0.0, prod)  # Ensure non-negative
+
+                    production_kw.append(round(prod, 3))
+
+                except Exception as ex:
+                    _LOGGER.debug("Error calculating production for hour %d: %s", i, ex)
+                    production_kw.append(0.0)
+
+            # Find current hour index in forecast
+            current_idx = None
+            for i, time_str in enumerate(times):
+                try:
+                    dt = dt_util.parse_datetime(time_str)
+                    if dt and dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=tz)
+                    # Current hour if: dt <= now < dt + 1h
+                    if dt and dt <= now < dt + timedelta(hours=1):
+                        current_idx = i
+                        break
+                except Exception:
+                    continue
+
+            if current_idx is None:
+                # Fallback: use first available hour
+                current_idx = 0
+                _LOGGER.debug("Could not find current hour in forecast, using index 0")
+
+            # Calculate forecasts
+            current_estimate = production_kw[current_idx] if current_idx < len(production_kw) else 0
+
+            # 1h forecast (next hour)
+            forecast_1h = production_kw[current_idx + 1] if current_idx + 1 < len(production_kw) else 0
+
+            # 3h forecast (sum of next 3 hours)
+            forecast_3h = sum(production_kw[current_idx:current_idx + 3]) if current_idx + 3 <= len(production_kw) else 0
+
+            # 6h forecast (sum of next 6 hours)
+            forecast_6h = sum(production_kw[current_idx:current_idx + 6]) if current_idx + 6 <= len(production_kw) else 0
+
+            # Today forecast (sum until end of day)
+            end_of_day_idx = None
+            for i in range(current_idx, len(times)):
+                try:
+                    dt = dt_util.parse_datetime(times[i])
+                    if dt and dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=tz)
+                    if dt and dt.date() > now.date():
+                        end_of_day_idx = i
+                        break
+                except Exception:
+                    continue
+
+            if end_of_day_idx is None:
+                end_of_day_idx = len(production_kw)
+
+            forecast_today = sum(production_kw[current_idx:end_of_day_idx])
+
+            # Calculate min/avg for next 3 hours (for appliances decision)
+            next_3h = production_kw[current_idx:current_idx + 3] if current_idx + 3 <= len(production_kw) else []
+            min_next_3h = min(next_3h) if next_3h else 0
+            avg_next_3h = sum(next_3h) / len(next_3h) if next_3h else 0
+
+            # Appliances ready logic:
+            # - Average production ≥ 1000W (1 kW)
+            # - Minimum production ≥ 600W (60% of average threshold)
+            avg_w = avg_next_3h * 1000  # Convert kW to W
+            min_w = min_next_3h * 1000
+
+            ready = avg_w >= 1000 and min_w >= 600
+
+            # Determine confidence level
+            if next_3h and avg_next_3h > 0:
+                min_pct = (min_next_3h / avg_next_3h * 100)
+                if min_pct >= 80:
+                    confidence = "high"
+                elif min_pct >= 60:
+                    confidence = "medium"
+                else:
+                    confidence = "low"
+            else:
+                confidence = "unknown"
+
+            # Reasoning text for user
+            if ready:
+                reasoning = f"Average production {avg_w:.0f}W ≥ 1000W and minimum {min_w:.0f}W ≥ 600W"
+            else:
+                reasoning = f"Average production {avg_w:.0f}W < 1000W or minimum {min_w:.0f}W < 600W"
+
+            result = {
+                "current_estimate_kw": current_estimate,
+                "forecast_1h_kwh": forecast_1h,
+                "forecast_3h_kwh": forecast_3h,
+                "forecast_6h_kwh": forecast_6h,
+                "forecast_today_kwh": forecast_today,
+                "min_next_3h_kw": min_next_3h,
+                "avg_next_3h_kw": avg_next_3h,
+                "appliances_ready": ready,
+                "appliances_ready_attrs": {
+                    "avg_production_w": round(avg_w, 1),
+                    "min_production_w": round(min_w, 1),
+                    "total_3h_kwh": round(forecast_3h, 2),
+                    "confidence": confidence,
+                    "reasoning": reasoning,
+                },
+                "hourly_production_kw": production_kw,  # For debugging/advanced use
+            }
+
+            _LOGGER.debug(
+                "PV production calculated: current=%.2f kW, 3h=%.2f kWh, ready=%s",
+                current_estimate,
+                forecast_3h,
+                ready,
+            )
+
+            return result
+
+        except Exception as ex:
+            # Graceful degradation: return zeros on any error
+            _LOGGER.error("Failed to calculate PV production: %s", ex, exc_info=True)
+            return {
+                "current_estimate_kw": 0,
+                "forecast_1h_kwh": 0,
+                "forecast_3h_kwh": 0,
+                "forecast_6h_kwh": 0,
+                "forecast_today_kwh": 0,
+                "min_next_3h_kw": 0,
+                "avg_next_3h_kw": 0,
+                "appliances_ready": False,
+                "appliances_ready_attrs": {
+                    "avg_production_w": 0,
+                    "min_production_w": 0,
+                    "total_3h_kwh": 0,
+                    "confidence": "error",
+                    "reasoning": f"Error calculating PV production: {str(ex)}",
+                },
+                "hourly_production_kw": [],
+            }
