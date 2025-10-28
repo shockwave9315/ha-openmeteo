@@ -855,12 +855,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         try:
             # Determine timezone (with fallback to UTC)
-            try:
-                import pytz
-                tz = pytz.timezone(timezone_str) if timezone_str else dt_util.UTC
-            except Exception:
-                tz = dt_util.UTC
-                _LOGGER.debug("Using UTC timezone as fallback for PV calculations")
+            # Using dt_util.get_time_zone() - async-safe with built-in cache
+            tz = dt_util.get_time_zone(timezone_str) or dt_util.UTC
 
             now = dt_util.now(tz)
 
