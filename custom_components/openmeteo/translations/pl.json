@@ -20,12 +20,22 @@
           "area_name_override": "Nazwa obszaru",
           "use_place_as_device_name": "Użyj nazwy miejsca jako nazwy urządzenia",
           "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
+          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)",
+          "pv_enabled": "Włącz przewidywanie produkcji PV",
+          "pv_power_kwp": "Moc instalacji PV (kWp)",
+          "pv_azimuth": "Azymut paneli (0-360°, 180=południe)",
+          "pv_tilt": "Nachylenie paneli (0-90°)",
+          "pv_efficiency": "Współczynnik sprawności (0.5-1.0)"
         },
         "data_description": {
           "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
           "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
-          "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
+          "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy.",
+          "pv_enabled": "Włącz przewidywanie produkcji fotowoltaiki na podstawie prognozy promieniowania słonecznego. Sensory PV będą dostępne po włączeniu.",
+          "pv_power_kwp": "Nominalna moc szczytowa instalacji fotowoltaicznej w kiloWatach (kWp). Np. 5.0 dla instalacji 5 kWp.",
+          "pv_azimuth": "Kierunek ustawienia paneli: 0°=północ, 90°=wschód, 180°=południe, 270°=zachód. Dla Polski optymalne: 180° (południe).",
+          "pv_tilt": "Kąt nachylenia paneli względem poziomu. Dla Polski optymalne: 30-40°.",
+          "pv_efficiency": "Całkowity współczynnik sprawności systemu (panele + falownik + straty). Typowo: 0.75-0.90."
         }
       },
       "search_place": {
@@ -63,12 +73,22 @@
           "area_name_override": "Nazwa obszaru",
           "use_place_as_device_name": "Użyj nazwy miejsca jako nazwy urządzenia",
           "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
+          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)",
+          "pv_enabled": "Włącz przewidywanie produkcji PV",
+          "pv_power_kwp": "Moc instalacji PV (kWp)",
+          "pv_azimuth": "Azymut paneli (0-360°, 180=południe)",
+          "pv_tilt": "Nachylenie paneli (0-90°)",
+          "pv_efficiency": "Współczynnik sprawności (0.5-1.0)"
         },
         "data_description": {
           "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
           "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
-          "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
+          "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy.",
+          "pv_enabled": "Włącz przewidywanie produkcji fotowoltaiki na podstawie prognozy promieniowania słonecznego. Sensory PV będą dostępne po włączeniu.",
+          "pv_power_kwp": "Nominalna moc szczytowa instalacji fotowoltaicznej w kiloWatach (kWp). Np. 5.0 dla instalacji 5 kWp.",
+          "pv_azimuth": "Kierunek ustawienia paneli: 0°=północ, 90°=wschód, 180°=południe, 270°=zachód. Dla Polski optymalne: 180° (południe).",
+          "pv_tilt": "Kąt nachylenia paneli względem poziomu. Dla Polski optymalne: 30-40°.",
+          "pv_efficiency": "Całkowity współczynnik sprawności systemu (panele + falownik + straty). Typowo: 0.75-0.90."
         }
       }
     },
@@ -127,12 +147,22 @@
           "area_name_override": "Nazwa obszaru",
           "use_place_as_device_name": "Użyj nazwy miejsca jako nazwy urządzenia",
           "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
+          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)",
+          "pv_enabled": "Włącz przewidywanie produkcji PV",
+          "pv_power_kwp": "Moc instalacji PV (kWp)",
+          "pv_azimuth": "Azymut paneli (0-360°, 180=południe)",
+          "pv_tilt": "Nachylenie paneli (0-90°)",
+          "pv_efficiency": "Współczynnik sprawności (0.5-1.0)"
         },
         "data_description": {
           "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
           "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
-          "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
+          "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy.",
+          "pv_enabled": "Włącz przewidywanie produkcji fotowoltaiki na podstawie prognozy promieniowania słonecznego. Sensory PV będą dostępne po włączeniu.",
+          "pv_power_kwp": "Nominalna moc szczytowa instalacji fotowoltaicznej w kiloWatach (kWp). Np. 5.0 dla instalacji 5 kWp.",
+          "pv_azimuth": "Kierunek ustawienia paneli: 0°=północ, 90°=wschód, 180°=południe, 270°=zachód. Dla Polski optymalne: 180° (południe).",
+          "pv_tilt": "Kąt nachylenia paneli względem poziomu. Dla Polski optymalne: 30-40°.",
+          "pv_efficiency": "Całkowity współczynnik sprawności systemu (panele + falownik + straty). Typowo: 0.75-0.90."
         }
       },
       "mode_details": {
@@ -151,7 +181,12 @@
           "api_provider": "Dostawca API",
           "area_name_override": "Nazwa obszaru",
           "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
+          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)",
+          "pv_enabled": "Włącz przewidywanie produkcji PV",
+          "pv_power_kwp": "Moc instalacji PV (kWp)",
+          "pv_azimuth": "Azymut paneli (0-360°, 180=południe)",
+          "pv_tilt": "Nachylenie paneli (0-90°)",
+          "pv_efficiency": "Współczynnik sprawności (0.5-1.0)"
         },
         "data_description": {
           "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
@@ -216,6 +251,32 @@
     },
     "uv_index": {
       "name": "Indeks UV"
+    },
+    "pv_current_estimate": {
+      "name": "Produkcja PV (teraz)"
+    },
+    "pv_forecast_1h": {
+      "name": "Prognoza PV 1h"
+    },
+    "pv_forecast_3h": {
+      "name": "Prognoza PV 3h"
+    },
+    "pv_forecast_6h": {
+      "name": "Prognoza PV 6h"
+    },
+    "pv_forecast_today": {
+      "name": "Prognoza PV dziś"
+    },
+    "pv_min_next_3h": {
+      "name": "Min. produkcja PV 3h"
+    },
+    "pv_avg_next_3h": {
+      "name": "Śr. produkcja PV 3h"
+    }
+  },
+  "binary_sensor": {
+    "pv_appliances_ready": {
+      "name": "Gotowe do uruchomienia AGD"
     }
   }
 }

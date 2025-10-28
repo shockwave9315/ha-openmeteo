@@ -28,12 +28,24 @@ from .const import (
     CONF_UPDATE_INTERVAL,  # legacy seconds key (fallback)
     CONF_UPDATE_INTERVAL_MIN,
     CONF_USE_PLACE_AS_DEVICE_NAME,
+    # PV configuration
+    CONF_PV_ENABLED,
+    CONF_PV_POWER_KWP,
+    CONF_PV_AZIMUTH,
+    CONF_PV_TILT,
+    CONF_PV_EFFICIENCY,
     DEFAULT_API_PROVIDER,
     DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_OPTIONS_SAVE_COOLDOWN_MIN,
     DEFAULT_REVERSE_GEOCODE_COOLDOWN_MIN,
     DEFAULT_UNITS,
     DEFAULT_UPDATE_INTERVAL,
+    # PV defaults
+    DEFAULT_PV_ENABLED,
+    DEFAULT_PV_POWER_KWP,
+    DEFAULT_PV_AZIMUTH,
+    DEFAULT_PV_TILT,
+    DEFAULT_PV_EFFICIENCY,
     DOMAIN,
     MODE_STATIC,
     MODE_TRACK,
@@ -178,6 +190,33 @@ def _build_schema(
             mode=selector.SelectSelectorMode.LIST,
         )
     )
+
+    # PV (Photovoltaic) Configuration - optional solar forecasting
+    extra[vol.Optional(
+        CONF_PV_ENABLED,
+        default=defaults.get(CONF_PV_ENABLED, DEFAULT_PV_ENABLED),
+    )] = bool
+
+    extra[vol.Optional(
+        CONF_PV_POWER_KWP,
+        default=defaults.get(CONF_PV_POWER_KWP, DEFAULT_PV_POWER_KWP),
+    )] = vol.All(vol.Coerce(float), vol.Range(min=0.5, max=50.0))
+
+    extra[vol.Optional(
+        CONF_PV_AZIMUTH,
+        default=defaults.get(CONF_PV_AZIMUTH, DEFAULT_PV_AZIMUTH),
+    )] = vol.All(vol.Coerce(int), vol.Range(min=0, max=360))
+
+    extra[vol.Optional(
+        CONF_PV_TILT,
+        default=defaults.get(CONF_PV_TILT, DEFAULT_PV_TILT),
+    )] = vol.All(vol.Coerce(int), vol.Range(min=0, max=90))
+
+    extra[vol.Optional(
+        CONF_PV_EFFICIENCY,
+        default=defaults.get(CONF_PV_EFFICIENCY, DEFAULT_PV_EFFICIENCY),
+    )] = vol.All(vol.Coerce(float), vol.Range(min=0.5, max=1.0))
+
     if include_use_place:
         extra[vol.Required(
             CONF_USE_PLACE_AS_DEVICE_NAME,
