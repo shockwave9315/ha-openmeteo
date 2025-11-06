@@ -648,9 +648,16 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Update the config entry without triggering an automatic reload."""
         self._suppress_next_reload = True
         try:
-            self.hass.config_entries.async_update_entry(
-                self.entry, data=data, options=options, title=title
-            )
+            # Build kwargs with only non-None values to avoid MappingProxyType error
+            kwargs: dict[str, Any] = {}
+            if data is not None:
+                kwargs["data"] = data
+            if options is not None:
+                kwargs["options"] = options
+            if title is not None:
+                kwargs["title"] = title
+
+            self.hass.config_entries.async_update_entry(self.entry, **kwargs)
         except Exception:
             self._suppress_next_reload = False
             raise
