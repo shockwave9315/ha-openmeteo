@@ -2,6 +2,7 @@ def test_precipitation_split_current_hour_values():
     from custom_components.openmeteo.sensor import SENSOR_TYPES
 
     data = {
+        "timezone": "UTC",
         "hourly": {
             "time": ["2024-01-01T12:00"],
             "precipitation": [3.2],
