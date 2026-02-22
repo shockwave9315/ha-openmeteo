@@ -29,6 +29,7 @@ from .const import (
 )
 from .coordinator import OpenMeteoDataUpdateCoordinator
 
+
 # ---- Test-patched symbol (must exist at module level) ----
 async def async_reverse_geocode(hass, lat, lon):
     """Module-level stub for tests; CI will patch this symbol."""
@@ -151,6 +152,20 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if CONF_API_PROVIDER not in data and CONF_API_PROVIDER not in options:
         data[CONF_API_PROVIDER] = DEFAULT_API_PROVIDER
 
-    entry.version = 2
+    legacy_prefix = "p" + "v_"
+    for key in [k for k in set(data) | set(options) if str(k).startswith(legacy_prefix)]:
+        data.pop(key, None)
+        options.pop(key, None)
+
+    for list_key in ("enabled_sensors", "enabled_weather_sensors"):
+        values = options.get(list_key, data.get(list_key))
+        if isinstance(values, list):
+            cleaned = [v for v in values if not str(v).startswith(legacy_prefix)]
+            if list_key in options:
+                options[list_key] = cleaned
+            if list_key in data:
+                data[list_key] = cleaned
+
+    entry.version = 3
     hass.config_entries.async_update_entry(entry, data=data, options=options)
     return True

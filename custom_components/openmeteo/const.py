@@ -21,7 +21,7 @@ MANUFACTURER = "Open-Meteo"
 NAME = "Open-Meteo"
 
 # HTTP
-HTTP_USER_AGENT = "ha-openmeteo/1.6.0 (https://github.com/shockwave9315/ha-openmeteo)"
+HTTP_USER_AGENT = "ha-openmeteo/1.6.5 (https://github.com/shockwave9315/ha-openmeteo)"
 
 """Configuration keys and defaults."""
 CONF_NAME = "name"
@@ -51,12 +51,6 @@ CONF_OPTIONS_SAVE_COOLDOWN_MIN = "options_save_cooldown_min"
 # Backward-compat: legacy seconds key (still honored if present)
 CONF_OPTIONS_SAVE_COOLDOWN_SEC = "options_save_cooldown_sec"
 
-# PV (Photovoltaic) Configuration - optional feature for solar power forecasting
-CONF_PV_ENABLED = "pv_enabled"
-CONF_PV_POWER_KWP = "pv_power_kwp"
-CONF_PV_AZIMUTH = "pv_azimuth"
-CONF_PV_TILT = "pv_tilt"
-CONF_PV_EFFICIENCY = "pv_efficiency"
 
 # Modes
 MODE_STATIC = "static"
@@ -88,13 +82,6 @@ DEFAULT_OPTIONS_SAVE_COOLDOWN_MIN = 1  # minute
 # Legacy default (seconds) retained for migration/back-compat only
 DEFAULT_OPTIONS_SAVE_COOLDOWN_SEC = 60  # seconds
 
-# PV (Photovoltaic) Defaults
-DEFAULT_PV_ENABLED = False
-DEFAULT_PV_POWER_KWP = 5.0          # kWp - typical residential installation
-DEFAULT_PV_AZIMUTH = 180            # degrees (180 = south)
-DEFAULT_PV_TILT = 35                # degrees (optimal for mid-latitudes)
-DEFAULT_PV_EFFICIENCY = 0.85        # 85% system efficiency (accounts for inverter losses, wiring, etc.)
-
 DEFAULT_DAILY_VARIABLES = [
     "temperature_2m_max",
     "temperature_2m_min",
@@ -111,6 +98,7 @@ DEFAULT_HOURLY_VARIABLES = [
     "relative_humidity_2m",
     "dewpoint_2m",
     "precipitation",
+    "rain",
     "snowfall",
     "precipitation_probability",
     "weathercode",
@@ -123,12 +111,6 @@ DEFAULT_HOURLY_VARIABLES = [
     "is_day",
     "apparent_temperature",
     "uv_index",
-    # Solar radiation parameters (for PV production forecasting)
-    "direct_radiation",           # W/m² - direct solar radiation
-    "diffuse_radiation",          # W/m² - diffuse solar radiation
-    "direct_normal_irradiance",   # W/m² - DNI (direct normal irradiance)
-    "shortwave_radiation",        # W/m² - GHI (global horizontal irradiance)
-    "sunshine_duration",          # seconds - duration of sunshine
 ]
 
 # Air Quality API keys mapping
@@ -148,7 +130,7 @@ URL = "https://api.open-meteo.com/v1/forecast"
 API_URL = URL  # alias dla starszych importów
 
 # Platforms
-PLATFORMS = ["weather", "sensor", "binary_sensor"]
+PLATFORMS = ["weather", "sensor"]
 
 # Weather code → HA condition mapping
 CONDITION_MAP = {
@@ -197,6 +179,8 @@ ALL_SENSOR_KEYS = [
     "wind_gust",
     "wind_bearing",
     "precipitation_sum",
+    "rain_current_hour",
+    "snow_current_hour",
     "precipitation_daily_sum",
     "precipitation_last_3h",
     "precipitation_probability",
@@ -214,14 +198,6 @@ ALL_SENSOR_KEYS = [
     "o3",
     "aqi_us",
     "aqi_eu",
-    "pv_current_estimate",
-    "pv_forecast_1h",
-    "pv_forecast_3h",
-    "pv_forecast_6h",
-    "pv_forecast_today",
-    "pv_min_next_3h",
-    "pv_avg_next_3h",
-    "pv_appliances_ready",
 ]
 
 WEATHER_SENSOR_KEYS = [
@@ -234,6 +210,8 @@ WEATHER_SENSOR_KEYS = [
     "wind_gust",
     "wind_bearing",
     "precipitation_sum",
+    "rain_current_hour",
+    "snow_current_hour",
     "precipitation_daily_sum",
     "precipitation_last_3h",
     "precipitation_probability",
@@ -243,14 +221,6 @@ WEATHER_SENSOR_KEYS = [
     "uv_index",
     "uv_index_max",
     "location",
-    "pv_current_estimate",
-    "pv_forecast_1h",
-    "pv_forecast_3h",
-    "pv_forecast_6h",
-    "pv_forecast_today",
-    "pv_min_next_3h",
-    "pv_avg_next_3h",
-    "pv_appliances_ready",
 ]
 
 AQ_SENSOR_KEYS = [
@@ -264,17 +234,6 @@ AQ_SENSOR_KEYS = [
     "aqi_eu",
 ]
 
-PV_SENSOR_KEYS = [
-    "pv_current_estimate",
-    "pv_forecast_1h",
-    "pv_forecast_3h",
-    "pv_forecast_6h",
-    "pv_forecast_today",
-    "pv_min_next_3h",
-    "pv_avg_next_3h",
-    "pv_appliances_ready",
-]
-
 SENSOR_LABELS = {
     "temperature": {"pl": "Temperatura", "en": "Temperature"},
     "apparent_temperature": {"pl": "Temp. odczuwalna", "en": "Apparent temperature"},
@@ -285,6 +244,8 @@ SENSOR_LABELS = {
     "wind_gust": {"pl": "Porywy wiatru", "en": "Wind gust"},
     "wind_bearing": {"pl": "Kierunek wiatru", "en": "Wind bearing"},
     "precipitation_sum": {"pl": "Opad (bieżąca godzina)", "en": "Precipitation (this hour)"},
+    "rain_current_hour": {"pl": "Deszcz (bieżąca godzina)", "en": "Rain (this hour)"},
+    "snow_current_hour": {"pl": "Śnieg (bieżąca godzina)", "en": "Snow (this hour)"},
     "precipitation_daily_sum": {
         "pl": "Suma opadów (dzienna)",
         "en": "Precipitation (daily sum)",
@@ -311,13 +272,4 @@ SENSOR_LABELS = {
     "aqi_us": {"pl": "US AQI", "en": "US AQI"},
     "aqi_eu": {"pl": "EU AQI", "en": "EU AQI"},
     "location": {"pl": "Lokalizacja (lat,lon)", "en": "Location (lat,lon)"},
-    # PV (Photovoltaic) sensors
-    "pv_current_estimate": {"pl": "Produkcja PV (teraz)", "en": "PV production (now)"},
-    "pv_forecast_1h": {"pl": "Prognoza PV 1h", "en": "PV forecast 1h"},
-    "pv_forecast_3h": {"pl": "Prognoza PV 3h", "en": "PV forecast 3h"},
-    "pv_forecast_6h": {"pl": "Prognoza PV 6h", "en": "PV forecast 6h"},
-    "pv_forecast_today": {"pl": "Prognoza PV dziś", "en": "PV forecast today"},
-    "pv_min_next_3h": {"pl": "Min. produkcja PV 3h", "en": "Min PV production 3h"},
-    "pv_avg_next_3h": {"pl": "Śr. produkcja PV 3h", "en": "Avg PV production 3h"},
-    "pv_appliances_ready": {"pl": "Gotowe do uruchomienia AGD", "en": "Appliances ready"},
 }
