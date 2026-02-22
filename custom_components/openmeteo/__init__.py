@@ -166,6 +166,5 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if list_key in data:
                 data[list_key] = cleaned
 
-    entry.version = 3
-    hass.config_entries.async_update_entry(entry, data=data, options=options)
+    hass.config_entries.async_update_entry(entry, data=data, options=options, version=3)
     return True
