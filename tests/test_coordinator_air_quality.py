@@ -7,11 +7,6 @@ import pytest
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_test_home_assistant
 
-from custom_components.openmeteo import DOMAIN
-from custom_components.openmeteo.const import CONF_LATITUDE, CONF_LONGITUDE, CONF_MODE, MODE_STATIC
-from custom_components.openmeteo.coordinator import OpenMeteoDataUpdateCoordinator
-
-
 @pytest.fixture
 def expected_lingering_timers():
     """Allow lingering timers in lightweight coordinator tests."""
@@ -20,6 +15,15 @@ def expected_lingering_timers():
 
 @pytest.mark.asyncio
 async def test_aq_missing_hourly_does_not_log_warning(caplog: pytest.LogCaptureFixture):
+    from custom_components.openmeteo import DOMAIN
+    from custom_components.openmeteo.const import (
+        CONF_LATITUDE,
+        CONF_LONGITUDE,
+        CONF_MODE,
+        MODE_STATIC,
+    )
+    from custom_components.openmeteo.coordinator import OpenMeteoDataUpdateCoordinator
+
     with patch("homeassistant.util.dt.get_time_zone", return_value=dt_util.UTC):
         async with async_test_home_assistant() as hass:
             entry = MockConfigEntry(
