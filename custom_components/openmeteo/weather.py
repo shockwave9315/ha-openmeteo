@@ -57,6 +57,12 @@ from .helpers import (
     maybe_update_device_name,
 )
 from .runtime import get_entry_coordinator
+from .naming import (
+    coords_label,
+    default_device_name,
+    should_update_entry_title,
+    stable_weather_unique_id,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -118,7 +124,7 @@ async def async_setup_entry(
         reg_entry = ent_reg.async_get_or_create(
             domain="weather",
             platform=DOMAIN,
-            unique_id=f"{config_entry.entry_id}-weather",
+            unique_id=stable_weather_unique_id(config_entry.entry_id),
             suggested_object_id="open_meteo",
             config_entry=config_entry,
         )
@@ -168,7 +174,7 @@ async def async_migrate_weather_entry(
     old_uid = entry.unique_id or ""
     ent_id = entry.entity_id
 
-    new_uid = f"{config_entry.entry_id}-weather"
+    new_uid = stable_weather_unique_id(config_entry.entry_id)
 
     updates: dict[str, Any] = {}
     if old_uid != new_uid:
@@ -229,12 +235,12 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         self._config_entry = config_entry
         # Ważne: has_entity_name=False, aby entity_id było "weather.open_meteo" bez prefiksu miejscowości
         self._attr_has_entity_name = False
-        self._attr_unique_id = f"{config_entry.entry_id}-weather"
+        self._attr_unique_id = stable_weather_unique_id(config_entry.entry_id)
         self._attr_suggested_object_id = "open_meteo"
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
-            name=config_entry.title,
+            name=default_device_name(config_entry.title),
             manufacturer="Open-Meteo",
         )
 
@@ -254,7 +260,7 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
 
     def _default_device_name(self):
         """Deprecated: device name is stable from config_entry.title."""
-        return self._config_entry.title or "Open-Meteo"
+        return default_device_name(self._config_entry.title)
 
     def _derive_object_id(self) -> str:
         """Deprecated: object id is fixed via suggested_object_id."""
@@ -284,7 +290,19 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         loc = (self.coordinator.data or {}).get("location_name")
         new_title = str(loc) if loc else None
         try:
-            if new_title and self._config_entry.title != new_title:
+            fallback = None
+            location = (self.coordinator.data or {}).get("location") or {}
+            lat = location.get("latitude")
+            lon = location.get("longitude")
+            if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+                fallback = coords_label(float(lat), float(lon))
+            merged = {**self._config_entry.data, **self._config_entry.options}
+            if should_update_entry_title(
+                current_title=self._config_entry.title,
+                new_title=new_title,
+                fallback_label=fallback,
+                area_override=merged.get(CONF_AREA_NAME_OVERRIDE),
+            ):
                 self.coordinator.async_update_entry_no_reload(title=new_title)
         except Exception as ex:
             _LOGGER.debug("[openmeteo] Entry title sync skipped: %s", ex)
