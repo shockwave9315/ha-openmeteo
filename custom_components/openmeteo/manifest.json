@@ -8,7 +8,7 @@
         "@shockwave9315"
     ],
     "iot_class": "cloud_polling",
-    "version": "v1.6.6",
+    "version": "v1.6.8",
     "requirements": [],
     "icon": "icon.png"
 }
