@@ -179,7 +179,7 @@
       "name": "Prawdopodobieństwo opadów"
     },
     "precipitation_sum": {
-      "name": "Opad (bieżąca godzina)"
+      "name": "Opad łączny (bieżąca godzina)"
     },
     "precipitation_daily_sum": {
       "name": "Suma opadów (dzienna)"

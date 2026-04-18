@@ -125,7 +125,7 @@ Pogoda śledzi Twoją lokalizację w czasie rzeczywistym!
 
 ### 🌧️ Szczegóły opadów (nowe)
 
-Integracja zachowuje istniejący sensor **Opad (bieżąca godzina)** i dodatkowo udostępnia rozbicie na składniki opadu dla bieżącej godziny:
+Integracja zachowuje istniejący sensor **Opad łączny (bieżąca godzina)** i dodatkowo udostępnia rozbicie na składniki opadu dla bieżącej godziny:
 
 | Sensor | Opis | Jednostka |
 |--------|------|-----------|

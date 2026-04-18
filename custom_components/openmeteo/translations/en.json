@@ -176,7 +176,7 @@
       "name": "Precipitation probability"
     },
     "precipitation_sum": {
-      "name": "Precipitation (current hour)"
+      "name": "Total precipitation (current hour)"
     },
     "precipitation_daily_sum": {
       "name": "Daily precipitation sum"

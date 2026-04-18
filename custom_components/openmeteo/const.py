@@ -243,7 +243,7 @@ SENSOR_LABELS = {
     "wind_speed": {"pl": "Prędkość wiatru", "en": "Wind speed"},
     "wind_gust": {"pl": "Porywy wiatru", "en": "Wind gust"},
     "wind_bearing": {"pl": "Kierunek wiatru", "en": "Wind bearing"},
-    "precipitation_sum": {"pl": "Opad (bieżąca godzina)", "en": "Precipitation (this hour)"},
+    "precipitation_sum": {"pl": "Opad łączny (bieżąca godzina)", "en": "Total precipitation (this hour)"},
     "rain_current_hour": {"pl": "Deszcz (bieżąca godzina)", "en": "Rain (this hour)"},
     "snow_current_hour": {"pl": "Śnieg (bieżąca godzina)", "en": "Snow (this hour)"},
     "precipitation_daily_sum": {
