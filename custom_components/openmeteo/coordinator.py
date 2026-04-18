@@ -530,17 +530,12 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._last_data["last_location_update"] = last_loc_ts
             
             # Try to fetch air quality data (best-effort, non-critical)
-            try:
-                aq_data = await self._fetch_air_quality(latitude, longitude)
-                if aq_data and 'hourly' in aq_data:
-                    self._last_data["aq"] = aq_data
-                    _LOGGER.debug("Successfully fetched air quality data")
-                else:
-                    _LOGGER.warning("No air quality data in API response")
-            except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-                _LOGGER.warning("Network error fetching air quality data: %s", err)
-            except (KeyError, ValueError, TypeError) as err:
-                _LOGGER.warning("Invalid air quality data format: %s", err)
+            aq_data = await self._fetch_air_quality(latitude, longitude)
+            if aq_data and "hourly" in aq_data:
+                self._last_data["aq"] = aq_data
+                _LOGGER.debug("Successfully fetched air quality data")
+            elif aq_data is not None:
+                _LOGGER.debug("Air quality API response missing 'hourly' data")
 
             # Step 4: Persist last accepted coords / location name (with cooldown)
             try:
@@ -758,4 +753,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return await resp.json()
         except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             _LOGGER.warning("Network error fetching air quality data: %s", err)
+            return None
+        except (KeyError, TypeError, ValueError) as err:
+            _LOGGER.debug("Invalid air quality data format: %s", err)
             return None
