@@ -16,6 +16,12 @@ def test_precipitation_split_current_hour_values():
     assert SENSOR_TYPES["snow_current_hour"].value_fn(data) == 1.2
 
 
+def test_precipitation_sum_display_name():
+    from custom_components.openmeteo.sensor import SENSOR_TYPES
+
+    assert SENSOR_TYPES["precipitation_sum"].name == "Opad łączny (bieżąca godzina)"
+
+
 def test_no_legacy_generation_sensors_present():
     from custom_components.openmeteo.sensor import SENSOR_TYPES
 
