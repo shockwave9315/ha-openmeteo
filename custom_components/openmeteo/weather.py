@@ -56,6 +56,7 @@ from .helpers import (
     hourly_index_at_now as _hourly_index_at_now,
     maybe_update_device_name,
 )
+from .runtime import get_entry_coordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -108,7 +109,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Open-Meteo weather entity from a config entry."""
 
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator = get_entry_coordinator(hass, config_entry.entry_id)
 
     # Jednorazowa migracja istniejącej encji pogody do stabilnego schematu
     ent_reg = er.async_get(hass)
