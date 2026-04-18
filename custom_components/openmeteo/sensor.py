@@ -39,6 +39,11 @@ from .helpers import (
     extra_attrs as _extra_attrs,
     aq_hour_value as _aq_hour_value,
 )
+from .runtime import (
+    get_entry_coordinator,
+    get_entry_runtime_store,
+    get_or_create_entry_runtime_store,
+)
 import logging
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
@@ -452,11 +457,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Open-Meteo sensor based on a config entry."""
-    # Koordynator może być zapisany bezpośrednio lub pod kluczem "coordinator"
-    stored = hass.data[DOMAIN][config_entry.entry_id]
-    coordinator: OpenMeteoDataUpdateCoordinator = (
-        stored.get("coordinator") if isinstance(stored, dict) else stored
-    )
+    coordinator: OpenMeteoDataUpdateCoordinator = get_entry_coordinator(hass, config_entry.entry_id)
 
     def _as_list(source: Mapping[str, Any] | None, key: str) -> list[str] | None:
         if not source:
@@ -585,11 +586,7 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
     def extra_state_attributes(self):
         attrs = _extra_attrs(self.coordinator.data or {})
         try:
-            store = (
-                self.hass.data.get(DOMAIN, {})
-                .get("entries", {})
-                .get(self._config_entry.entry_id, {})
-            )
+            store = get_entry_runtime_store(self.hass, self._config_entry.entry_id) or {}
             src = store.get("src")
             if src:
                 attrs["source"] = src
@@ -604,20 +601,12 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
     async def async_added_to_hass(self) -> None:
         """When entity is added to hass."""
         await super().async_added_to_hass()
-        store = (
-            self.hass.data.get(DOMAIN, {})
-            .get("entries", {})
-            .setdefault(self._config_entry.entry_id, {})
-        )
+        store = get_or_create_entry_runtime_store(self.hass, self._config_entry.entry_id)
         store.setdefault("entities", []).append(self)
 
     async def async_will_remove_from_hass(self) -> None:
         """Run when entity will be removed from hass."""
-        store = (
-            self.hass.data.get(DOMAIN, {})
-            .get("entries", {})
-            .get(self._config_entry.entry_id)
-        )
+        store = get_entry_runtime_store(self.hass, self._config_entry.entry_id)
         if store and self in store.get("entities", []):
             store["entities"].remove(self)
         await super().async_will_remove_from_hass()
@@ -680,19 +669,11 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
             async_dispatcher_connect(self.hass, signal, self._handle_place_update)
         )
         self._handle_place_update()
-        store = (
-            self.hass.data.setdefault(DOMAIN, {})
-            .setdefault("entries", {})
-            .setdefault(self._config_entry.entry_id, {})
-        )
+        store = get_or_create_entry_runtime_store(self.hass, self._config_entry.entry_id)
         store.setdefault("entities", []).append(self)
 
     async def async_will_remove_from_hass(self) -> None:
-        store = (
-            self.hass.data.get(DOMAIN, {})
-            .get("entries", {})
-            .get(self._config_entry.entry_id)
-        )
+        store = get_entry_runtime_store(self.hass, self._config_entry.entry_id)
         if store and self in store.get("entities", []):
             store["entities"].remove(self)
         await super().async_will_remove_from_hass()
@@ -777,20 +758,12 @@ class OpenMeteoAqSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Senso
     async def async_added_to_hass(self) -> None:
         """When entity is added to hass."""
         await super().async_added_to_hass()
-        store = (
-            self.hass.data.get(DOMAIN, {})
-            .get("entries", {})
-            .setdefault(self._config_entry.entry_id, {})
-        )
+        store = get_or_create_entry_runtime_store(self.hass, self._config_entry.entry_id)
         store.setdefault("entities", []).append(self)
 
     async def async_will_remove_from_hass(self) -> None:
         """Run when entity will be removed from hass."""
-        store = (
-            self.hass.data.get(DOMAIN, {})
-            .get("entries", {})
-            .get(self._config_entry.entry_id)
-        )
+        store = get_entry_runtime_store(self.hass, self._config_entry.entry_id)
         if store and self in store.get("entities", []):
             store["entities"].remove(self)
         await super().async_will_remove_from_hass()
