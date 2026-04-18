@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
+from custom_components.openmeteo import async_update_entry
 from custom_components.openmeteo.const import DOMAIN
 from custom_components.openmeteo.runtime import (
     get_entry_coordinator,
@@ -35,7 +36,14 @@ async def test_runtime_store_create_and_read_consistent() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sensor_setup_entry_uses_runtime_coordinator_helper() -> None:
-    text = Path("custom_components/openmeteo/sensor.py").read_text(encoding="utf-8")
-    assert "get_entry_coordinator(hass, config_entry.entry_id)" in text
-    assert 'stored.get("coordinator") if isinstance(stored, dict) else stored' not in text
+async def test_async_update_entry_uses_wrapped_coordinator_without_reload() -> None:
+    coordinator = SimpleNamespace(consume_suppress_reload=lambda: True)
+    entry = SimpleNamespace(entry_id="entry_wrapped")
+    hass = SimpleNamespace(
+        data={DOMAIN: {"entry_wrapped": {"coordinator": coordinator}}},
+        config_entries=SimpleNamespace(async_reload=AsyncMock()),
+    )
+
+    await async_update_entry(hass, entry)
+
+    hass.config_entries.async_reload.assert_not_called()
