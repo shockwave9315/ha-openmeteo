@@ -39,6 +39,12 @@ from .const import (
     DEFAULT_OPTIONS_SAVE_COOLDOWN_MIN,
     HTTP_USER_AGENT,
 )
+from .naming import (
+    build_location_display_name,
+    coords_label,
+    resolve_area_override,
+    should_update_entry_title,
+)
 
 # logger
 _LOGGER = logging.getLogger(__name__)
@@ -276,7 +282,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _coords_fallback(self, lat: float, lon: float) -> str:
         """Generate a fallback location name from coordinates."""
-        return f"{lat:.2f},{lon:.2f}"
+        return coords_label(lat, lon)
 
     async def _update_coordinates_from_tracker(
         self, data: dict[str, Any], now: datetime, min_track: int
@@ -411,8 +417,9 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return prev_name if prev_name else fallback_label
 
         # Check for user override first
-        if data.get(CONF_AREA_NAME_OVERRIDE):
-            return data.get(CONF_AREA_NAME_OVERRIDE)
+        area_override = resolve_area_override(data)
+        if area_override:
+            return area_override
 
         # Apply cooldown to avoid excessive reverse-geocoding
         allow_geocode = (
@@ -422,7 +429,12 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if allow_geocode:
             name = await async_reverse_geocode(self.hass, lat, lon)
             self._last_geocode_at = now
-            return name or fallback_label
+            return build_location_display_name(
+                area_override=area_override,
+                reverse_geocoded_place=name,
+                lat=lat,
+                lon=lon,
+            )
 
         # Cooldown active - use fallback
         remaining = (self._last_geocode_at + self._rg_cooldown_td - now).total_seconds()
@@ -432,34 +444,6 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             fallback_label,
         )
         return fallback_label
-
-    def _should_update_entry_title(
-        self, new_title: str, fallback: str | None, data: dict[str, Any]
-    ) -> bool:
-        """Determine whether the config entry title should be updated."""
-
-        if not new_title:
-            return False
-
-        current = (self.entry.title or "").strip()
-        if new_title == current:
-            return False
-
-        # User-provided override always wins.
-        if data.get(CONF_AREA_NAME_OVERRIDE):
-            return True
-
-        if not current:
-            return True
-
-        normalized = current.lower()
-        if normalized.startswith("open-meteo"):
-            return True
-
-        if fallback and normalized == fallback.lower():
-            return True
-
-        return False
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch weather data from API.
@@ -509,7 +493,12 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Step 3: Update config entry title if needed
         fallback_label = self._coords_fallback(lat, lon)
-        if loc_name and self._should_update_entry_title(loc_name, fallback_label, data):
+        if should_update_entry_title(
+            current_title=self.entry.title,
+            new_title=loc_name,
+            fallback_label=fallback_label,
+            area_override=resolve_area_override(data),
+        ):
             try:
                 self.async_update_entry_no_reload(title=loc_name)
             except (ValueError, KeyError) as ex:

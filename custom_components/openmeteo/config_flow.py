@@ -51,6 +51,10 @@ from .helpers import (
     async_prefer_user_zip_postcode,
     format_postal,
 )
+from .naming import (
+    build_location_display_name,
+    flow_title_from_tracker,
+)
 
 def _build_schema(
     hass: HomeAssistant,
@@ -203,12 +207,9 @@ async def _async_guess_title(
 ) -> str:
     """Derive a friendly title for the entry based on provided data."""
 
-    override = (data.get(CONF_AREA_NAME_OVERRIDE) or "").strip()
-    if override:
-        return override
-
     try:
         if mode == MODE_TRACK:
+            override = (data.get(CONF_AREA_NAME_OVERRIDE) or "").strip()
             entity_id = data.get(CONF_ENTITY_ID)
             if entity_id:
                 state = hass.states.get(entity_id)
@@ -223,17 +224,33 @@ async def _async_guess_title(
 
                     if lat_f is not None and lon_f is not None:
                         place = await async_reverse_geocode(hass, lat_f, lon_f)
-                        if place:
-                            return place
-                        return f"Open-Meteo: {lat_f:.4f},{lon_f:.4f}"
+                        return flow_title_from_tracker(
+                            area_override=override,
+                            reverse_geocoded_place=place,
+                            tracker_friendly_name=None,
+                            lat=lat_f,
+                            lon=lon_f,
+                        )
 
                     friendly = (
                         state.attributes.get("friendly_name")
                         or state.name
                         or entity_id
                     )
-                    return f"Open-Meteo: {friendly}"
-            return "Open-Meteo: Śledzenie"
+                    return flow_title_from_tracker(
+                        area_override=override,
+                        reverse_geocoded_place=None,
+                        tracker_friendly_name=str(friendly),
+                        lat=None,
+                        lon=None,
+                    )
+            return flow_title_from_tracker(
+                area_override=override,
+                reverse_geocoded_place=None,
+                tracker_friendly_name=None,
+                lat=None,
+                lon=None,
+            )
 
         lat = data.get(CONF_LATITUDE)
         lon = data.get(CONF_LONGITUDE)
@@ -243,9 +260,12 @@ async def _async_guess_title(
         lat_f = float(lat)
         lon_f = float(lon)
         place = await async_reverse_geocode(hass, lat_f, lon_f)
-        if place:
-            return place
-        return f"Open-Meteo: {lat_f:.4f},{lon_f:.4f}"
+        return build_location_display_name(
+            area_override=data.get(CONF_AREA_NAME_OVERRIDE),
+            reverse_geocoded_place=place,
+            lat=lat_f,
+            lon=lon_f,
+        )
     except Exception:  # pragma: no cover - defensive
         return "Open-Meteo"
 
