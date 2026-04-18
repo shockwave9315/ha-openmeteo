@@ -44,6 +44,7 @@ from .runtime import (
     get_entry_runtime_store,
     get_or_create_entry_runtime_store,
 )
+from .naming import default_device_name, stable_sensor_unique_id
 import logging
 
 from .coordinator import OpenMeteoDataUpdateCoordinator
@@ -545,12 +546,12 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
         # Ważne: has_entity_name=False, aby entity_id NIE zawierało prefiksu nazwy urządzenia (miejscowości)
         self._attr_has_entity_name = False
         self._attr_suggested_object_id = OBJECT_ID_PL.get(sensor_type, sensor_type) or (sensor_type or "open_meteo_sensor")
-        self._attr_unique_id = f"{config_entry.entry_id}:{sensor_type}"
+        self._attr_unique_id = stable_sensor_unique_id(config_entry.entry_id, sensor_type)
 
         # Set device info
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
-            name=config_entry.title,
+            name=default_device_name(config_entry.title),
             manufacturer="Open-Meteo",
         )
 
@@ -627,7 +628,7 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
         # Ważne: has_entity_name=False, aby entity_id było "sensor.promieniowanie_uv" bez prefiksu miejscowości
         self._attr_has_entity_name = False
         self._attr_suggested_object_id = OBJECT_ID_PL.get("uv_index", "promieniowanie_uv")
-        self._attr_unique_id = f"{config_entry.entry_id}:uv_index"
+        self._attr_unique_id = stable_sensor_unique_id(config_entry.entry_id, "uv_index")
         self._attr_native_unit_of_measurement = UV_INDEX
         self._attr_icon = "mdi:weather-sunny-alert"
         self._attr_state_class = SensorStateClass.MEASUREMENT
@@ -639,7 +640,7 @@ class OpenMeteoUvIndexSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], 
         # Set device info
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
-            name=config_entry.title,
+            name=default_device_name(config_entry.title),
             manufacturer="Open-Meteo",
         )
 
@@ -701,13 +702,13 @@ class OpenMeteoAqSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Senso
         # Set entity attributes
         self._attr_has_entity_name = False
         self._attr_suggested_object_id = f"{sensor_type}_aq"
-        self._attr_unique_id = f"{config_entry.entry_id}:{sensor_type}_aq"
+        self._attr_unique_id = stable_sensor_unique_id(config_entry.entry_id, f"{sensor_type}_aq")
         self._attr_state_class = SensorStateClass.MEASUREMENT
         
         # Set device info
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
-            name=config_entry.title,
+            name=default_device_name(config_entry.title),
             manufacturer="Open-Meteo",
         )
 
