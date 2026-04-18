@@ -28,6 +28,7 @@ from .const import (
     CONF_LONGITUDE,
 )
 from .coordinator import OpenMeteoDataUpdateCoordinator
+from .runtime import get_entry_coordinator
 
 
 # ---- Test-patched symbol (must exist at module level) ----
@@ -106,16 +107,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_update_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload when options are updated."""
-    stored = hass.data.get(DOMAIN)
-    coordinator: OpenMeteoDataUpdateCoordinator | None = None
-    if isinstance(stored, dict):
-        maybe = stored.get(entry.entry_id)
-        if isinstance(maybe, OpenMeteoDataUpdateCoordinator):
-            coordinator = maybe
-        elif isinstance(maybe, dict):
-            potential = maybe.get("coordinator")
-            if isinstance(potential, OpenMeteoDataUpdateCoordinator):
-                coordinator = potential
+    coordinator = get_entry_coordinator(hass, entry.entry_id)
     if coordinator and coordinator.consume_suppress_reload():
         return
     await hass.config_entries.async_reload(entry.entry_id)
