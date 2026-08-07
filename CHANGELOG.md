@@ -23,7 +23,7 @@ Development branch: `rewrite/v2-architecture`. Not released yet.
 - Preserve V1 registry `unique_id` values to avoid duplicate entities and broken dashboards during migration.
 - Do not auto-rename existing entity IDs.
 - New entries receive source-scoped stable object IDs independent of the current city.
-- V2 remains on config-entry major version 3 and migrates to minor version 3.2 so first live testing remains rollback-safe with the V1.7.x line.
+- V2 migrates to config-entry version 3.2 (major 3, minor 2), so first live testing remains rollback-safe with the V1.7.x line.
 - Legacy V1/V3 config is canonicalized while frozen `last_lat`, `last_lon` and `last_location_name` values are retained as an inert rollback snapshot; V2 never updates them.
 
 ### Home Assistant 2026.8
