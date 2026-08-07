@@ -390,6 +390,9 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._last_geocode_at = now
             if name:
                 return name, name != self.location_name
+            if coordinates_changed and movement_km >= IMMEDIATE_TRACK_DISTANCE_KM:
+                fallback = coordinate_label(latitude, longitude)
+                return fallback, fallback != self.location_name
 
         if self.location_name:
             return self.location_name, False
