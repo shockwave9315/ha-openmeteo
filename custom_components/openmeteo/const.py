@@ -23,7 +23,6 @@ HTTP_USER_AGENT = "ha-openmeteo/2.0.0-dev (https://github.com/shockwave9315/ha-o
 URL = "https://api.open-meteo.com/v1/forecast"
 PLATFORMS = [Platform.WEATHER, Platform.SENSOR]
 
-# Current configuration keys.
 CONF_MODE = "mode"
 CONF_ENTITY_ID = "entity_id"
 CONF_LATITUDE = "latitude"
@@ -41,13 +40,6 @@ MODE_TRACK = "track"
 DEFAULT_UPDATE_INTERVAL = 600
 DEFAULT_MIN_TRACK_INTERVAL = 15
 DEFAULT_REVERSE_GEOCODE_COOLDOWN_MIN = 15
-
-# Legacy config keys retained only for migration/compatibility with v1.x entries.
-CONF_UPDATE_INTERVAL = "update_interval"
-CONF_TRACKED_ENTITY_ID = "tracked_entity_id"
-CONF_ENABLED_SENSORS = "enabled_sensors"
-CONF_API_PROVIDER = "api_provider"
-DEFAULT_API_PROVIDER = "open_meteo"
 
 AQ_HOURLY_KEYS = {
     "pm2_5": "pm2_5",
