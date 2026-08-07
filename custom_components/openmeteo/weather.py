@@ -94,7 +94,7 @@ async def async_setup_entry(
 
 
 class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], WeatherEntity):
-    """Stable weather entity whose presentation follows the current place."""
+    """Stable weather entity whose presentation may follow the current place."""
 
     _attr_has_entity_name = False
     _attr_attribution = ATTRIBUTION
@@ -121,7 +121,7 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         self._attr_device_info = DeviceInfo(
             entry_type=DeviceEntryType.SERVICE,
             identifiers={(DOMAIN, config_entry.entry_id)},
-            name=coordinator.location_name or config_entry.title or "Open-Meteo",
+            name=coordinator.presentation_name,
             manufacturer="Open-Meteo",
             model="Forecast API",
         )
@@ -132,10 +132,8 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
 
     def _refresh_display_name(self) -> None:
         self._attr_name = (
-            (self.coordinator.data or {}).get("location_name")
-            or self.coordinator.location_name
-            or self._config_entry.title
-            or "Open-Meteo"
+            (self.coordinator.data or {}).get("presentation_name")
+            or self.coordinator.presentation_name
         )
 
     def _handle_coordinator_update(self) -> None:
@@ -316,6 +314,7 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         location = data.get("location") if isinstance(data.get("location"), Mapping) else {}
         return {
             "location_name": data.get("location_name"),
+            "presentation_name": data.get("presentation_name"),
             "latitude": location.get("latitude"),
             "longitude": location.get("longitude"),
             "last_location_update": data.get("last_location_update"),
