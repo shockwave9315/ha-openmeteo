@@ -20,7 +20,12 @@ class FakeStore:
 @pytest.mark.asyncio
 async def test_large_jump_geocode_failure_does_not_keep_previous_city(hass) -> None:
     now = dt_util.utcnow()
-    entry = MockConfigEntry(domain=DOMAIN, title="Lotte, DE", version=3, minor_version=2)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Lotte, DE",
+        version=1,
+        minor_version=1,
+    )
     entry.add_to_hass(hass)
     coordinator = OpenMeteoDataUpdateCoordinator(
         hass,
