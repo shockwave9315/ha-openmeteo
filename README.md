@@ -16,6 +16,20 @@ That caused tracking entries to keep stale city identity. For example, an entry 
 
 V2 rebuilds this model instead of adding another compatibility patch.
 
+## Clean V2 baseline
+
+V2 intentionally does **not** migrate V1 configuration entries. The first V2 deployment is a one-time clean start:
+
+1. remove the existing Open-Meteo config entry from Home Assistant,
+2. remove/replace the old custom integration,
+3. restart Home Assistant,
+4. install V2,
+5. create the weather source again through the V2 config flow.
+
+This deliberately trades V1 history/entity continuity for a smaller and more predictable production codebase. Once V2 is released and proven on a live installation, future versions are expected to preserve V2 config entries normally.
+
+The V2 config-entry schema starts at **1.1**. Backward-compatible schema changes should stay on major version 1 and bump the minor version. A new major config-entry version is reserved for genuinely breaking schema changes that require migration.
+
 ## V2 identity model
 
 For tracking entries, the tracker defines a stable source key once:
@@ -34,9 +48,7 @@ Lotte -> Dortmund -> Osnabrück -> Radłów
 
 while the same Home Assistant entities continue to exist throughout the trip.
 
-For existing V1 installations, V2 deliberately preserves the old registry `unique_id` values so dashboards, history and automations are not replaced by duplicate entities during migration. Existing user-customized entity IDs are not renamed automatically.
-
-For newly created entries, initial object IDs are source-scoped, for example:
+New entries receive source-scoped initial object IDs, for example:
 
 ```text
 weather.open_meteo_phone
@@ -44,6 +56,8 @@ sensor.open_meteo_phone_temperatura
 sensor.open_meteo_phone_cisnienie
 sensor.open_meteo_phone_lokalizacja
 ```
+
+Registry `unique_id` values are based on the config-entry ID rather than location or presentation name. This keeps entity identity stable across movement, renaming and future V2 updates.
 
 ## Location modes
 
@@ -114,23 +128,7 @@ dew_point_2m
 
 Weather data is required for a successful coordinator update. Air-quality data is best effort: an AQ outage does not take the weather entity down. If an entry has no AQ sensors enabled, V2 does not call the Air Quality endpoint at all.
 
-Reverse geocoding is isolated from the weather API and currently uses Nominatim with a configurable cooldown. Large location jumps may bypass the cooldown so a trip does not remain labeled with the previous city.
-
-## Configuration migration and rollback safety
-
-The first V2 rollout intentionally remains on config-entry **major version 3** and uses **minor version 2**. V1.7.x also uses major version 3, so testing V2 does not create a higher-major config entry that Home Assistant would refuse to hand back to V1 during a rollback.
-
-Migration to 3.2:
-
-- normalizes static/tracking mode,
-- migrates legacy tracker keys,
-- converts the old update interval to minutes,
-- splits the legacy single sensor list into weather and AQ lists,
-- creates one stable `source_key`,
-- removes obsolete options such as fake `units`, provider selection and old compatibility/cooldown fields,
-- copies the last known tracked position into per-entry Home Assistant storage.
-
-The V2 runtime source of truth for moving GPS data is the per-entry `Store`. During the first rollout, legacy `last_lat`, `last_lon` and `last_location_name` values are deliberately left as a **frozen rollback snapshot** in the old ConfigEntry. V2 neither reads nor updates those fields after migration; they exist only so a temporary rollback to V1.7.x still has a sane last-known position.
+Reverse geocoding is isolated from the weather API and currently uses Nominatim with a configurable cooldown. Large location jumps may bypass the cooldown so a trip does not remain labeled with the previous city. If reverse geocoding fails after a large move, the presentation falls back to coordinates instead of retaining a false previous city name.
 
 ## Development and tests
 
@@ -144,7 +142,7 @@ pytest-homeassistant-custom-component 0.13.354
 
 CI validates dependency consistency, compiles the Python sources, parses HACS/manifest/translation JSON resources and runs the full pytest suite.
 
-The suite covers identity invariants, V1 migration, rollback-safe config-entry migration, preservation of existing registry IDs/history, event-driven tracking, the Lotte→Dortmund regression, tracker-unavailable behavior, API field contracts, AQ request policy, sensor units, native HA weather forecasts, title-only update behavior, unload cleanup and full user config-flow paths for TRACK and STATIC modes.
+The suite covers identity invariants, event-driven tracking, the Lotte→Dortmund→Osnabrück regression, tracker-unavailable behavior, API field contracts, AQ request policy, sensor units, native HA weather forecasts, title-only update behavior, unload cleanup and full user config-flow paths for TRACK and STATIC modes.
 
 Run locally with:
 
@@ -155,7 +153,9 @@ pytest -q
 
 ## Installation
 
-The stable release remains the version published from `main`. V2 should currently be treated as development code and tested on a staged/live Home Assistant installation before merge and release.
+The stable release remains the version published from `main`. V2 should currently be treated as development code and tested on a live Home Assistant installation before merge and release.
+
+For the first V2 test, delete the V1 Open-Meteo config entry before loading V2. V1 → V2 in-place migration is intentionally unsupported.
 
 ## License
 
