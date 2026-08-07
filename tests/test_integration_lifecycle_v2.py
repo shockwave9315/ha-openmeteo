@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.helpers import device_registry as dr
 
 from custom_components.openmeteo.const import (
@@ -128,12 +129,24 @@ async def test_full_tracking_lifecycle_keeps_entities_while_location_moves(
         assert moved_location is not None
         assert moved_location.state == "Osnabrück, DE"
         assert entry.title == "Osnabrück, DE"
-        assert {entity_id for entity_id in original_entity_ids if hass.states.get(entity_id)} == original_entity_ids
+        assert {
+            entity_id for entity_id in original_entity_ids if hass.states.get(entity_id)
+        } == original_entity_ids
         assert weather.await_count == 2
         assert reverse_geocode.await_count == 2
+
+        coordinator = entry.runtime_data.coordinator
+        assert coordinator._tracker_unsub is not None
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
 
+        # HA 2026.8 preserves registry-backed states as unavailable/restored after
+        # unload. The lifecycle contract is that no Open-Meteo entity remains
+        # active and our tracker/timer callbacks are released.
         for entity_id in original_entity_ids:
-            assert hass.states.get(entity_id) is None
+            state = hass.states.get(entity_id)
+            assert state is not None
+            assert state.state == STATE_UNAVAILABLE
+        assert coordinator._tracker_unsub is None
+        assert coordinator._delayed_refresh_unsub is None
