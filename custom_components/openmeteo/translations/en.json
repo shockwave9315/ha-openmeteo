@@ -4,222 +4,74 @@
     "step": {
       "user": {
         "title": "Open-Meteo",
-        "description": "Configure Open-Meteo.",
+        "description": "Choose the location source. Tracking follows the selected entity without changing Open-Meteo entity identity.",
         "data": {
-          "mode": "Mode",
+          "mode": "Location mode"
+        }
+      },
+      "details": {
+        "title": "Weather source setup",
+        "description": "Configure location, update frequency and sensors.",
+        "data": {
           "latitude": "Latitude",
           "longitude": "Longitude",
-          "entity_id": "Tracker entity",
-          "min_track_interval": "Min track interval (min)",
-          "update_interval_min": "Update interval (min)",
-          "enabled_weather_sensors": "🌦️ Weather sensors",
-          "enabled_aq_sensors": "💨 Air quality sensors",
-          "enabled_sensors": "Sensors to create",
-          "units": "Units",
-          "api_provider": "API provider",
-          "area_name_override": "Area name override",
-          "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
-          "options_save_cooldown_min": "Options save cooldown (min)"
+          "entity_id": "Location entity",
+          "min_track_interval": "Minimum interval for small position changes (min)",
+          "update_interval_min": "Weather update interval (min)",
+          "area_name_override": "Fixed source name (optional)",
+          "reverse_geocode_cooldown_min": "Minimum place-name refresh interval (min)",
+          "enabled_weather_sensors": "Weather sensors",
+          "enabled_aq_sensors": "Air quality sensors"
         },
         "data_description": {
-          "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve place name from coordinates. Higher value = less battery/data usage.",
-          "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
-        }
-      },
-      "mode_details": {
-        "title": "Open-Meteo",
-        "description": "Fill in configuration details.",
-        "data": {
-          "mode": "Mode",
-          "latitude": "Latitude",
-          "longitude": "Longitude",
-          "entity_id": "Tracker entity",
-          "min_track_interval": "Min track interval (min)",
-          "update_interval_min": "Update interval (min)",
-          "enabled_weather_sensors": "🌦️ Weather sensors",
-          "enabled_aq_sensors": "💨 Air quality sensors",
-          "enabled_sensors": "Sensors to create",
-          "units": "Units",
-          "api_provider": "API provider",
-          "area_name_override": "Area name override",
-          "use_place_as_device_name": "Use place name as device name",
-          "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
-          "options_save_cooldown_min": "Options save cooldown (min)"
-        },
-        "data_description": {
-          "use_place_as_device_name": "When enabled, the device in the Device Registry will be named after the place (e.g. Radłów). When disabled, your own custom device name is kept.",
-          "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve a place name from coordinates. Higher value = less battery/data usage.",
-          "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
-        }
-      },
-      "search_place": {
-        "title": "Open-Meteo",
-        "description": "Search for a place (static mode).",
-        "data": {
-          "place_query": "Enter a place name",
-          "postal_code": "Postal code (optional)",
-          "country_code": "Country (ISO-2, optional)"
-        }
-      },
-      "pick_place": {
-        "title": "Open-Meteo",
-        "description": "Pick a place from the list.",
-        "data": {
-          "picked": "Select a place"
+          "entity_id": "Select a person or device_tracker exposing latitude and longitude.",
+          "min_track_interval": "Small movements are grouped. Large location changes are accepted immediately.",
+          "area_name_override": "Leave empty to let the entry and device display the current place.",
+          "reverse_geocode_cooldown_min": "Limits reverse-geocoding calls for small position changes."
         }
       }
     },
     "error": {
-      "missing_location": "Latitude and longitude are required",
-      "missing_entity": "Tracking entity is required",
-      "invalid_entity": "Entity has no GPS coordinates",
-      "no_results": "No results for the provided name",
-      "network_error": "Network error during search. Please try again."
-    }
-  },
-  "entity": {
-    "sensor": {
-      "pm2_5": {
-        "name": "PM2.5"
-      },
-      "pm10": {
-        "name": "PM10"
-      },
-      "carbon_monoxide": {
-        "name": "Carbon Monoxide"
-      },
-      "nitrogen_dioxide": {
-        "name": "Nitrogen Dioxide"
-      },
-      "sulphur_dioxide": {
-        "name": "Sulphur Dioxide"
-      },
-      "ozone": {
-        "name": "Ozone"
-      },
-      "us_aqi": {
-        "name": "US AQI"
-      },
-      "european_aqi": {
-        "name": "European AQI"
-      }
+      "required": "This field is required",
+      "missing_entity": "Select a location entity",
+      "invalid_entity": "The selected entity does not expose GPS coordinates"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Open-Meteo options",
+        "description": "Choose the location mode.",
         "data": {
-          "mode": "Mode",
-          "latitude": "Latitude",
-          "longitude": "Longitude",
-          "entity_id": "Tracker entity",
-          "min_track_interval": "Min track interval (min)",
-          "update_interval_min": "Update interval (min)",
-          "enabled_weather_sensors": "🌦️ Weather sensors",
-          "enabled_aq_sensors": "💨 Air quality sensors",
-          "enabled_sensors": "Sensors to create",
-          "units": "Units",
-          "api_provider": "API provider",
-          "area_name_override": "Area name override",
-          "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
-          "options_save_cooldown_min": "Options save cooldown (min)"
-        },
-        "data_description": {
-          "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve place name from coordinates. Higher value = less battery/data usage.",
-          "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
+          "mode": "Location mode"
         }
       },
-      "mode_details": {
-        "title": "Open-Meteo options",
+      "details": {
+        "title": "Weather source options",
+        "description": "Changing these settings does not change the stable identity of existing entities.",
         "data": {
-          "mode": "Mode",
           "latitude": "Latitude",
           "longitude": "Longitude",
-          "entity_id": "Tracker entity",
-          "min_track_interval": "Min track interval (min)",
-          "update_interval_min": "Update interval (min)",
-          "enabled_weather_sensors": "🌦️ Weather sensors",
-          "enabled_aq_sensors": "💨 Air quality sensors",
-          "enabled_sensors": "Sensors to create",
-          "units": "Units",
-          "api_provider": "API provider",
-          "area_name_override": "Area name override",
-          "use_place_as_device_name": "Use place name as device name",
-          "reverse_geocode_cooldown_min": "Reverse geocode cooldown (min)",
-          "options_save_cooldown_min": "Options save cooldown (min)"
+          "entity_id": "Location entity",
+          "min_track_interval": "Minimum interval for small position changes (min)",
+          "update_interval_min": "Weather update interval (min)",
+          "area_name_override": "Fixed source name (optional)",
+          "reverse_geocode_cooldown_min": "Minimum place-name refresh interval (min)",
+          "enabled_weather_sensors": "Weather sensors",
+          "enabled_aq_sensors": "Air quality sensors"
         },
         "data_description": {
-          "use_place_as_device_name": "When enabled, the device in the Device Registry will be named after the place (e.g. Radłów). When disabled, your own custom device name is kept.",
-          "reverse_geocode_cooldown_min": "Minimum time between attempts to resolve a place name from coordinates. Higher value = less battery/data usage.",
-          "options_save_cooldown_min": "Minimum time between saving settings (last coordinates/name) to Home Assistant to reduce frequent writes."
+          "entity_id": "Select a person or device_tracker exposing latitude and longitude.",
+          "min_track_interval": "Small movements are grouped. Large location changes are accepted immediately.",
+          "area_name_override": "Leave empty to let the entry and device display the current place.",
+          "reverse_geocode_cooldown_min": "Limits reverse-geocoding calls for small position changes."
         }
       }
     },
     "error": {
-      "missing_location": "Latitude and longitude are required",
-      "missing_entity": "Tracking entity is required",
-      "invalid_entity": "Entity has no GPS coordinates"
+      "required": "This field is required",
+      "missing_entity": "Select a location entity",
+      "invalid_entity": "The selected entity does not expose GPS coordinates"
     }
-  },
-  "sensor": {
-    "temperature": {
-      "name": "Temperature"
-    },
-    "humidity": {
-      "name": "Humidity"
-    },
-    "apparent_temperature": {
-      "name": "Apparent temperature"
-    },
-    "precipitation_probability": {
-      "name": "Precipitation probability"
-    },
-    "precipitation_sum": {
-      "name": "Total precipitation (current hour)"
-    },
-    "precipitation_daily_sum": {
-      "name": "Daily precipitation sum"
-    },
-    "precipitation_last_3h": {
-      "name": "Precipitation (last 3h)"
-    },
-    "wind_speed": {
-      "name": "Wind speed"
-    },
-    "wind_gust": {
-      "name": "Wind gusts"
-    },
-    "wind_bearing": {
-      "name": "Wind direction"
-    },
-    "pressure": {
-      "name": "Pressure"
-    },
-    "visibility": {
-      "name": "Visibility"
-    },
-    "dew_point": {
-      "name": "Dew point"
-    },
-    "location": {
-      "name": "Location"
-    },
-    "sunrise": {
-      "name": "Sunrise"
-    },
-    "sunset": {
-      "name": "Sunset"
-    },
-    "uv_index": {
-      "name": "UV Index"
-    },
-    "rain_current_hour": {
-      "name": "Rain (current hour)"
-    },
-    "snow_current_hour": {
-      "name": "Snow (current hour)"
-    }
-  },
-  "binary_sensor": {}
+  }
 }
