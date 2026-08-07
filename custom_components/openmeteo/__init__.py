@@ -72,6 +72,9 @@ async def async_setup_entry(
     await coordinator.async_config_entry_first_refresh()
     await coordinator.async_start_tracking()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # Entity setup creates/links the service device. Do one final presentation
+    # sync afterwards so platform setup order cannot overwrite an explicit UI name.
+    await coordinator._sync_presentation(coordinator.presentation_name)
     entry.async_on_unload(entry.add_update_listener(async_update_entry))
     return True
 
