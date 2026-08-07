@@ -5,16 +5,13 @@
       "user": {
         "title": "Open-Meteo",
         "description": "Wybierz źródło lokalizacji. Tryb śledzenia aktualizuje pogodę według pozycji wybranej encji, ale nie zmienia tożsamości encji Open-Meteo.",
-        "data": {
-          "mode": "Tryb lokalizacji"
-        }
+        "data": {"mode": "Tryb lokalizacji"}
       },
       "details": {
         "title": "Konfiguracja źródła pogody",
         "description": "Ustaw lokalizację, częstotliwość aktualizacji oraz sensory.",
         "data": {
-          "latitude": "Szerokość geograficzna",
-          "longitude": "Długość geograficzna",
+          "location": "Lokalizacja",
           "entity_id": "Encja lokalizacji",
           "min_track_interval": "Minimalny odstęp małych zmian pozycji (min)",
           "update_interval_min": "Interwał odświeżania pogody (min)",
@@ -42,16 +39,13 @@
       "init": {
         "title": "Opcje Open-Meteo",
         "description": "Wybierz tryb lokalizacji.",
-        "data": {
-          "mode": "Tryb lokalizacji"
-        }
+        "data": {"mode": "Tryb lokalizacji"}
       },
       "details": {
         "title": "Opcje źródła pogody",
         "description": "Zmiana tych ustawień nie zmienia stałej tożsamości istniejących encji.",
         "data": {
-          "latitude": "Szerokość geograficzna",
-          "longitude": "Długość geograficzna",
+          "location": "Lokalizacja",
           "entity_id": "Encja lokalizacji",
           "min_track_interval": "Minimalny odstęp małych zmian pozycji (min)",
           "update_interval_min": "Interwał odświeżania pogody (min)",
