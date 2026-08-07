@@ -215,7 +215,8 @@ async def test_lotte_to_dortmund_updates_place_without_changing_identity_or_conf
     await coordinator.async_shutdown()
 
 
-def test_tracker_event_filter_ignores_gps_jitter(hass) -> None:
+@pytest.mark.asyncio
+async def test_tracker_event_filter_ignores_gps_jitter(hass) -> None:
     now = dt_util.utcnow()
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -239,9 +240,11 @@ def test_tracker_event_filter_ignores_gps_jitter(hass) -> None:
 
     assert coordinator._tracker_change_requires_refresh((50.00005, 19.00005), now) is False
     assert coordinator._delayed_refresh_unsub is None
+    await coordinator.async_shutdown()
 
 
-def test_tracker_event_filter_refreshes_large_jump_immediately(hass) -> None:
+@pytest.mark.asyncio
+async def test_tracker_event_filter_refreshes_large_jump_immediately(hass) -> None:
     now = dt_util.utcnow()
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -265,3 +268,4 @@ def test_tracker_event_filter_refreshes_large_jump_immediately(hass) -> None:
 
     assert coordinator._tracker_change_requires_refresh((51.5136, 7.4653), now) is True
     assert coordinator._delayed_refresh_unsub is None
+    await coordinator.async_shutdown()
