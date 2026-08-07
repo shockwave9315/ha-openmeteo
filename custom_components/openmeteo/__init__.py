@@ -93,13 +93,12 @@ async def async_update_entry(
 async def async_unload_entry(
     hass: HomeAssistant, entry: OpenMeteoConfigEntry
 ) -> bool:
-    """Unload platforms and release tracker/timer subscriptions."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        runtime = get_runtime_data(entry)
-        if runtime is not None:
-            await runtime.coordinator.async_shutdown()
-    return unload_ok
+    """Unload platforms.
+
+    DataUpdateCoordinator registers its async_shutdown callback on the config
+    entry itself, so Home Assistant owns coordinator shutdown after this returns.
+    """
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
 def _pop_legacy(mapping: dict[str, Any], *keys: str) -> None:
