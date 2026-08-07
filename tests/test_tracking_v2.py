@@ -269,3 +269,47 @@ async def test_tracker_event_filter_refreshes_large_jump_immediately(hass) -> No
     assert coordinator._tracker_change_requires_refresh((51.5136, 7.4653), now) is True
     assert coordinator._delayed_refresh_unsub is None
     await coordinator.async_shutdown()
+
+
+@pytest.mark.asyncio
+async def test_real_tracker_state_event_awaits_coordinator_refresh(hass) -> None:
+    """A Home Assistant state event must schedule/await the async refresh coroutine."""
+    now = dt_util.utcnow()
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_MODE: MODE_TRACK,
+            CONF_ENTITY_ID: "device_tracker.phone",
+            CONF_MIN_TRACK_INTERVAL: 60,
+        },
+    )
+    entry.add_to_hass(hass)
+    hass.states.async_set(
+        "device_tracker.phone",
+        "not_home",
+        {"latitude": 52.2833, "longitude": 7.4333},
+    )
+    await hass.async_block_till_done()
+
+    coordinator = OpenMeteoDataUpdateCoordinator(
+        hass,
+        entry,
+        FakeStore(),
+        {
+            "latitude": 52.2833,
+            "longitude": 7.4333,
+            "accepted_at": now.isoformat(),
+        },
+    )
+    await coordinator.async_start_tracking()
+    coordinator.async_request_refresh = AsyncMock()
+
+    hass.states.async_set(
+        "device_tracker.phone",
+        "not_home",
+        {"latitude": 51.5136, "longitude": 7.4653},
+    )
+    await hass.async_block_till_done()
+
+    coordinator.async_request_refresh.assert_awaited_once_with()
+    await coordinator.async_shutdown()
