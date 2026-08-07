@@ -8,6 +8,7 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_LATITUDE, CONF_LOCATION, CONF_LONGITUDE
 from homeassistant.data_entry_flow import FlowResultType
 
+from custom_components.openmeteo.config_flow import _validate_tracker
 from custom_components.openmeteo.const import (
     CONF_ENABLED_AQ_SENSORS,
     CONF_ENABLED_WEATHER_SENSORS,
@@ -118,3 +119,13 @@ async def test_static_user_flow_uses_native_location_selector(
     assert result["data"][CONF_LATITUDE] == pytest.approx(50.085)
     assert result["data"][CONF_LONGITUDE] == pytest.approx(20.849)
     assert CONF_LOCATION not in result["data"]
+
+
+async def test_tracker_validation_rejects_existing_entity_without_coordinates(hass) -> None:
+    hass.states.async_set("device_tracker.no_gps", "not_home", {"friendly_name": "No GPS"})
+    assert _validate_tracker(hass, "device_tracker.no_gps") == "invalid_entity"
+
+    # A temporarily missing entity is accepted so a valid tracker can recover after
+    # startup; the coordinator will stay not-ready until coordinates are available.
+    assert _validate_tracker(hass, "device_tracker.temporarily_missing") is None
+    assert _validate_tracker(hass, "") == "required"
