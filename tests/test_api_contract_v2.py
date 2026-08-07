@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from custom_components.openmeteo.coordinator import CURRENT_FIELDS, DAILY_FIELDS, HOURLY_FIELDS
+from custom_components.openmeteo.api import CURRENT_FIELDS, DAILY_FIELDS, HOURLY_FIELDS
 
 
 def test_open_meteo_api_uses_current_field_names() -> None:
