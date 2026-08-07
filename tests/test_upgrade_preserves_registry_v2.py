@@ -35,11 +35,14 @@ def _weather_payload(temperature: float) -> dict:
     }
 
 
-async def test_migration_moves_v1_last_position_out_of_config_entry(hass) -> None:
+async def test_migration_moves_v1_last_position_to_store_and_keeps_rollback_snapshot(
+    hass,
+) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Lotte, DE",
         version=3,
+        minor_version=1,
         data={
             "tracking_mode": "device",
             "tracked_entity_id": "device_tracker.poco_x8",
@@ -67,10 +70,17 @@ async def test_migration_moves_v1_last_position_out_of_config_entry(hass) -> Non
             "location_name": "Lotte override, DE",
         }
     )
-    merged = {**dict(entry.data), **dict(entry.options)}
-    assert "last_lat" not in merged
-    assert "last_lon" not in merged
-    assert "last_location_name" not in merged
+    assert entry.version == 3
+    assert entry.minor_version == 2
+
+    # These values are an inert V1 rollback snapshot only. V2's runtime source of
+    # truth is Store and it must never update the legacy ConfigEntry keys.
+    assert entry.data["last_lat"] == pytest.approx(52.314)
+    assert entry.data["last_lon"] == pytest.approx(7.872)
+    assert entry.data["last_location_name"] == "Lotte, DE"
+    assert entry.options["last_lat"] == pytest.approx(52.315)
+    assert entry.options["last_lon"] == pytest.approx(7.873)
+    assert entry.options["last_location_name"] == "Lotte override, DE"
 
 
 async def test_v1_registry_ids_survive_v2_upgrade_and_location_move(
@@ -80,6 +90,7 @@ async def test_v1_registry_ids_survive_v2_upgrade_and_location_move(
         domain=DOMAIN,
         title="Lotte, DE",
         version=3,
+        minor_version=1,
         data={
             "tracking_mode": "device",
             "tracked_entity_id": "device_tracker.phone",
@@ -161,7 +172,8 @@ async def test_v1_registry_ids_survive_v2_upgrade_and_location_move(
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-        assert entry.version == 4
+        assert entry.version == 3
+        assert entry.minor_version == 2
         for entity_id in legacy_ids:
             assert hass.states.get(entity_id) is not None
 
@@ -198,6 +210,11 @@ async def test_v1_registry_ids_survive_v2_upgrade_and_location_move(
         }
         assert after_registry_ids == legacy_ids
         assert weather.await_count == 2
+
+        # The frozen V1 rollback snapshot must not follow V2 runtime movement.
+        assert entry.data["last_lat"] == pytest.approx(52.314)
+        assert entry.data["last_lon"] == pytest.approx(7.872)
+        assert entry.data["last_location_name"] == "Lotte, DE"
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
