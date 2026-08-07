@@ -484,6 +484,11 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
         )
 
     @property
+    def suggested_object_id(self) -> str | None:
+        """Keep entity identity stable instead of deriving it from the current city."""
+        return self._attr_suggested_object_id
+
+    @property
     def native_value(self) -> Any:
         try:
             return self.entity_description.value_fn(self.coordinator.data or {})
