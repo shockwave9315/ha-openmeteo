@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Open-Meteo",
-        "description": "Wybierz źródło lokalizacji. Tryb śledzenia aktualizuje pogodę według pozycji wybranej encji, ale nie zmienia tożsamości encji Open-Meteo.",
+        "description": "Wybierz sposób określania lokalizacji dla pogody. Śledzenie lokalizacji korzysta z pozycji wybranej osoby lub urządzenia, ale nie zmienia tożsamości encji Open-Meteo.",
         "data": {"mode": "Tryb lokalizacji"}
       },
       "details": {
@@ -12,33 +12,33 @@
         "description": "Ustaw lokalizację, częstotliwość aktualizacji oraz sensory.",
         "data": {
           "location": "Lokalizacja",
-          "entity_id": "Encja lokalizacji",
-          "min_track_interval": "Minimalny odstęp małych zmian pozycji (min)",
-          "update_interval_min": "Interwał odświeżania pogody (min)",
-          "area_name_override": "Stała nazwa źródła (opcjonalnie)",
-          "reverse_geocode_cooldown_min": "Minimalny odstęp odświeżania nazwy miejsca (min)",
+          "entity_id": "Źródło lokalizacji",
+          "min_track_interval": "Minimalny odstęp aktualizacji pozycji (min)",
+          "update_interval_min": "Odświeżanie pogody (min)",
+          "area_name_override": "Nazwa wyświetlana (opcjonalnie)",
+          "reverse_geocode_cooldown_min": "Odświeżanie nazwy miejsca (min)",
           "enabled_weather_sensors": "Sensory pogody",
           "enabled_aq_sensors": "Sensory jakości powietrza"
         },
         "data_description": {
-          "entity_id": "Wybierz person lub device_tracker z atrybutami latitude i longitude.",
-          "min_track_interval": "Małe ruchy są grupowane. Duża zmiana lokalizacji jest przyjmowana natychmiast.",
-          "area_name_override": "Pozostaw puste, aby nazwa wpisu i urządzenia pokazywała aktualną miejscowość.",
-          "reverse_geocode_cooldown_min": "Ogranicza wywołania geokodowania przy małych zmianach pozycji."
+          "entity_id": "Wybierz osobę lub urządzenie, które udostępnia współrzędne GPS.",
+          "min_track_interval": "Małe zmiany pozycji są grupowane. Duża zmiana lokalizacji jest przyjmowana natychmiast.",
+          "area_name_override": "Pozostaw puste, aby automatycznie wyświetlać aktualną miejscowość.",
+          "reverse_geocode_cooldown_min": "Ogranicza częstotliwość ustalania nazwy miejscowości przy małych zmianach pozycji."
         }
       }
     },
     "error": {
       "required": "To pole jest wymagane",
-      "missing_entity": "Wybierz encję lokalizacji",
-      "invalid_entity": "Wybrana encja nie udostępnia współrzędnych GPS"
+      "missing_entity": "Wybierz źródło lokalizacji",
+      "invalid_entity": "Wybrana osoba lub urządzenie nie udostępnia współrzędnych GPS"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Opcje Open-Meteo",
-        "description": "Wybierz tryb lokalizacji.",
+        "description": "Wybierz sposób określania lokalizacji.",
         "data": {"mode": "Tryb lokalizacji"}
       },
       "details": {
@@ -46,26 +46,26 @@
         "description": "Zmiana tych ustawień nie zmienia stałej tożsamości istniejących encji.",
         "data": {
           "location": "Lokalizacja",
-          "entity_id": "Encja lokalizacji",
-          "min_track_interval": "Minimalny odstęp małych zmian pozycji (min)",
-          "update_interval_min": "Interwał odświeżania pogody (min)",
-          "area_name_override": "Stała nazwa źródła (opcjonalnie)",
-          "reverse_geocode_cooldown_min": "Minimalny odstęp odświeżania nazwy miejsca (min)",
+          "entity_id": "Źródło lokalizacji",
+          "min_track_interval": "Minimalny odstęp aktualizacji pozycji (min)",
+          "update_interval_min": "Odświeżanie pogody (min)",
+          "area_name_override": "Nazwa wyświetlana (opcjonalnie)",
+          "reverse_geocode_cooldown_min": "Odświeżanie nazwy miejsca (min)",
           "enabled_weather_sensors": "Sensory pogody",
           "enabled_aq_sensors": "Sensory jakości powietrza"
         },
         "data_description": {
-          "entity_id": "Wybierz person lub device_tracker z atrybutami latitude i longitude.",
-          "min_track_interval": "Małe ruchy są grupowane. Duża zmiana lokalizacji jest przyjmowana natychmiast.",
-          "area_name_override": "Pozostaw puste, aby nazwa wpisu i urządzenia pokazywała aktualną miejscowość.",
-          "reverse_geocode_cooldown_min": "Ogranicza wywołania geokodowania przy małych zmianach pozycji."
+          "entity_id": "Wybierz osobę lub urządzenie, które udostępnia współrzędne GPS.",
+          "min_track_interval": "Małe zmiany pozycji są grupowane. Duża zmiana lokalizacji jest przyjmowana natychmiast.",
+          "area_name_override": "Pozostaw puste, aby automatycznie wyświetlać aktualną miejscowość.",
+          "reverse_geocode_cooldown_min": "Ogranicza częstotliwość ustalania nazwy miejscowości przy małych zmianach pozycji."
         }
       }
     },
     "error": {
       "required": "To pole jest wymagane",
-      "missing_entity": "Wybierz encję lokalizacji",
-      "invalid_entity": "Wybrana encja nie udostępnia współrzędnych GPS"
+      "missing_entity": "Wybierz źródło lokalizacji",
+      "invalid_entity": "Wybrana osoba lub urządzenie nie udostępnia współrzędnych GPS"
     }
   }
 }
