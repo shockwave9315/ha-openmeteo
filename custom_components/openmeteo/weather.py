@@ -126,6 +126,11 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
             model="Forecast API",
         )
 
+    @property
+    def suggested_object_id(self) -> str | None:
+        """Keep entity identity stable instead of deriving it from the current city."""
+        return self._attr_suggested_object_id
+
     def _current(self) -> Mapping[str, Any]:
         current = (self.coordinator.data or {}).get("current")
         return current if isinstance(current, Mapping) else {}
