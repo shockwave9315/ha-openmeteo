@@ -51,8 +51,8 @@ async def test_full_tracking_lifecycle_keeps_entities_while_location_moves(
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Open-Meteo: Telefon",
-        version=3,
-        minor_version=2,
+        version=1,
+        minor_version=1,
         data={
             CONF_MODE: MODE_TRACK,
             CONF_ENTITY_ID: "device_tracker.phone",
