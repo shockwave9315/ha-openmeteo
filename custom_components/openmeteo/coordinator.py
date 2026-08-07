@@ -292,16 +292,10 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if candidate is None:
             if self._accepted_lat is not None and self._accepted_lon is not None:
                 return self._accepted_lat, self._accepted_lon, False, 0.0
-
-            merged = self._merged_config()
-            latitude = self._safe_float(merged.get(CONF_LATITUDE))
-            longitude = self._safe_float(merged.get(CONF_LONGITUDE))
-            if latitude is None:
-                latitude = float(self.hass.config.latitude)
-            if longitude is None:
-                longitude = float(self.hass.config.longitude)
-            self._accept_coordinates(latitude, longitude, now)
-            return latitude, longitude, True, 0.0
+            tracker = entity_id or "configured tracker"
+            raise UpdateFailed(
+                f"Tracked entity {tracker} has no GPS coordinates and no last known location"
+            )
 
         latitude, longitude = candidate
         movement = self._movement_from_accepted(latitude, longitude)
