@@ -16,7 +16,11 @@ from homeassistant.util import dt as dt_util
 
 from .api import OpenMeteoApiError, OpenMeteoClient
 from .const import (
+    AQ_SENSOR_KEYS,
     CONF_AREA_NAME_OVERRIDE,
+    CONF_ENABLED_AQ_SENSORS,
+    CONF_ENABLED_SENSORS,
+    CONF_ENABLED_WEATHER_SENSORS,
     CONF_ENTITY_ID,
     CONF_LATITUDE,
     CONF_LONGITUDE,
@@ -118,6 +122,21 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         merged = self._merged_config()
         value = merged.get(CONF_ENTITY_ID) or merged.get(CONF_TRACKED_ENTITY_ID)
         return str(value) if value else None
+
+    def _air_quality_enabled(self) -> bool:
+        """Return whether this entry actually needs the optional AQ endpoint."""
+        merged = self._merged_config()
+        selected = merged.get(CONF_ENABLED_AQ_SENSORS)
+        if isinstance(selected, list):
+            return bool(selected)
+
+        legacy = merged.get(CONF_ENABLED_SENSORS)
+        if isinstance(legacy, list):
+            return any(str(key) in AQ_SENSOR_KEYS for key in legacy)
+
+        # Old entries with no sensor-selection keys exposed all sensors. Preserve
+        # that behavior until migration/configuration makes the selection explicit.
+        return CONF_ENABLED_WEATHER_SENSORS not in merged
 
     def _weather_update_interval(self) -> timedelta:
         merged = self._merged_config()
@@ -422,13 +441,14 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except OpenMeteoApiError as err:
             raise UpdateFailed(f"Weather update failed: {err}") from err
 
-        try:
-            air_quality = await self._client.async_air_quality(latitude, longitude)
-        except OpenMeteoApiError as err:
-            _LOGGER.debug("Air-quality update skipped: %s", err)
-        else:
-            if isinstance(air_quality.get("hourly"), Mapping):
-                payload["aq"] = air_quality
+        if self._air_quality_enabled():
+            try:
+                air_quality = await self._client.async_air_quality(latitude, longitude)
+            except OpenMeteoApiError as err:
+                _LOGGER.debug("Air-quality update skipped: %s", err)
+            else:
+                if isinstance(air_quality.get("hourly"), Mapping):
+                    payload["aq"] = air_quality
 
         payload["location"] = {
             "latitude": latitude,
