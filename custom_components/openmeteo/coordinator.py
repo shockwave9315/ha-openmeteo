@@ -177,8 +177,8 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @callback
     def _schedule_coordinator_refresh(self, reason: str) -> None:
-        """Schedule a coordinator refresh tied to this config-entry lifecycle."""
-        self.entry.async_create_task(
+        """Schedule a background refresh tied to this config-entry lifecycle."""
+        self.entry.async_create_background_task(
             self.hass,
             self.async_request_refresh(),
             name=f"{DOMAIN} {reason} refresh",
