@@ -34,6 +34,7 @@ def test_persisted_source_key_wins_over_every_display_change() -> None:
     )
 
 
-def test_unique_ids_are_entry_scoped_and_location_free() -> None:
-    assert weather_unique_id("entry-1") == "entry-1:weather"
+def test_unique_ids_keep_v1_registry_identity() -> None:
+    assert weather_unique_id("entry-1") == "entry-1-weather"
     assert sensor_unique_id("entry-1", "temperature") == "entry-1:temperature"
+    assert sensor_unique_id("entry-1", "co", air_quality=True) == "entry-1:co_aq"
