@@ -7,9 +7,29 @@
         "description": "Wybierz sposób określania lokalizacji dla pogody. Śledzenie lokalizacji korzysta z pozycji wybranej osoby lub urządzenia, ale nie zmienia tożsamości encji Open-Meteo.",
         "data": {"mode": "Tryb lokalizacji"}
       },
+      "static_source": {
+        "title": "Stała lokalizacja",
+        "description": "Wybierz sposób ustawienia stałej lokalizacji pogody. Współrzędne zostaną zapisane jednorazowo i później nie będą śledzone.",
+        "data": {"static_location_method": "Sposób ustawienia lokalizacji"}
+      },
+      "static_entity": {
+        "title": "Pobierz bieżącą pozycję",
+        "description": "Wybierz osobę lub urządzenie. Jego aktualne współrzędne GPS zostaną skopiowane jednorazowo jako stała lokalizacja pogody.",
+        "data": {"static_location_entity": "Osoba lub urządzenie"}
+      },
+      "static_search": {
+        "title": "Wyszukaj miejsce",
+        "description": "Wpisz miejscowość, wieś lub adres.",
+        "data": {"search_query": "Miejscowość lub adres"}
+      },
+      "static_search_result": {
+        "title": "Wybierz wynik wyszukiwania",
+        "description": "Wyniki dla: {query}",
+        "data": {"search_result": "Wynik wyszukiwania"}
+      },
       "details": {
         "title": "Konfiguracja źródła pogody",
-        "description": "Ustaw lokalizację, częstotliwość aktualizacji oraz sensory.",
+        "description": "Potwierdź lokalizację, częstotliwość aktualizacji oraz sensory.",
         "data": {
           "location": "Lokalizacja",
           "entity_id": "Źródło lokalizacji",
@@ -31,7 +51,8 @@
     "error": {
       "required": "To pole jest wymagane",
       "missing_entity": "Wybierz źródło lokalizacji",
-      "invalid_entity": "Wybrana osoba lub urządzenie nie udostępnia współrzędnych GPS"
+      "invalid_entity": "Wybrana osoba lub urządzenie nie udostępnia współrzędnych GPS",
+      "location_not_found": "Nie znaleziono pasującej miejscowości ani adresu"
     }
   },
   "options": {
@@ -41,9 +62,29 @@
         "description": "Wybierz sposób określania lokalizacji.",
         "data": {"mode": "Tryb lokalizacji"}
       },
+      "static_source": {
+        "title": "Stała lokalizacja",
+        "description": "Wybierz sposób ustawienia stałej lokalizacji pogody. Współrzędne zostaną zapisane jednorazowo i później nie będą śledzone.",
+        "data": {"static_location_method": "Sposób ustawienia lokalizacji"}
+      },
+      "static_entity": {
+        "title": "Pobierz bieżącą pozycję",
+        "description": "Wybierz osobę lub urządzenie. Jego aktualne współrzędne GPS zostaną skopiowane jednorazowo jako stała lokalizacja pogody.",
+        "data": {"static_location_entity": "Osoba lub urządzenie"}
+      },
+      "static_search": {
+        "title": "Wyszukaj miejsce",
+        "description": "Wpisz miejscowość, wieś lub adres.",
+        "data": {"search_query": "Miejscowość lub adres"}
+      },
+      "static_search_result": {
+        "title": "Wybierz wynik wyszukiwania",
+        "description": "Wyniki dla: {query}",
+        "data": {"search_result": "Wynik wyszukiwania"}
+      },
       "details": {
         "title": "Opcje źródła pogody",
-        "description": "Zmiana tych ustawień nie zmienia stałej tożsamości istniejących encji.",
+        "description": "Potwierdź lokalizację i ustawienia działania. Tożsamość istniejących encji pozostaje bez zmian.",
         "data": {
           "location": "Lokalizacja",
           "entity_id": "Źródło lokalizacji",
@@ -65,7 +106,8 @@
     "error": {
       "required": "To pole jest wymagane",
       "missing_entity": "Wybierz źródło lokalizacji",
-      "invalid_entity": "Wybrana osoba lub urządzenie nie udostępnia współrzędnych GPS"
+      "invalid_entity": "Wybrana osoba lub urządzenie nie udostępnia współrzędnych GPS",
+      "location_not_found": "Nie znaleziono pasującej miejscowości ani adresu"
     }
   }
 }
