@@ -37,6 +37,10 @@ from .runtime import (
 STORAGE_VERSION = 1
 CONFIG_ENTRY_VERSION = 4
 
+LEGACY_LAST_LAT = "last_lat"
+LEGACY_LAST_LON = "last_lon"
+LEGACY_LAST_LOCATION_NAME = "last_location_name"
+
 type OpenMeteoConfigEntry = ConfigEntry[OpenMeteoRuntimeData]
 
 
@@ -109,11 +113,54 @@ def _pop_legacy(mapping: dict[str, Any], *keys: str) -> None:
         mapping.pop(key, None)
 
 
+def _legacy_runtime_snapshot(
+    data: dict[str, Any], options: dict[str, Any]
+) -> dict[str, Any]:
+    """Build a v2 runtime snapshot from v1-v3 persisted moving-location data."""
+    # Options won over data in v1, preserve that precedence during migration.
+    latitude = options.get(LEGACY_LAST_LAT, data.get(LEGACY_LAST_LAT))
+    longitude = options.get(LEGACY_LAST_LON, data.get(LEGACY_LAST_LON))
+    location_name = options.get(
+        LEGACY_LAST_LOCATION_NAME, data.get(LEGACY_LAST_LOCATION_NAME)
+    )
+
+    snapshot: dict[str, Any] = {}
+    try:
+        latitude_f = float(latitude)
+        longitude_f = float(longitude)
+    except (TypeError, ValueError):
+        latitude_f = longitude_f = None
+
+    if (
+        latitude_f is not None
+        and longitude_f is not None
+        and -90 <= latitude_f <= 90
+        and -180 <= longitude_f <= 180
+    ):
+        snapshot["latitude"] = latitude_f
+        snapshot["longitude"] = longitude_f
+    if location_name:
+        snapshot["location_name"] = str(location_name)
+    return snapshot
+
+
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Canonicalize v1-v3 entries for the v2 runtime model."""
     data = dict(entry.data or {})
     options = dict(entry.options or {})
     merged = {**data, **options}
+
+    # Preserve the last known tracked position before removing v1 runtime keys
+    # from the persistent ConfigEntry. There is intentionally no accepted_at:
+    # after migration a live tracker position may be accepted immediately.
+    legacy_runtime = _legacy_runtime_snapshot(data, options)
+    if legacy_runtime:
+        store: Store[dict[str, Any]] = Store(
+            hass,
+            STORAGE_VERSION,
+            f"{DOMAIN}.{entry.entry_id}.runtime",
+        )
+        await store.async_save(legacy_runtime)
 
     mode = merged.get(CONF_MODE)
     legacy_tracking_mode = merged.get("tracking_mode")
@@ -162,6 +209,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             CONF_TRACKED_ENTITY_ID,
             CONF_ENABLED_SENSORS,
             CONF_UPDATE_INTERVAL,
+            LEGACY_LAST_LAT,
+            LEGACY_LAST_LON,
+            LEGACY_LAST_LOCATION_NAME,
             "tracking_mode",
             "units",
             "api_provider",
