@@ -35,7 +35,10 @@ from .runtime import (
 )
 
 STORAGE_VERSION = 1
-CONFIG_ENTRY_VERSION = 4
+# Keep the V1 major config-entry version so a first live V2 test can be rolled
+# back to the 1.7.x code without HA rejecting the entry as "newer than current".
+CONFIG_ENTRY_VERSION = 3
+CONFIG_ENTRY_MINOR_VERSION = 2
 
 LEGACY_LAST_LAT = "last_lat"
 LEGACY_LAST_LON = "last_lon"
@@ -145,14 +148,15 @@ def _legacy_runtime_snapshot(
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Canonicalize v1-v3 entries for the v2 runtime model."""
+    """Canonicalize older entries for the v2 runtime model."""
     data = dict(entry.data or {})
     options = dict(entry.options or {})
     merged = {**data, **options}
 
-    # Preserve the last known tracked position before removing v1 runtime keys
-    # from the persistent ConfigEntry. There is intentionally no accepted_at:
-    # after migration a live tracker position may be accepted immediately.
+    # Move the live runtime source of truth into Store. We intentionally leave a
+    # frozen copy of last_* in the ConfigEntry during the first V2 rollout so a
+    # downgrade to V1.7.x still has a sane last-known position. V2 never reads or
+    # updates those legacy keys after migration.
     legacy_runtime = _legacy_runtime_snapshot(data, options)
     if legacy_runtime:
         store: Store[dict[str, Any]] = Store(
@@ -209,9 +213,6 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             CONF_TRACKED_ENTITY_ID,
             CONF_ENABLED_SENSORS,
             CONF_UPDATE_INTERVAL,
-            LEGACY_LAST_LAT,
-            LEGACY_LAST_LON,
-            LEGACY_LAST_LOCATION_NAME,
             "tracking_mode",
             "units",
             "api_provider",
@@ -237,5 +238,6 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data=data,
         options=options,
         version=CONFIG_ENTRY_VERSION,
+        minor_version=CONFIG_ENTRY_MINOR_VERSION,
     )
     return True
