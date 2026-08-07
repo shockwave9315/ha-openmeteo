@@ -14,13 +14,13 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    CONCENTRATION_PARTS_PER_MILLION,
     DEGREE,
     PERCENTAGE,
     UV_INDEX,
     UnitOfLength,
     UnitOfPrecipitationDepth,
     UnitOfPressure,
+    UnitOfRatio,
     UnitOfSpeed,
     UnitOfTemperature,
 )
@@ -350,7 +350,7 @@ AQ_SENSORS: dict[str, OpenMeteoSensorDescription] = {
         key="co",
         translation_key="carbon_monoxide",
         name="Tlenek węgla",
-        native_unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
+        native_unit_of_measurement=UnitOfRatio.PARTS_PER_MILLION,
         icon="mdi:molecule",
         device_class=SensorDeviceClass.CO,
         state_class=SensorStateClass.MEASUREMENT,
