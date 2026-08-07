@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Open-Meteo",
-        "description": "Choose the location source. Tracking follows the selected entity without changing Open-Meteo entity identity.",
+        "description": "Choose how the weather location is determined. Location tracking follows the selected person or device without changing Open-Meteo entity identity.",
         "data": {"mode": "Location mode"}
       },
       "details": {
@@ -12,33 +12,33 @@
         "description": "Configure location, update frequency and sensors.",
         "data": {
           "location": "Location",
-          "entity_id": "Location entity",
-          "min_track_interval": "Minimum interval for small position changes (min)",
-          "update_interval_min": "Weather update interval (min)",
-          "area_name_override": "Fixed source name (optional)",
-          "reverse_geocode_cooldown_min": "Minimum place-name refresh interval (min)",
+          "entity_id": "Location source",
+          "min_track_interval": "Minimum position update interval (min)",
+          "update_interval_min": "Weather refresh interval (min)",
+          "area_name_override": "Display name override (optional)",
+          "reverse_geocode_cooldown_min": "Place-name refresh interval (min)",
           "enabled_weather_sensors": "Weather sensors",
           "enabled_aq_sensors": "Air quality sensors"
         },
         "data_description": {
-          "entity_id": "Select a person or device_tracker exposing latitude and longitude.",
-          "min_track_interval": "Small movements are grouped. Large location changes are accepted immediately.",
-          "area_name_override": "Leave empty to let the entry and device display the current place.",
-          "reverse_geocode_cooldown_min": "Limits reverse-geocoding calls for small position changes."
+          "entity_id": "Select a person or device that provides GPS coordinates.",
+          "min_track_interval": "Small position changes are grouped. Large location changes are accepted immediately.",
+          "area_name_override": "Leave empty to display the current place automatically.",
+          "reverse_geocode_cooldown_min": "Limits how often the place name is resolved for small position changes."
         }
       }
     },
     "error": {
       "required": "This field is required",
-      "missing_entity": "Select a location entity",
-      "invalid_entity": "The selected entity does not expose GPS coordinates"
+      "missing_entity": "Select a location source",
+      "invalid_entity": "The selected person or device does not expose GPS coordinates"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Open-Meteo options",
-        "description": "Choose the location mode.",
+        "description": "Choose how the location is determined.",
         "data": {"mode": "Location mode"}
       },
       "details": {
@@ -46,26 +46,26 @@
         "description": "Changing these settings does not change the stable identity of existing entities.",
         "data": {
           "location": "Location",
-          "entity_id": "Location entity",
-          "min_track_interval": "Minimum interval for small position changes (min)",
-          "update_interval_min": "Weather update interval (min)",
-          "area_name_override": "Fixed source name (optional)",
-          "reverse_geocode_cooldown_min": "Minimum place-name refresh interval (min)",
+          "entity_id": "Location source",
+          "min_track_interval": "Minimum position update interval (min)",
+          "update_interval_min": "Weather refresh interval (min)",
+          "area_name_override": "Display name override (optional)",
+          "reverse_geocode_cooldown_min": "Place-name refresh interval (min)",
           "enabled_weather_sensors": "Weather sensors",
           "enabled_aq_sensors": "Air quality sensors"
         },
         "data_description": {
-          "entity_id": "Select a person or device_tracker exposing latitude and longitude.",
-          "min_track_interval": "Small movements are grouped. Large location changes are accepted immediately.",
-          "area_name_override": "Leave empty to let the entry and device display the current place.",
-          "reverse_geocode_cooldown_min": "Limits reverse-geocoding calls for small position changes."
+          "entity_id": "Select a person or device that provides GPS coordinates.",
+          "min_track_interval": "Small position changes are grouped. Large location changes are accepted immediately.",
+          "area_name_override": "Leave empty to display the current place automatically.",
+          "reverse_geocode_cooldown_min": "Limits how often the place name is resolved for small position changes."
         }
       }
     },
     "error": {
       "required": "This field is required",
-      "missing_entity": "Select a location entity",
-      "invalid_entity": "The selected entity does not expose GPS coordinates"
+      "missing_entity": "Select a location source",
+      "invalid_entity": "The selected person or device does not expose GPS coordinates"
     }
   }
 }
