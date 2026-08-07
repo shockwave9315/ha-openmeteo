@@ -10,14 +10,7 @@ from typing import Any
 
 from homeassistant.util import slugify
 
-from .const import (
-    CONF_ENTITY_ID,
-    CONF_LATITUDE,
-    CONF_LONGITUDE,
-    CONF_MODE,
-    CONF_TRACKED_ENTITY_ID,
-    MODE_TRACK,
-)
+from .const import CONF_ENTITY_ID, CONF_LATITUDE, CONF_LONGITUDE, CONF_MODE, MODE_TRACK
 
 CONF_SOURCE_KEY = "source_key"
 
@@ -35,17 +28,12 @@ def derive_source_key(
     title: str | None,
     data: Mapping[str, Any],
 ) -> str:
-    """Derive a stable source key for a config entry.
-
-    The result is persisted once in config-entry data and is never recomputed
-    from the moving location afterwards.
-    """
+    """Derive the stable source key stored when a config entry is created."""
     if key := _clean_source_key(data.get(CONF_SOURCE_KEY)):
         return key
 
-    mode = data.get(CONF_MODE)
-    tracked_entity = data.get(CONF_ENTITY_ID) or data.get(CONF_TRACKED_ENTITY_ID)
-    if mode == MODE_TRACK or tracked_entity:
+    tracked_entity = data.get(CONF_ENTITY_ID)
+    if data.get(CONF_MODE) == MODE_TRACK or tracked_entity:
         if isinstance(tracked_entity, str) and tracked_entity:
             object_id = tracked_entity.split(".", 1)[-1]
             if key := _clean_source_key(object_id):
@@ -74,11 +62,11 @@ def sensor_object_id(source_key: str, sensor_slug: str) -> str:
 
 
 def weather_unique_id(entry_id: str) -> str:
-    """Preserve the v1 registry identity to prevent duplicate weather entities."""
+    """Return a stable weather registry identity for one config entry."""
     return f"{entry_id}-weather"
 
 
 def sensor_unique_id(entry_id: str, sensor_key: str, *, air_quality: bool = False) -> str:
-    """Preserve v1 sensor registry identities during the v2 migration."""
+    """Return a stable sensor registry identity for one config entry."""
     suffix = f"{sensor_key}_aq" if air_quality else sensor_key
     return f"{entry_id}:{suffix}"
