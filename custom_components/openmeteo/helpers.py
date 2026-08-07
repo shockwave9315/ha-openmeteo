@@ -2,6 +2,8 @@
 """Helper utilities for Open-Meteo integration."""
 from __future__ import annotations
 
+import asyncio
+import math
 from typing import Any, Iterable, Optional, Sequence
 
 from homeassistant.core import HomeAssistant
@@ -9,8 +11,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-import async_timeout
-import math
 
 from .const import DOMAIN, HTTP_USER_AGENT
 
@@ -124,7 +124,7 @@ async def async_reverse_postcode(
 
     session = async_get_clientsession(hass)
     try:
-        async with async_timeout.timeout(10):
+        async with asyncio.timeout(10):
             resp = await session.get(url, params=params, headers=headers)
             if resp.status != 200:
                 return None
@@ -175,7 +175,7 @@ async def async_reverse_postcode_info(
 
     session = async_get_clientsession(hass)
     try:
-        async with async_timeout.timeout(10):
+        async with asyncio.timeout(10):
             resp = await session.get(url, params=params, headers=headers)
             if resp.status != 200:
                 return None
@@ -426,7 +426,7 @@ async def async_forward_geocode(
 
     session = async_get_clientsession(hass)
     try:
-        async with async_timeout.timeout(10):
+        async with asyncio.timeout(10):
             resp = await session.get(url, params=params)
             if resp.status != 200:
                 return []
@@ -488,7 +488,7 @@ async def async_zip_to_coords(
     url = f"https://api.zippopotam.us/{cc}/{zip_clean}"
     session = async_get_clientsession(hass)
     try:
-        async with async_timeout.timeout(10):
+        async with asyncio.timeout(10):
             resp = await session.get(url)
             if resp.status != 200:
                 return None
