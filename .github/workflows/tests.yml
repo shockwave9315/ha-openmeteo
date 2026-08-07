@@ -13,46 +13,39 @@ concurrency:
 
 jobs:
   test:
-    name: pytest (py${{ matrix.python-version }})
+    name: pytest (HA current / Python 3.14)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.12", "3.13"]
+    timeout-minutes: 20
 
     env:
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PYTHONUNBUFFERED: "1"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.14"
           cache: pip
           cache-dependency-path: requirements.txt
 
       - name: Upgrade pip
         run: python -m pip install -U pip
 
-      - name: Install test tooling (PHACC -> HA)
+      - name: Install test stack
         run: python -m pip install --prefer-binary -r requirements.txt
 
       - name: Show resolved versions
         run: |
           python - <<'PY'
-          try:
-              import importlib.metadata as im
-          except Exception:
-              import importlib_metadata as im
-          for pkg in ("homeassistant","pytest-homeassistant-custom-component","pytest"):
-              try:
-                  print(pkg, "=>", im.version(pkg))
-              except Exception:
-                  print(pkg, "=> NOT INSTALLED")
+          import importlib.metadata as im
+          for pkg in ("homeassistant", "pytest-homeassistant-custom-component", "pytest"):
+              print(pkg, "=>", im.version(pkg))
           PY
 
-      - name: Run tests (fast-fail)
-        run: pytest -q --maxfail=1
+      - name: Validate dependencies
+        run: python -m pip check
+
+      - name: Run tests
+        run: pytest -q
