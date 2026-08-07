@@ -26,7 +26,9 @@ from custom_components.openmeteo.identity import CONF_SOURCE_KEY
 pytestmark = pytest.mark.asyncio
 
 
-async def test_tracking_user_flow_uses_tracker_identity_not_current_city(hass) -> None:
+async def test_tracking_user_flow_uses_tracker_identity_not_current_city(
+    hass, enable_custom_integrations
+) -> None:
     hass.states.async_set(
         "device_tracker.phone",
         "not_home",
@@ -74,7 +76,9 @@ async def test_tracking_user_flow_uses_tracker_identity_not_current_city(hass) -
     assert "Dortmund" not in result["data"][CONF_SOURCE_KEY]
 
 
-async def test_static_user_flow_uses_native_location_selector(hass) -> None:
+async def test_static_user_flow_uses_native_location_selector(
+    hass, enable_custom_integrations
+) -> None:
     with patch(
         "custom_components.openmeteo.config_flow.async_reverse_geocode",
         new=AsyncMock(return_value="Radłów, PL"),
