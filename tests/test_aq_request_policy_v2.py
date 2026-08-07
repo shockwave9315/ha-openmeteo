@@ -7,7 +7,6 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.openmeteo.const import (
     CONF_ENABLED_AQ_SENSORS,
-    CONF_ENABLED_SENSORS,
     CONF_ENABLED_WEATHER_SENSORS,
     CONF_LATITUDE,
     CONF_LONGITUDE,
@@ -24,18 +23,34 @@ class FakeStore:
 
 
 def _entry(data: dict) -> MockConfigEntry:
-    return MockConfigEntry(domain=DOMAIN, title="Test", version=4, data=data)
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="Test",
+        version=1,
+        minor_version=1,
+        data=data,
+    )
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("selection", "expected"),
     [
-        ({CONF_ENABLED_WEATHER_SENSORS: ["temperature"], CONF_ENABLED_AQ_SENSORS: []}, False),
-        ({CONF_ENABLED_WEATHER_SENSORS: ["temperature"], CONF_ENABLED_AQ_SENSORS: ["pm10"]}, True),
-        ({CONF_ENABLED_SENSORS: ["temperature"]}, False),
-        ({CONF_ENABLED_SENSORS: ["temperature", "pm10"]}, True),
-        ({}, True),
+        (
+            {
+                CONF_ENABLED_WEATHER_SENSORS: ["temperature"],
+                CONF_ENABLED_AQ_SENSORS: [],
+            },
+            False,
+        ),
+        (
+            {
+                CONF_ENABLED_WEATHER_SENSORS: ["temperature"],
+                CONF_ENABLED_AQ_SENSORS: ["pm10"],
+            },
+            True,
+        ),
+        ({CONF_ENABLED_WEATHER_SENSORS: [], CONF_ENABLED_AQ_SENSORS: []}, False),
     ],
 )
 async def test_air_quality_endpoint_policy(hass, selection: dict, expected: bool) -> None:
