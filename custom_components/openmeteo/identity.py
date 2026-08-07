@@ -51,8 +51,6 @@ def derive_source_key(
             if key := _clean_source_key(object_id):
                 return key
 
-    # Static entries are allowed to use their initial title as a stable source
-    # label because their configured location itself is static.
     if key := _clean_source_key(title):
         return key
 
@@ -76,8 +74,11 @@ def sensor_object_id(source_key: str, sensor_slug: str) -> str:
 
 
 def weather_unique_id(entry_id: str) -> str:
-    return f"{entry_id}:weather"
+    """Preserve the v1 registry identity to prevent duplicate weather entities."""
+    return f"{entry_id}-weather"
 
 
-def sensor_unique_id(entry_id: str, sensor_key: str) -> str:
-    return f"{entry_id}:{sensor_key}"
+def sensor_unique_id(entry_id: str, sensor_key: str, *, air_quality: bool = False) -> str:
+    """Preserve v1 sensor registry identities during the v2 migration."""
+    suffix = f"{sensor_key}_aq" if air_quality else sensor_key
+    return f"{entry_id}:{suffix}"
