@@ -34,7 +34,6 @@ from .const import (
     AQ_HOURLY_KEYS,
     ATTRIBUTION,
     CONF_ENABLED_AQ_SENSORS,
-    CONF_ENABLED_SENSORS,
     CONF_ENABLED_WEATHER_SENSORS,
     DOMAIN,
 )
@@ -418,19 +417,16 @@ AQ_KEYS = [key for key, description in SENSORS.items() if description.air_qualit
 
 
 def _configured_keys(entry: ConfigEntry) -> list[str]:
+    """Return exactly the sensors selected by the V2 config schema."""
     merged = {**dict(entry.data or {}), **dict(entry.options or {})}
-    weather = merged.get(CONF_ENABLED_WEATHER_SENSORS)
-    air_quality = merged.get(CONF_ENABLED_AQ_SENSORS)
-
-    if not isinstance(weather, list) and not isinstance(air_quality, list):
-        legacy = merged.get(CONF_ENABLED_SENSORS)
-        if isinstance(legacy, list):
-            return [key for key in legacy if key in SENSORS]
-        return list(SENSORS)
+    weather = merged.get(CONF_ENABLED_WEATHER_SENSORS, [])
+    air_quality = merged.get(CONF_ENABLED_AQ_SENSORS, [])
 
     selected: list[str] = []
-    selected.extend(key for key in (weather or []) if key in WEATHER_KEYS)
-    selected.extend(key for key in (air_quality or []) if key in AQ_KEYS)
+    if isinstance(weather, list):
+        selected.extend(key for key in weather if key in WEATHER_KEYS)
+    if isinstance(air_quality, list):
+        selected.extend(key for key in air_quality if key in AQ_KEYS)
     return selected
 
 
@@ -479,7 +475,7 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
         # HA 2026.8 turns Entity.suggested_object_id into an object-id base and
         # may prefix it with the mutable device name. Supplying a valid entity_id
         # before add makes EntityPlatform pass this as the integration's true
-        # suggested object id. Existing registry entries still win by unique_id.
+        # suggested object id.
         self.entity_id = f"sensor.{self._attr_suggested_object_id}"
         self._attr_name = self.entity_description.name
         self._attr_device_info = DeviceInfo(
