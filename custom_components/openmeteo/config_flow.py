@@ -30,7 +30,17 @@ from .const import (
     WEATHER_SENSOR_KEYS,
 )
 from .identity import CONF_SOURCE_KEY, derive_source_key
-from .location import async_reverse_geocode, coordinate_label
+from .location import async_forward_geocode, async_reverse_geocode, coordinate_label
+
+CONF_STATIC_LOCATION_METHOD = "static_location_method"
+CONF_STATIC_LOCATION_ENTITY = "static_location_entity"
+CONF_SEARCH_QUERY = "search_query"
+CONF_SEARCH_RESULT = "search_result"
+
+STATIC_METHOD_HOME = "home"
+STATIC_METHOD_ENTITY = "entity"
+STATIC_METHOD_SEARCH = "search"
+STATIC_METHOD_MAP = "map"
 
 
 def _update_interval_minutes(defaults: dict[str, Any]) -> int:
@@ -60,6 +70,30 @@ def _mode_selector(hass: HomeAssistant) -> selector.SelectSelector:
         labels = {MODE_STATIC: "Stała lokalizacja", MODE_TRACK: "Śledź lokalizację"}
     else:
         labels = {MODE_STATIC: "Static location", MODE_TRACK: "Track location"}
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[{"value": value, "label": label} for value, label in labels.items()],
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
+
+
+def _static_method_selector(hass: HomeAssistant) -> selector.SelectSelector:
+    language = (hass.config.language or "en").split("-", 1)[0].lower()
+    if language == "pl":
+        labels = {
+            STATIC_METHOD_HOME: "Użyj lokalizacji Home Assistant",
+            STATIC_METHOD_ENTITY: "Pobierz bieżącą pozycję",
+            STATIC_METHOD_SEARCH: "Wyszukaj miejscowość lub adres",
+            STATIC_METHOD_MAP: "Wskaż na mapie",
+        }
+    else:
+        labels = {
+            STATIC_METHOD_HOME: "Use Home Assistant location",
+            STATIC_METHOD_ENTITY: "Use current person/device position",
+            STATIC_METHOD_SEARCH: "Search for a place or address",
+            STATIC_METHOD_MAP: "Pick on the map",
+        }
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
             options=[{"value": value, "label": label} for value, label in labels.items()],
@@ -165,15 +199,30 @@ def _flatten_static_location(values: dict[str, Any]) -> None:
         values[CONF_LONGITUDE] = float(location[CONF_LONGITUDE])
 
 
+def _coordinates_from_entity(
+    hass: HomeAssistant, entity_id: Any
+) -> tuple[float, float] | None:
+    if not entity_id:
+        return None
+    state = hass.states.get(str(entity_id))
+    if state is None:
+        return None
+    try:
+        latitude = float(state.attributes["latitude"])
+        longitude = float(state.attributes["longitude"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return None
+    return latitude, longitude
+
+
 def _validate_tracker(hass: HomeAssistant, entity_id: Any) -> str | None:
     """Validate a selected tracker without rejecting a temporary unavailable state."""
     if not entity_id:
         return "required"
     state = hass.states.get(str(entity_id))
-    if state is not None and (
-        state.attributes.get("latitude") is None
-        or state.attributes.get("longitude") is None
-    ):
+    if state is not None and _coordinates_from_entity(hass, entity_id) is None:
         return "invalid_entity"
     return None
 
@@ -203,20 +252,179 @@ async def _initial_title(hass: HomeAssistant, mode: str, data: dict[str, Any]) -
     return place or coordinate_label(latitude, longitude)
 
 
-class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class _StaticLocationFlowSupport:
+    """Shared one-shot static-location acquisition steps."""
+
+    hass: HomeAssistant
+    _static_defaults: dict[str, Any]
+    _search_results: list[dict[str, Any]]
+    _search_query: str
+
+    def _init_static_support(self, defaults: dict[str, Any] | None = None) -> None:
+        self._static_defaults = {}
+        defaults = defaults or {}
+        try:
+            latitude = float(defaults[CONF_LATITUDE])
+            longitude = float(defaults[CONF_LONGITUDE])
+        except (KeyError, TypeError, ValueError):
+            pass
+        else:
+            if -90 <= latitude <= 90 and -180 <= longitude <= 180:
+                self._static_defaults[CONF_LATITUDE] = latitude
+                self._static_defaults[CONF_LONGITUDE] = longitude
+        self._search_results = []
+        self._search_query = ""
+
+    def _set_static_coordinates(self, latitude: float, longitude: float) -> None:
+        self._static_defaults[CONF_LATITUDE] = float(latitude)
+        self._static_defaults[CONF_LONGITUDE] = float(longitude)
+
+    def _ensure_static_map_default(self) -> None:
+        if (
+            CONF_LATITUDE not in self._static_defaults
+            or CONF_LONGITUDE not in self._static_defaults
+        ):
+            self._set_static_coordinates(
+                float(self.hass.config.latitude), float(self.hass.config.longitude)
+            )
+
+    async def async_step_static_source(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        if user_input is not None:
+            method = user_input[CONF_STATIC_LOCATION_METHOD]
+            if method == STATIC_METHOD_HOME:
+                self._set_static_coordinates(
+                    float(self.hass.config.latitude), float(self.hass.config.longitude)
+                )
+                return await self.async_step_details()
+            if method == STATIC_METHOD_ENTITY:
+                return await self.async_step_static_entity()
+            if method == STATIC_METHOD_SEARCH:
+                return await self.async_step_static_search()
+            self._ensure_static_map_default()
+            return await self.async_step_details()
+
+        return self.async_show_form(
+            step_id="static_source",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_STATIC_LOCATION_METHOD, default=STATIC_METHOD_HOME
+                    ): _static_method_selector(self.hass)
+                }
+            ),
+        )
+
+    async def async_step_static_entity(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            entity_id = user_input.get(CONF_STATIC_LOCATION_ENTITY)
+            if not entity_id:
+                errors[CONF_STATIC_LOCATION_ENTITY] = "required"
+            elif (coordinates := _coordinates_from_entity(self.hass, entity_id)) is None:
+                errors[CONF_STATIC_LOCATION_ENTITY] = "invalid_entity"
+            else:
+                self._set_static_coordinates(*coordinates)
+                return await self.async_step_details()
+
+        return self.async_show_form(
+            step_id="static_entity",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_STATIC_LOCATION_ENTITY): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain=["device_tracker", "person"])
+                    )
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_static_search(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            query = str(user_input.get(CONF_SEARCH_QUERY) or "").strip()
+            self._search_query = query
+            if not query:
+                errors[CONF_SEARCH_QUERY] = "required"
+            else:
+                results = await async_forward_geocode(self.hass, query)
+                if not results:
+                    errors[CONF_SEARCH_QUERY] = "location_not_found"
+                elif len(results) == 1:
+                    result = results[0]
+                    self._set_static_coordinates(
+                        result["latitude"], result["longitude"]
+                    )
+                    return await self.async_step_details()
+                else:
+                    self._search_results = results
+                    return await self.async_step_static_search_result()
+
+        return self.async_show_form(
+            step_id="static_search",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_SEARCH_QUERY, default=self._search_query): str}
+            ),
+            errors=errors,
+        )
+
+    async def async_step_static_search_result(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                index = int(user_input[CONF_SEARCH_RESULT])
+                result = self._search_results[index]
+            except (KeyError, TypeError, ValueError, IndexError):
+                errors[CONF_SEARCH_RESULT] = "required"
+            else:
+                self._set_static_coordinates(result["latitude"], result["longitude"])
+                return await self.async_step_details()
+
+        options = [
+            {"value": str(index), "label": str(result["label"])}
+            for index, result in enumerate(self._search_results)
+        ]
+        return self.async_show_form(
+            step_id="static_search_result",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_SEARCH_RESULT): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=options,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            ),
+            errors=errors,
+            description_placeholders={"query": self._search_query},
+        )
+
+
+class OpenMeteoConfigFlow(
+    _StaticLocationFlowSupport, config_entries.ConfigFlow, domain=DOMAIN
+):
     """Set up one static or tracking Open-Meteo source."""
 
-    # V2 is a clean schema baseline. Keep compatible schema evolution on this
-    # major and bump MINOR_VERSION; use a new major only for breaking changes.
     VERSION = 1
     MINOR_VERSION = 1
 
     def __init__(self) -> None:
         self._mode = MODE_STATIC
+        self._init_static_support()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         if user_input is not None:
             self._mode = user_input[CONF_MODE]
+            if self._mode == MODE_STATIC:
+                return await self.async_step_static_source()
             return await self.async_step_details()
 
         return self.async_show_form(
@@ -228,7 +436,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_details(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
-        defaults = dict(user_input or {})
+        defaults = {**self._static_defaults, **dict(user_input or {})}
 
         if user_input is not None:
             data = dict(user_input)
@@ -263,17 +471,20 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return OpenMeteoOptionsFlow(config_entry)
 
 
-class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
+class OpenMeteoOptionsFlow(_StaticLocationFlowSupport, config_entries.OptionsFlow):
     """Edit runtime behavior without changing the stable source key."""
 
     def __init__(self, entry: config_entries.ConfigEntry) -> None:
         self._entry = entry
         merged = {**dict(entry.data or {}), **dict(entry.options or {})}
         self._mode = merged.get(CONF_MODE, MODE_STATIC)
+        self._init_static_support(merged)
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         if user_input is not None:
             self._mode = user_input[CONF_MODE]
+            if self._mode == MODE_STATIC:
+                return await self.async_step_static_source()
             return await self.async_step_details()
 
         return self.async_show_form(
@@ -285,7 +496,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_details(self, user_input: dict[str, Any] | None = None):
         merged = {**dict(self._entry.data or {}), **dict(self._entry.options or {})}
-        defaults = dict(merged)
+        defaults = {**merged, **self._static_defaults}
         errors: dict[str, str] = {}
 
         if user_input is not None:

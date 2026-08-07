@@ -18,7 +18,7 @@ DOMAIN = "openmeteo"
 NAME = "Open-Meteo"
 MANUFACTURER = "Open-Meteo"
 ATTRIBUTION = "Weather data provided by Open-Meteo"
-HTTP_USER_AGENT = "ha-openmeteo/2.0.0-dev (https://github.com/shockwave9315/ha-openmeteo)"
+HTTP_USER_AGENT = "ha-openmeteo/2.0.2 (https://github.com/shockwave9315/ha-openmeteo)"
 
 URL = "https://api.open-meteo.com/v1/forecast"
 PLATFORMS = [Platform.WEATHER, Platform.SENSOR]

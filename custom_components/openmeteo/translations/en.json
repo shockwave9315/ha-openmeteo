@@ -7,9 +7,29 @@
         "description": "Choose how the weather location is determined. Location tracking follows the selected person or device without changing Open-Meteo entity identity.",
         "data": {"mode": "Location mode"}
       },
+      "static_source": {
+        "title": "Static location",
+        "description": "Choose how to set the fixed weather location. The selected coordinates are saved once and are not tracked afterwards.",
+        "data": {"static_location_method": "Location source"}
+      },
+      "static_entity": {
+        "title": "Use current position",
+        "description": "Choose a person or device. Its current GPS coordinates will be copied once as the fixed weather location.",
+        "data": {"static_location_entity": "Person or device"}
+      },
+      "static_search": {
+        "title": "Search for a place",
+        "description": "Enter a city, town, village or address.",
+        "data": {"search_query": "Place or address"}
+      },
+      "static_search_result": {
+        "title": "Choose search result",
+        "description": "Results for: {query}",
+        "data": {"search_result": "Search result"}
+      },
       "details": {
         "title": "Weather source setup",
-        "description": "Configure location, update frequency and sensors.",
+        "description": "Confirm the location, update frequency and sensors.",
         "data": {
           "location": "Location",
           "entity_id": "Location source",
@@ -31,7 +51,8 @@
     "error": {
       "required": "This field is required",
       "missing_entity": "Select a location source",
-      "invalid_entity": "The selected person or device does not expose GPS coordinates"
+      "invalid_entity": "The selected person or device does not expose GPS coordinates",
+      "location_not_found": "No matching place or address was found"
     }
   },
   "options": {
@@ -41,9 +62,29 @@
         "description": "Choose how the location is determined.",
         "data": {"mode": "Location mode"}
       },
+      "static_source": {
+        "title": "Static location",
+        "description": "Choose how to set the fixed weather location. The selected coordinates are saved once and are not tracked afterwards.",
+        "data": {"static_location_method": "Location source"}
+      },
+      "static_entity": {
+        "title": "Use current position",
+        "description": "Choose a person or device. Its current GPS coordinates will be copied once as the fixed weather location.",
+        "data": {"static_location_entity": "Person or device"}
+      },
+      "static_search": {
+        "title": "Search for a place",
+        "description": "Enter a city, town, village or address.",
+        "data": {"search_query": "Place or address"}
+      },
+      "static_search_result": {
+        "title": "Choose search result",
+        "description": "Results for: {query}",
+        "data": {"search_result": "Search result"}
+      },
       "details": {
         "title": "Weather source options",
-        "description": "Changing these settings does not change the stable identity of existing entities.",
+        "description": "Confirm the location and runtime settings. Existing entity identity stays unchanged.",
         "data": {
           "location": "Location",
           "entity_id": "Location source",
@@ -65,7 +106,8 @@
     "error": {
       "required": "This field is required",
       "missing_entity": "Select a location source",
-      "invalid_entity": "The selected person or device does not expose GPS coordinates"
+      "invalid_entity": "The selected person or device does not expose GPS coordinates",
+      "location_not_found": "No matching place or address was found"
     }
   }
 }
