@@ -1,363 +1,166 @@
-# 🌤️ Open-Meteo for Home Assistant
+# Open-Meteo for Home Assistant — V2 development
 
-![Version](https://img.shields.io/badge/version-1.6.0a19-orange)
-![License](https://img.shields.io/badge/license-Apache%202.0-green)
-![HACS](https://img.shields.io/badge/HACS-Custom-orange)
-![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024+-blue)
+> **Status:** active V2 rewrite on `rewrite/v2-architecture`. This branch is not a release yet.
 
-Darmowa, szybka integracja pogodowa dla Home Assistant wykorzystująca [Open-Meteo API](https://open-meteo.com/) — **bez klucza API, bez limitów!**
+Custom Home Assistant integration using the free Open-Meteo Weather and Air Quality APIs. No API key is required.
 
----
+## Why V2 exists
 
-## ✨ Funkcje
+The original integration grew through many incremental AI-assisted changes. It worked, but mixed three concepts that must remain separate in Home Assistant:
 
-- 🌡️ **Pogoda** - temperatura, wilgotność, ciśnienie, wiatr, opady
-- 🔮 **Prognozy** - godzinowe (72h) i dzienne (7 dni)
-- 💨 **Jakość powietrza** - PM2.5, PM10, CO, NO₂, SO₂, O₃, AQI (US/EU)
-- 📍 **GPS Tracking** - śledź pogodę w lokalizacji osoby/urządzenia
-- 🌍 **Geocoding** - automatyczne nazwy miejscowości z współrzędnych
-- ⚡ **Wydajność** - cooldowny, retry, cache dla oszczędności baterii
-- 🌐 **Dwujęzyczne** - pełne wsparcie PL/EN
+1. **source identity** — the configured weather source,
+2. **current location** — mutable runtime state,
+3. **presentation name** — what the UI currently displays.
 
----
+That caused tracking entries to keep stale city identity. For example, an entry created while the tracker was in **Lotte** could later show weather for **Dortmund**, while parts of the registry/UI still remained tied to Lotte.
 
-## 🚀 Szybki start
+V2 rebuilds this model instead of adding another compatibility patch.
 
-### 1. **Instalacja przez HACS**
+## Clean V2 baseline
 
-<details>
-<summary><b>📥 Kliknij, aby rozwinąć instrukcję</b></summary>
+V2 intentionally does **not** migrate V1 configuration entries. The first V2 deployment is a one-time clean start:
 
-1. Otwórz **HACS** w Home Assistant
-2. Kliknij **Integrations**
-3. Menu `⋮` (prawy górny róg) → **Custom repositories**
-4. Wklej URL:
-   ```
-   https://github.com/shockwave9315/ha-openmeteo
-   ```
-5. Wybierz kategorię: **Integration**
-6. Kliknij **Add**
-7. Znajdź "**Open-Meteo**" na liście i kliknij **Download**
-8. **Restartuj Home Assistant**
+1. remove the existing Open-Meteo config entry from Home Assistant,
+2. remove/replace the old custom integration,
+3. restart Home Assistant,
+4. install V2,
+5. create the weather source again through the V2 config flow.
 
-</details>
+Deleting only the HACS files is not enough for this transition: the old V1 config entry must be removed before V2 is loaded.
 
-### 2. **Konfiguracja**
+This deliberately trades V1 history/entity continuity for a smaller and more predictable production codebase. Once V2 is released and proven on a live installation, future versions are expected to preserve V2 config entries normally.
 
-1. Przejdź do **Ustawienia** → **Urządzenia i usługi**
-2. Kliknij **+ Dodaj integrację**
-3. Wyszukaj "**Open-Meteo**"
-4. Wybierz tryb:
-   - **Static** - stałe współrzędne (dom, działka)
-   - **Track** - śledź lokalizację osoby/urządzenia
-5. Gotowe! 🎉
+The V2 config-entry schema starts at **1.1**. Backward-compatible schema changes should stay on major version 1 and bump the minor version. A new major config-entry version is reserved for genuinely breaking schema changes that require migration.
 
----
+## V2 identity model
 
-## 📋 Tryby lokalizacji
+For tracking entries, the tracker defines a stable source key once:
 
-### 🏠 Tryb statyczny (Static)
-
-Idealne dla stałej lokalizacji - domu, biura, działki.
-
-**Konfiguracja:**
-- Wpisz nazwę miejsca (np. "Warszawa") lub kod pocztowy
-- System znajdzie lokalizację automatycznie
-- Lub podaj dokładne współrzędne GPS
-
-### 📱 Tryb śledzenia (Track)
-
-Pogoda śledzi Twoją lokalizację w czasie rzeczywistym!
-
-**Wymogi:**
-- Encja `person.*` lub `device_tracker.*` z GPS
-- Aplikacja Home Assistant Mobile z włączoną lokalizacją
-
-**Ustawienia:**
-- **Min. odstęp śledzenia** (15 min) - jak często aktualizować lokalizację
-- **Reverse geocode cooldown** (15 min) - jak często pobierać nazwę miejsca
-- **Options save cooldown** (1 min) - jak często zapisywać zmiany
-
-**💡 Tip dla Android/MIUI:**
-- Włącz **Autostart** dla aplikacji HA
-- Ustaw baterię: **Bez ograniczeń**
-- Lokalizacja: **Zawsze**
-- "Zablokuj" aplikację w Recent Apps
-
----
-
-## 🎯 Dostępne sensory
-
-### ☁️ Sensory pogodowe
-
-| Sensor | Opis | Jednostka |
-|--------|------|-----------|
-| 🌡️ Temperatura | Temperatura powietrza | °C |
-| 🌡️ Temp. odczuwalna | Temperatura odczuwalna | °C |
-| 💧 Wilgotność | Wilgotność względna | % |
-| 📊 Ciśnienie | Ciśnienie atmosferyczne | hPa |
-| 💎 Punkt rosy | Temperatura punktu rosy | °C |
-| 💨 Wiatr | Prędkość wiatru | km/h |
-| 💨 Porywy wiatru | Maksymalne porywy | km/h |
-| 🧭 Kierunek wiatru | Kierunek wiatru | ° |
-| 🌧️ Opady (1h) | Opady w bieżącej godzinie | mm |
-| 🌧️ Opady (dzienna suma) | Suma opadów dziennych | mm |
-| 🌧️ Opady (3h) | Suma opadów z 3h | mm |
-| ☔ Prawdopodobieństwo opadów | Szansa na opady | % |
-| 👁️ Widzialność | Widzialność | km |
-| 🌅 Wschód słońca | Czas wschodu | timestamp |
-| 🌇 Zachód słońca | Czas zachodu | timestamp |
-| ☀️ Indeks UV | Promieniowanie UV | - |
-| 📍 Lokalizacja | Współrzędne GPS | lat,lon |
-
-### 🏭 Sensory jakości powietrza
-
-| Sensor | Opis | Jednostka |
-|--------|------|-----------|
-| PM2.5 | Pyły zawieszone 2.5µm | µg/m³ |
-| PM10 | Pyły zawieszone 10µm | µg/m³ |
-| CO | Tlenek węgla | ppm |
-| NO₂ | Dwutlenek azotu | µg/m³ |
-| SO₂ | Dwutlenek siarki | µg/m³ |
-| O₃ | Ozon | µg/m³ |
-| US AQI | Indeks jakości powietrza (USA) | - |
-| EU AQI | Indeks jakości powietrza (EU) | - |
-
-### 🌧️ Szczegóły opadów (nowe)
-
-Integracja zachowuje istniejący sensor **Opad łączny (bieżąca godzina)** i dodatkowo udostępnia rozbicie na składniki opadu dla bieżącej godziny:
-
-| Sensor | Opis | Jednostka |
-|--------|------|-----------|
-| 🌧️ Deszcz (bieżąca godzina) | Część deszczowa opadu w aktualnej godzinie | mm |
-| ❄️ Śnieg (bieżąca godzina) | Część śnieżna opadu w aktualnej godzinie (`snowfall`) | mm |
-
-Semantyka nowych sensorów jest taka sama jak dla istniejącego sensora opadu godzinowego (wartość dla bieżącej godziny).
-
----
-
-## 🎨 Przykładowa karta Lovelace
-
-### Podstawowa karta pogody
-
-```yaml
-type: weather-forecast
-entity: weather.open_meteo
-show_forecast: true
-forecast_type: daily
+```text
+device_tracker.phone -> source_key: phone
 ```
 
-### Zaawansowana karta (wymaga HACS)
+The source key and config-entry ID define identity. The current city never does.
 
-<details>
-<summary><b>🎭 Kliknij, aby zobaczyć kod</b></summary>
+A trip can therefore look like this:
 
-**Wymagane karty:**
-- [Mushroom Cards](https://github.com/piitaya/lovelace-mushroom)
-- [ApexCharts Card](https://github.com/RomRider/apexcharts-card)
-
-```yaml
-type: vertical-stack
-cards:
-  # Header z aktualną pogodą
-  - type: custom:mushroom-title-card
-    title: 🌤️ Pogoda
-    subtitle: "{{ states('weather.open_meteo') | title }} • {{ state_attr('weather.open_meteo','temperature') }}°C"
-
-  # Szybki podgląd najważniejszych danych
-  - type: custom:mushroom-chips-card
-    chips:
-      - type: weather
-        entity: weather.open_meteo
-        show_conditions: true
-        show_temperature: true
-      - type: entity
-        entity: sensor.promieniowanie_uv
-        icon: mdi:weather-sunny-alert
-        icon_color: orange
-      - type: entity
-        entity: sensor.prawdopodobienstwo_opadow
-        icon: mdi:umbrella
-        icon_color: blue
-      - type: entity
-        entity: sensor.wiatr
-        icon: mdi:weather-windy
-      - type: entity
-        entity: sensor.cisnienie
-        icon: mdi:gauge
-
-  # Wykres temperatury
-  - type: custom:apexcharts-card
-    header:
-      show: true
-      title: 📈 Temperatura (24h)
-    graph_span: 24h
-    span:
-      start: day
-    series:
-      - entity: sensor.temperatura
-        name: Temperatura
-        stroke_width: 2
-        color: '#ff6b6b'
-      - entity: sensor.temperatura_odczuwalna
-        name: Odczuwalna
-        stroke_width: 2
-        color: '#4ecdc4'
-        curve: smooth
-
-  # Karta jakości powietrza
-  - type: entities
-    title: 🏭 Jakość powietrza
-    entities:
-      - entity: sensor.pm2_5_aq
-        name: PM2.5
-        icon: mdi:blur
-      - entity: sensor.pm10_aq
-        name: PM10
-        icon: mdi:blur
-      - entity: sensor.aqi_eu_aq
-        name: European AQI
-        icon: mdi:gauge
+```text
+Lotte -> Dortmund -> Osnabrück -> Radłów
 ```
 
-</details>
+while the same Home Assistant entities continue to exist throughout the trip.
 
----
+New entries receive source-scoped initial object IDs, for example:
 
-## ⚙️ Konfiguracja zaawansowana
+```text
+weather.open_meteo_phone
+sensor.open_meteo_phone_temperatura
+sensor.open_meteo_phone_cisnienie
+sensor.open_meteo_phone_lokalizacja
+```
 
-### Opcje integracji
+Registry `unique_id` values are based on the config-entry ID rather than location or presentation name. This keeps entity identity stable across movement, renaming and future V2 updates.
 
-| Opcja | Opis | Domyślnie | Tryb |
-|-------|------|-----------|------|
-| **Interwał aktualizacji** | Jak często pobierać dane pogodowe | 10 min | Oba |
-| **Jednostki** | Metryczne lub imperialne | Metryczne | Oba |
-| **Nazwa miejsca** | Własna nazwa (opcjonalne) | Auto | Oba |
-| **Min. odstęp śledzenia** | Min. czas między aktualizacjami GPS | 15 min | Track |
-| **Reverse geocode cooldown** | Cooldown na pobieranie nazwy miejsca | 15 min | Track |
-| **Options save cooldown** | Cooldown na zapis ustawień | 1 min | Track |
+## Location modes
 
-### Wybór sensorów
+### Tracking
 
-Możesz włączyć/wyłączyć dowolne sensory w opcjach integracji:
-1. Przejdź do **Urządzenia i usługi** → **Open-Meteo**
-2. Kliknij **Konfiguruj**
-3. Wybierz sensory pogodowe i/lub jakości powietrza
-4. Zapisz
+Select a `person.*` or `device_tracker.*` entity exposing `latitude` and `longitude`.
 
----
+Tracking is event driven:
 
-## 🔧 Rozwiązywanie problemów
+- GPS jitter below roughly 50 m is ignored,
+- small movements are grouped according to the configured tracking interval,
+- a jump of at least 10 km bypasses that throttle and refreshes immediately,
+- a delayed refresh is scheduled for a throttled small movement, so movement is not silently lost.
 
-<details>
-<summary><b>❓ Brak danych GPS w trybie Track</b></summary>
+The active coordinates and place name are runtime data stored in Home Assistant storage. They are **not** written repeatedly into config-entry `data` or `options`.
 
-**Problem:** Sensory pokazują "unavailable" lub używają starych współrzędnych
+If a tracked entity temporarily has no coordinates, V2 uses the last accepted stored position. A fresh tracking entry with neither live GPS nor a stored last position stays not-ready rather than silently falling back to the Home Assistant home coordinates.
 
-**Rozwiązanie:**
-1. Sprawdź czy encja trackera ma atrybuty `latitude` i `longitude`
-2. W aplikacji HA Mobile: Ustawienia → Companion App → Włącz lokalizację
-3. Android: Uprawnienia → Lokalizacja → Zawsze
-4. Sprawdź logi: `custom_components.openmeteo.coordinator`
+### Static
 
-</details>
+Choose a point with Home Assistant's native location selector. Static entries use the configured coordinates and otherwise share the same weather/sensor implementation as tracking entries.
 
-<details>
-<summary><b>❓ Sensory jakości powietrza są niedostępne</b></summary>
+## Current location in Home Assistant
 
-**Problem:** Sensory AQ pokazują "unavailable"
+The integration exposes the current place as normal mutable state:
 
-**Przyczyna:** Open-Meteo Air Quality API może nie mieć danych dla wszystkich lokalizacji
+```text
+sensor.open_meteo_<source>_lokalizacja = Dortmund, DE
+```
 
-**Rozwiązanie:**
-- To normalne - nie wszystkie regiony mają dostępne dane AQ
-- Sensory będą "unavailable" w miejscach bez pokrycia
-- Sprawdź [Open-Meteo Air Quality](https://open-meteo.com/en/docs/air-quality-api)
+with attributes including latitude, longitude, tracking mode and last accepted location update.
 
-</details>
+The visible integration/device/weather names may follow the current place, but those changes do not alter registry identity and do not trigger a configuration reload by themselves.
 
-<details>
-<summary><b>❓ Nazwy encji się zmieniają</b></summary>
+## Weather entity
 
-**Problem:** Entity ID zmienia się po zmianie lokalizacji
+The V2 weather entity targets the Home Assistant 2026.8 native weather API and exposes:
 
-**Rozwiązanie:**
-Od wersji 1.4+ używamy stabilnych ID:
-- Weather: `weather.open_meteo`
-- Sensory: `sensor.temperatura`, `sensor.cisnienie`, itp.
+- temperature and apparent temperature,
+- humidity and dew point,
+- pressure,
+- wind speed, direction and gusts,
+- visibility,
+- cloud coverage,
+- UV index,
+- weather condition,
+- native hourly forecast,
+- native daily forecast.
 
-Jeśli masz starą wersję - zaktualizuj i uruchom ponownie konfigurację.
+Forecast dictionaries use Home Assistant's current `native_*` forecast fields rather than the old compatibility field names.
 
-</details>
+## Sensors
 
----
+Weather sensors include temperature, apparent temperature, humidity, pressure, dew point, wind, precipitation, rain, snowfall, precipitation probability, visibility, sunrise/sunset, UV and current location.
 
-## 📊 Wydajność i bateria
+Air-quality sensors include PM2.5, PM10, CO, NO₂, SO₂, O₃, US AQI and European AQI.
 
-Integracja jest zoptymalizowana pod kątem oszczędzania baterii:
+Important unit correction in V2: Open-Meteo reports hourly `snowfall` in **centimeters**. V1 incorrectly exposed that value as millimeters; V2 exposes it as `cm`.
 
-| Feature | Opis |
-|---------|------|
-| ⏱️ **Cooldowny** | Ograniczają częstotliwość API calls |
-| 🔄 **Retry z backoff** | Eksponencjalny backoff przy błędach (1s → 1.5s → 2.25s) |
-| 💾 **Cache** | Zachowuje ostatnie dane przy błędach sieci |
-| 📍 **GPS throttling** | Min. odstęp między aktualizacjami lokalizacji |
-| 🌐 **Geocode cooldown** | Ogranicza reverse geocoding (oszczędność danych) |
+## API behavior
 
----
+V2 requests current Open-Meteo field names such as:
 
-## 🆕 Co nowego w 1.6.x
+```text
+weather_code
+dew_point_2m
+```
 
-### ✨ Nowe funkcje
-- ✅ Grupowane sensory (pogoda vs jakość powietrza) w UI
-- ✅ Ulepszone type hints dla lepszej type safety
-- ✅ Refaktoryzacja kodu - lepsze utrzymanie
-- ✅ Szczegółowe docstringi i komentarze
+Weather data is required for a successful coordinator update. Air-quality data is best effort: an AQ outage does not take the weather entity down. If an entry has no AQ sensors enabled, V2 does not call the Air Quality endpoint at all.
 
-### 🔧 Poprawki
-- ✅ Bardziej precyzyjne exception handling
-- ✅ Udokumentowane magic numbers i timing
-- ✅ Split długich funkcji na mniejsze metody
-- ✅ Lepsze logowanie z kontekstem
+Reverse geocoding is isolated from the weather API and currently uses Nominatim with a configurable cooldown. Large location jumps may bypass the cooldown so a trip does not remain labeled with the previous city. If reverse geocoding fails after a large move, the presentation falls back to coordinates instead of retaining a false previous city name.
 
-Pełen changelog: [CHANGELOG.md](CHANGELOG.md)
+## Development and tests
 
----
+The V2 branch CI targets the same stack as current Home Assistant:
 
-## 🤝 Wsparcie i rozwój
+```text
+Home Assistant 2026.8.0
+Python 3.14
+pytest-homeassistant-custom-component 0.13.354
+```
 
-### Znalazłeś bug?
-Zgłoś issue: [GitHub Issues](https://github.com/shockwave9315/ha-openmeteo/issues)
+CI validates dependency consistency, compiles the Python sources, parses HACS/manifest/translation JSON resources and runs the full pytest suite.
 
-### Masz pomysł na feature?
-Otwórz Feature Request: [GitHub Issues](https://github.com/shockwave9315/ha-openmeteo/issues/new)
+The suite covers identity invariants, event-driven tracking, the Lotte→Dortmund→Osnabrück regression, tracker-unavailable behavior, API field contracts, AQ request policy, sensor units, native HA weather forecasts, title-only update behavior, unload cleanup and full user config-flow paths for TRACK and STATIC modes.
 
-### Chcesz pomóc?
-Pull requesty są mile widziane! 🎉
+Run locally with:
 
----
+```bash
+python -m pip install -r requirements.txt
+pytest -q
+```
 
-## 📜 Licencja
+## Installation
 
-**Apache License 2.0**
+The stable release remains the version published from `main`. V2 should currently be treated as development code and tested on a live Home Assistant installation before merge and release.
 
-Projekt jest open-source na warunkach Apache 2.0.
-Pełny tekst licencji: [LICENSE](LICENSE)
+For the first V2 test, delete the V1 Open-Meteo config entry before loading V2. V1 → V2 in-place migration is intentionally unsupported.
 
----
+## License
 
-## 🙏 Podziękowania
+Apache License 2.0.
 
-- [Open-Meteo](https://open-meteo.com/) - za darmowe API
-- Społeczność Home Assistant - za wsparcie i testy
-- Wszyscy kontrybutorzy - za pull requesty i raporty bugów
-
----
-
-<div align="center">
-
-**Jeśli podoba Ci się ta integracja, zostaw ⭐ na GitHubie!**
-
-Made with ❤️ for Home Assistant
-
-</div>
+Weather and air-quality data are provided by Open-Meteo. Reverse geocoding uses OpenStreetMap Nominatim.

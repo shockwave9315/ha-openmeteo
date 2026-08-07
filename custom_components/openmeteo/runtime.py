@@ -1,44 +1,51 @@
-# SPDX-License-Identifier: Apache-2.0
-"""Runtime access helpers for Open-Meteo hass.data state."""
+"""Typed runtime state for Open-Meteo v2."""
 from __future__ import annotations
 
+from dataclasses import dataclass
+import json
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-
-from .const import DOMAIN
-
-
-EntryStore = dict[str, Any]
+from homeassistant.helpers.storage import Store
 
 
-def _get_domain_store(hass: HomeAssistant) -> dict[str, Any]:
-    """Return Open-Meteo domain store as a dict."""
-    store = hass.data.get(DOMAIN)
-    return store if isinstance(store, dict) else {}
+@dataclass(slots=True)
+class OpenMeteoRuntimeData:
+    """Runtime objects owned by one config entry."""
+
+    coordinator: Any
+    store: Store[dict[str, Any]]
+    source_key: str
+    config_signature: str
+
+
+def config_signature(entry: ConfigEntry) -> str:
+    """Return a stable fingerprint of reload-relevant config.
+
+    Entry title is intentionally excluded: the current place is presentation state
+    and may change while tracking without requiring a reload.
+    """
+    return json.dumps(
+        {
+            "data": dict(entry.data or {}),
+            "options": dict(entry.options or {}),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+
+
+def get_runtime_data(entry: ConfigEntry) -> OpenMeteoRuntimeData | None:
+    runtime = getattr(entry, "runtime_data", None)
+    return runtime if isinstance(runtime, OpenMeteoRuntimeData) else None
 
 
 def get_entry_coordinator(hass: HomeAssistant, entry_id: str) -> Any | None:
-    """Return coordinator for an entry, supporting legacy wrapped storage shape."""
-    domain_store = _get_domain_store(hass)
-    value = domain_store.get(entry_id)
-    if isinstance(value, dict):
-        return value.get("coordinator")
-    return value
-
-
-def get_entry_runtime_store(hass: HomeAssistant, entry_id: str) -> EntryStore | None:
-    """Return runtime metadata store for an entry or None when unavailable."""
-    entries = _get_domain_store(hass).get("entries")
-    if not isinstance(entries, dict):
+    """Return the coordinator through ConfigEntry.runtime_data."""
+    entry = hass.config_entries.async_get_entry(entry_id)
+    if entry is None:
         return None
-    store = entries.get(entry_id)
-    return store if isinstance(store, dict) else None
-
-
-def get_or_create_entry_runtime_store(hass: HomeAssistant, entry_id: str) -> EntryStore:
-    """Return runtime metadata store for an entry and create it when missing."""
-    domain_store = hass.data.setdefault(DOMAIN, {})
-    entries = domain_store.setdefault("entries", {})
-    store = entries.setdefault(entry_id, {})
-    return store
+    runtime = get_runtime_data(entry)
+    return runtime.coordinator if runtime is not None else None

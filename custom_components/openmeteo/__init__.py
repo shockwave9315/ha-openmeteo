@@ -1,162 +1,81 @@
-
-"""The Open-Meteo integration."""
+"""Open-Meteo integration v2."""
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.storage import Store
 
-from .const import (
-    CONF_API_PROVIDER,
-    CONF_ENTITY_ID,
-    CONF_MIN_TRACK_INTERVAL,
-    CONF_MODE,
-    CONF_TRACKED_ENTITY_ID,
-    CONF_UPDATE_INTERVAL,
-    DEFAULT_API_PROVIDER,
-    DEFAULT_MIN_TRACK_INTERVAL,
-    DEFAULT_UNITS,
-    DEFAULT_UPDATE_INTERVAL,
-    DOMAIN,
-    MODE_STATIC,
-    MODE_TRACK,
-    PLATFORMS,
-    CONF_UNITS,
-    CONF_LATITUDE,
-    CONF_LONGITUDE,
-)
+from .const import DOMAIN, PLATFORMS
 from .coordinator import OpenMeteoDataUpdateCoordinator
-from .runtime import get_entry_coordinator
+from .identity import CONF_SOURCE_KEY, derive_source_key
+from .runtime import OpenMeteoRuntimeData, config_signature, get_runtime_data
+
+STORAGE_VERSION = 1
+
+type OpenMeteoConfigEntry = ConfigEntry[OpenMeteoRuntimeData]
 
 
-# ---- Test-patched symbol (must exist at module level) ----
-async def async_reverse_geocode(hass, lat, lon):
-    """Module-level stub for tests; CI will patch this symbol."""
-    return None
+def _merged(entry: ConfigEntry) -> dict[str, Any]:
+    return {**dict(entry.data or {}), **dict(entry.options or {})}
 
 
-# ---------- Helpers to support both dict and ConfigEntry/MockConfigEntry ----------
-def _merge_entry_like(config: ConfigType | ConfigEntry | dict) -> tuple[dict[str, Any], Optional[str]]:
-    """Normalize config to a dict and extract title if available."""
-    if hasattr(config, "data") and hasattr(config, "options"):
-        data = getattr(config, "data", {}) or {}
-        options = getattr(config, "options", {}) or {}
-        merged = {**data, **options}
-        title = getattr(config, "title", None)
-        return merged, title
-    if isinstance(config, dict):
-        return dict(config), config.get("title")
-    return {}, None
+async def async_setup_entry(
+    hass: HomeAssistant, entry: OpenMeteoConfigEntry
+) -> bool:
+    """Set up one static or tracked Open-Meteo source."""
+    merged = _merged(entry)
+    source_key = str(
+        merged.get(CONF_SOURCE_KEY)
+        or derive_source_key(entry_id=entry.entry_id, title=entry.title, data=merged)
+    )
 
+    store: Store[dict[str, Any]] = Store(
+        hass,
+        STORAGE_VERSION,
+        f"{DOMAIN}.{entry.entry_id}.runtime",
+    )
+    restored = await store.async_load() or {}
 
-# ---------- API used by tests ----------
-async def resolve_coords(hass: HomeAssistant, config: ConfigType | ConfigEntry | dict) -> Tuple[float, float, Optional[str]]:
-    """Resolve (lat, lon, title) from entry/dict.
+    coordinator = OpenMeteoDataUpdateCoordinator(hass, entry, store, restored)
+    entry.runtime_data = OpenMeteoRuntimeData(
+        coordinator=coordinator,
+        store=store,
+        source_key=source_key,
+        config_signature=config_signature(entry),
+    )
 
-    - Works with ConfigEntry/MockConfigEntry and dict
-    - For MODE_STATIC uses lat/lon from config; otherwise falls back to HA coords
-    - Third value is the entry title (may be None/empty string)
-    """
-    merged, title = _merge_entry_like(config)
-
-    mode = merged.get(CONF_MODE, MODE_STATIC)
-    if mode not in (MODE_STATIC, MODE_TRACK):
-        mode = MODE_STATIC
-
-    if mode == MODE_STATIC:
-        lat = float(merged.get(CONF_LATITUDE, hass.config.latitude))
-        lon = float(merged.get(CONF_LONGITUDE, hass.config.longitude))
-    else:
-        # MODE_TRACK (not used in the per-entry test); keep simple fallback
-        lat = float(merged.get(CONF_LATITUDE, hass.config.latitude))
-        lon = float(merged.get(CONF_LONGITUDE, hass.config.longitude))
-
-    return lat, lon, title
-
-
-async def build_title(hass: HomeAssistant, config: ConfigType | ConfigEntry | dict, lat: float, lon: float) -> str:
-    """Build a title:
-    1) non-empty ConfigEntry.title → use it,
-    2) else reverse-geocode (tests patch async_reverse_geocode),
-    3) else "{lat:.5f},{lon:.5f}".
-    """
-    _, title = _merge_entry_like(config)
-
-    if title and str(title).strip():
-        return str(title)
-
-    place = await async_reverse_geocode(hass, lat, lon)
-    if place:
-        return place
-
-    return f"{lat:.5f},{lon:.5f}"
-
-
-# ---------- Standard HA entry setup ----------
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Open-Meteo from a config entry."""
-    coordinator = OpenMeteoDataUpdateCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    await coordinator.async_start_tracking()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # Entity setup creates/links the service device. Do one final presentation
+    # sync afterwards so platform setup order cannot overwrite an explicit UI name.
+    await coordinator._sync_presentation(coordinator.presentation_name)
     entry.async_on_unload(entry.add_update_listener(async_update_entry))
     return True
 
 
-async def async_update_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload when options are updated."""
-    coordinator = get_entry_coordinator(hass, entry.entry_id)
-    if coordinator and coordinator.consume_suppress_reload():
+async def async_update_entry(
+    hass: HomeAssistant, entry: OpenMeteoConfigEntry
+) -> None:
+    """Reload only when data/options changed.
+
+    A tracked city name is stored in the config-entry title for presentation, but
+    title-only changes must not reload the integration.
+    """
+    runtime = get_runtime_data(entry)
+    if runtime is not None and runtime.config_signature == config_signature(entry):
         return
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
-        if not hass.data[DOMAIN]:
-            hass.data.pop(DOMAIN)
-    return unload_ok
+async def async_unload_entry(
+    hass: HomeAssistant, entry: OpenMeteoConfigEntry
+) -> bool:
+    """Unload platforms.
 
-
-async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Migrate old entry to new version."""
-    data = {**(entry.data or {})}
-    options = {**(entry.options or {})}
-
-    mode = data.get(CONF_MODE) or options.get(CONF_MODE)
-    if not mode:
-        if data.get(CONF_ENTITY_ID) or options.get(CONF_ENTITY_ID) or data.get(CONF_TRACKED_ENTITY_ID):
-            data[CONF_MODE] = MODE_TRACK
-        else:
-            data[CONF_MODE] = MODE_STATIC
-
-    if CONF_MIN_TRACK_INTERVAL not in data and CONF_MIN_TRACK_INTERVAL not in options:
-        data[CONF_MIN_TRACK_INTERVAL] = DEFAULT_MIN_TRACK_INTERVAL
-    if CONF_UPDATE_INTERVAL not in data and CONF_UPDATE_INTERVAL not in options:
-        data[CONF_UPDATE_INTERVAL] = DEFAULT_UPDATE_INTERVAL
-    if "units" not in data and "units" not in options:
-        data["units"] = DEFAULT_UNITS
-    if CONF_API_PROVIDER not in data and CONF_API_PROVIDER not in options:
-        data[CONF_API_PROVIDER] = DEFAULT_API_PROVIDER
-
-    legacy_prefix = "p" + "v_"
-    for key in [k for k in set(data) | set(options) if str(k).startswith(legacy_prefix)]:
-        data.pop(key, None)
-        options.pop(key, None)
-
-    for list_key in ("enabled_sensors", "enabled_weather_sensors"):
-        values = options.get(list_key, data.get(list_key))
-        if isinstance(values, list):
-            cleaned = [v for v in values if not str(v).startswith(legacy_prefix)]
-            if list_key in options:
-                options[list_key] = cleaned
-            if list_key in data:
-                data[list_key] = cleaned
-
-    hass.config_entries.async_update_entry(entry, data=data, options=options, version=3)
-    return True
+    DataUpdateCoordinator registers its async_shutdown callback on the config
+    entry itself, so Home Assistant owns coordinator shutdown after this returns.
+    """
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
