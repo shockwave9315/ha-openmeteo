@@ -57,9 +57,9 @@ def _label_options(hass: HomeAssistant, keys: list[str]) -> list[dict[str, str]]
 def _mode_selector(hass: HomeAssistant) -> selector.SelectSelector:
     language = (hass.config.language or "en").split("-", 1)[0].lower()
     if language == "pl":
-        labels = {MODE_STATIC: "Stała lokalizacja", MODE_TRACK: "Śledź encję"}
+        labels = {MODE_STATIC: "Stała lokalizacja", MODE_TRACK: "Śledź lokalizację"}
     else:
-        labels = {MODE_STATIC: "Static location", MODE_TRACK: "Track an entity"}
+        labels = {MODE_STATIC: "Static location", MODE_TRACK: "Track location"}
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
             options=[{"value": value, "label": label} for value, label in labels.items()],

@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Open-Meteo",
-        "description": "Choose how the weather location is determined. Location tracking follows the selected person or device without changing Open-Meteo entity identity.",
+        "description": "Choose the location source. Tracking follows the selected entity without changing Open-Meteo entity identity.",
         "data": {"mode": "Location mode"}
       },
       "details": {
@@ -21,24 +21,24 @@
           "enabled_aq_sensors": "Air quality sensors"
         },
         "data_description": {
-          "entity_id": "Select a person or device that provides GPS coordinates.",
-          "min_track_interval": "Small position changes are grouped. Large location changes are accepted immediately.",
+          "entity_id": "Select a person or device tracker that provides GPS coordinates.",
+          "min_track_interval": "Small movements are grouped. Large location changes are accepted immediately.",
           "area_name_override": "Leave empty to display the current place automatically.",
-          "reverse_geocode_cooldown_min": "Limits how often the place name is resolved for small position changes."
+          "reverse_geocode_cooldown_min": "Limits reverse-geocoding calls for small position changes."
         }
       }
     },
     "error": {
       "required": "This field is required",
       "missing_entity": "Select a location source",
-      "invalid_entity": "The selected person or device does not expose GPS coordinates"
+      "invalid_entity": "The selected entity does not expose GPS coordinates"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Open-Meteo options",
-        "description": "Choose how the location is determined.",
+        "description": "Choose the location mode.",
         "data": {"mode": "Location mode"}
       },
       "details": {
@@ -55,17 +55,17 @@
           "enabled_aq_sensors": "Air quality sensors"
         },
         "data_description": {
-          "entity_id": "Select a person or device that provides GPS coordinates.",
-          "min_track_interval": "Small position changes are grouped. Large location changes are accepted immediately.",
+          "entity_id": "Select a person or device tracker that provides GPS coordinates.",
+          "min_track_interval": "Small movements are grouped. Large location changes are accepted immediately.",
           "area_name_override": "Leave empty to display the current place automatically.",
-          "reverse_geocode_cooldown_min": "Limits how often the place name is resolved for small position changes."
+          "reverse_geocode_cooldown_min": "Limits reverse-geocoding calls for small position changes."
         }
       }
     },
     "error": {
       "required": "This field is required",
       "missing_entity": "Select a location source",
-      "invalid_entity": "The selected person or device does not expose GPS coordinates"
+      "invalid_entity": "The selected entity does not expose GPS coordinates"
     }
   }
 }
