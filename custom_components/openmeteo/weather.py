@@ -117,6 +117,11 @@ class OpenMeteoWeather(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], Weathe
         self._config_entry = config_entry
         self._attr_unique_id = weather_unique_id(config_entry.entry_id)
         self._attr_suggested_object_id = weather_object_id(source_key)
+        # HA 2026.8 treats Entity.suggested_object_id as an object-id base and may
+        # prefix it with the mutable device name. A valid pre-add entity_id is the
+        # public integration hook that EntityPlatform converts to a true suggested
+        # object id. Existing registry entries still win by unique_id.
+        self.entity_id = f"weather.{self._attr_suggested_object_id}"
         self._refresh_display_name()
         self._attr_device_info = DeviceInfo(
             entry_type=DeviceEntryType.SERVICE,
