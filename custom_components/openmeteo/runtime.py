@@ -1,44 +1,64 @@
-# SPDX-License-Identifier: Apache-2.0
-"""Runtime access helpers for Open-Meteo hass.data state."""
+"""Typed runtime state for Open-Meteo."""
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-
-from .const import DOMAIN
-
-
-EntryStore = dict[str, Any]
+from homeassistant.helpers.storage import Store
 
 
-def _get_domain_store(hass: HomeAssistant) -> dict[str, Any]:
-    """Return Open-Meteo domain store as a dict."""
-    store = hass.data.get(DOMAIN)
-    return store if isinstance(store, dict) else {}
+@dataclass(slots=True)
+class OpenMeteoRuntimeData:
+    """Runtime objects owned by one config entry."""
+
+    coordinator: Any
+    store: Store[dict[str, Any]]
+    source_key: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+def get_runtime_data(entry: ConfigEntry) -> OpenMeteoRuntimeData | None:
+    runtime = getattr(entry, "runtime_data", None)
+    return runtime if isinstance(runtime, OpenMeteoRuntimeData) else None
 
 
 def get_entry_coordinator(hass: HomeAssistant, entry_id: str) -> Any | None:
-    """Return coordinator for an entry, supporting legacy wrapped storage shape."""
-    domain_store = _get_domain_store(hass)
-    value = domain_store.get(entry_id)
-    if isinstance(value, dict):
-        return value.get("coordinator")
-    return value
+    """Compatibility helper while v2 removes hass.data based storage."""
+    entry = hass.config_entries.async_get_entry(entry_id)
+    if entry is not None:
+        runtime = get_runtime_data(entry)
+        if runtime is not None:
+            return runtime.coordinator
+
+    # Temporary compatibility with v1 tests/partially migrated code.
+    domain_store = hass.data.get("openmeteo")
+    if isinstance(domain_store, dict):
+        value = domain_store.get(entry_id)
+        if isinstance(value, dict):
+            return value.get("coordinator")
+        return value
+    return None
 
 
-def get_entry_runtime_store(hass: HomeAssistant, entry_id: str) -> EntryStore | None:
-    """Return runtime metadata store for an entry or None when unavailable."""
-    entries = _get_domain_store(hass).get("entries")
-    if not isinstance(entries, dict):
-        return None
-    store = entries.get(entry_id)
-    return store if isinstance(store, dict) else None
+def get_entry_runtime_store(hass: HomeAssistant, entry_id: str) -> dict[str, Any] | None:
+    entry = hass.config_entries.async_get_entry(entry_id)
+    if entry is not None:
+        runtime = get_runtime_data(entry)
+        if runtime is not None:
+            return runtime.metadata
+    return None
 
 
-def get_or_create_entry_runtime_store(hass: HomeAssistant, entry_id: str) -> EntryStore:
-    """Return runtime metadata store for an entry and create it when missing."""
-    domain_store = hass.data.setdefault(DOMAIN, {})
+def get_or_create_entry_runtime_store(hass: HomeAssistant, entry_id: str) -> dict[str, Any]:
+    entry = hass.config_entries.async_get_entry(entry_id)
+    if entry is not None:
+        runtime = get_runtime_data(entry)
+        if runtime is not None:
+            return runtime.metadata
+
+    # Compatibility fallback only; new v2 code should never need this path.
+    domain_store = hass.data.setdefault("openmeteo", {})
     entries = domain_store.setdefault("entries", {})
-    store = entries.setdefault(entry_id, {})
-    return store
+    return entries.setdefault(entry_id, {})
