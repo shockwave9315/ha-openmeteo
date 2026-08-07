@@ -18,7 +18,7 @@ DOMAIN = "openmeteo"
 NAME = "Open-Meteo"
 MANUFACTURER = "Open-Meteo"
 ATTRIBUTION = "Weather data provided by Open-Meteo"
-HTTP_USER_AGENT = "ha-openmeteo/2.0.0-dev (https://github.com/shockwave9315/ha-openmeteo)"
+HTTP_USER_AGENT = "ha-openmeteo/2.0.2 (https://github.com/shockwave9315/ha-openmeteo)"
 
 URL = "https://api.open-meteo.com/v1/forecast"
 PLATFORMS = [Platform.WEATHER, Platform.SENSOR]
@@ -92,32 +92,21 @@ WEATHER_SENSOR_KEYS = [
     "wind_speed",
     "wind_gust",
     "wind_bearing",
+    "precipitation_probability",
+    "visibility",
     "precipitation_sum",
     "rain_current_hour",
     "snow_current_hour",
-    "precipitation_daily_sum",
-    "precipitation_last_3h",
-    "precipitation_probability",
-    "visibility",
     "sunrise",
     "sunset",
     "uv_index",
-    "uv_index_max",
     "location",
 ]
 
-AQ_SENSOR_KEYS = [
-    "pm2_5",
-    "pm10",
-    "co",
-    "no2",
-    "so2",
-    "o3",
-    "aqi_us",
-    "aqi_eu",
-]
+AQ_SENSOR_KEYS = ["pm2_5", "pm10", "co", "no2", "so2", "o3", "aqi_us", "aqi_eu"]
+ALL_SENSOR_KEYS = WEATHER_SENSOR_KEYS + AQ_SENSOR_KEYS
 
-SENSOR_LABELS = {
+SENSOR_LABELS: dict[str, dict[str, str]] = {
     "temperature": {"pl": "Temperatura", "en": "Temperature"},
     "apparent_temperature": {"pl": "Temperatura odczuwalna", "en": "Apparent temperature"},
     "humidity": {"pl": "Wilgotność", "en": "Humidity"},
@@ -125,25 +114,22 @@ SENSOR_LABELS = {
     "dew_point": {"pl": "Punkt rosy", "en": "Dew point"},
     "wind_speed": {"pl": "Prędkość wiatru", "en": "Wind speed"},
     "wind_gust": {"pl": "Porywy wiatru", "en": "Wind gust"},
-    "wind_bearing": {"pl": "Kierunek wiatru", "en": "Wind bearing"},
-    "precipitation_sum": {"pl": "Opad łączny (bieżąca godzina)", "en": "Precipitation (current hour)"},
+    "wind_bearing": {"pl": "Kierunek wiatru", "en": "Wind direction"},
+    "precipitation_probability": {"pl": "Prawdopodobieństwo opadów", "en": "Precipitation probability"},
+    "visibility": {"pl": "Widoczność", "en": "Visibility"},
+    "precipitation_sum": {"pl": "Suma opadów", "en": "Precipitation sum"},
     "rain_current_hour": {"pl": "Deszcz (bieżąca godzina)", "en": "Rain (current hour)"},
     "snow_current_hour": {"pl": "Śnieg (bieżąca godzina)", "en": "Snow (current hour)"},
-    "precipitation_daily_sum": {"pl": "Suma opadów (dzienna)", "en": "Daily precipitation"},
-    "precipitation_last_3h": {"pl": "Opad (ostatnie 3h)", "en": "Precipitation (last 3h)"},
-    "precipitation_probability": {"pl": "Prawdopodobieństwo opadów", "en": "Precipitation probability"},
-    "visibility": {"pl": "Widzialność", "en": "Visibility"},
     "sunrise": {"pl": "Wschód słońca", "en": "Sunrise"},
     "sunset": {"pl": "Zachód słońca", "en": "Sunset"},
     "uv_index": {"pl": "Indeks UV", "en": "UV index"},
-    "uv_index_max": {"pl": "Maksymalny indeks UV", "en": "Maximum UV index"},
     "location": {"pl": "Lokalizacja", "en": "Location"},
     "pm2_5": {"pl": "PM2.5", "en": "PM2.5"},
     "pm10": {"pl": "PM10", "en": "PM10"},
-    "co": {"pl": "Tlenek węgla (CO)", "en": "Carbon monoxide (CO)"},
-    "no2": {"pl": "Dwutlenek azotu (NO₂)", "en": "Nitrogen dioxide (NO₂)"},
-    "so2": {"pl": "Dwutlenek siarki (SO₂)", "en": "Sulphur dioxide (SO₂)"},
-    "o3": {"pl": "Ozon (O₃)", "en": "Ozone (O₃)"},
+    "co": {"pl": "Tlenek węgla", "en": "Carbon monoxide"},
+    "no2": {"pl": "Dwutlenek azotu", "en": "Nitrogen dioxide"},
+    "so2": {"pl": "Dwutlenek siarki", "en": "Sulphur dioxide"},
+    "o3": {"pl": "Ozon", "en": "Ozone"},
     "aqi_us": {"pl": "US AQI", "en": "US AQI"},
-    "aqi_eu": {"pl": "Europejski AQI", "en": "European AQI"},
+    "aqi_eu": {"pl": "European AQI", "en": "European AQI"},
 }
