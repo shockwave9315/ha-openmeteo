@@ -170,7 +170,9 @@ async def test_v1_registry_ids_survive_v2_upgrade_and_location_move(
         assert hass.states.get("weather.open_meteo_phone") is None
         assert hass.states.get("sensor.open_meteo_phone_temperatura") is None
         assert hass.states.get("sensor.open_meteo_phone_lokalizacja") is None
-        assert hass.states[old_location.entity_id].state == "Dortmund, DE"
+        location_state = hass.states.get(old_location.entity_id)
+        assert location_state is not None
+        assert location_state.state == "Dortmund, DE"
 
         before_registry_ids = {
             entity.entity_id
@@ -186,7 +188,9 @@ async def test_v1_registry_ids_survive_v2_upgrade_and_location_move(
         )
         await hass.async_block_till_done()
 
-        assert hass.states[old_location.entity_id].state == "Osnabrück, DE"
+        location_state = hass.states.get(old_location.entity_id)
+        assert location_state is not None
+        assert location_state.state == "Osnabrück, DE"
         after_registry_ids = {
             entity.entity_id
             for entity in registry.entities.values()
