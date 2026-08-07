@@ -58,7 +58,9 @@ Tracking is event driven:
 - a jump of at least 10 km bypasses that throttle and refreshes immediately,
 - a delayed refresh is scheduled for a throttled small movement, so movement is not silently lost.
 
-The current coordinates and place name are runtime data stored in Home Assistant storage. They are **not** written repeatedly into config-entry `data` or `options`.
+The active coordinates and place name are runtime data stored in Home Assistant storage. They are **not** written repeatedly into config-entry `data` or `options`.
+
+If a tracked entity temporarily has no coordinates, V2 uses the last accepted stored position. A fresh tracking entry with neither live GPS nor a stored last position stays not-ready rather than silently falling back to the Home Assistant home coordinates.
 
 ### Static
 
@@ -110,22 +112,25 @@ weather_code
 dew_point_2m
 ```
 
-Weather data is required for a successful coordinator update. Air-quality data is best effort: an AQ outage does not take the weather entity down.
+Weather data is required for a successful coordinator update. Air-quality data is best effort: an AQ outage does not take the weather entity down. If an entry has no AQ sensors enabled, V2 does not call the Air Quality endpoint at all.
 
 Reverse geocoding is isolated from the weather API and currently uses Nominatim with a configurable cooldown. Large location jumps may bypass the cooldown so a trip does not remain labeled with the previous city.
 
-## Configuration migration
+## Configuration migration and rollback safety
 
-Config-entry version 4 migrates V1–V3 entries by:
+The first V2 rollout intentionally remains on config-entry **major version 3** and uses **minor version 2**. V1.7.x also uses major version 3, so testing V2 does not create a higher-major config entry that Home Assistant would refuse to hand back to V1 during a rollback.
 
-- normalizing static/tracking mode,
-- migrating legacy tracker keys,
-- converting the old update interval to minutes,
-- splitting the legacy single sensor list into weather and AQ lists,
-- creating one stable `source_key`,
-- removing obsolete options such as fake `units`, provider selection and old runtime persistence/cooldown fields.
+Migration to 3.2:
 
-Runtime GPS state is moved out of configuration and into per-entry Home Assistant storage.
+- normalizes static/tracking mode,
+- migrates legacy tracker keys,
+- converts the old update interval to minutes,
+- splits the legacy single sensor list into weather and AQ lists,
+- creates one stable `source_key`,
+- removes obsolete options such as fake `units`, provider selection and old compatibility/cooldown fields,
+- copies the last known tracked position into per-entry Home Assistant storage.
+
+The V2 runtime source of truth for moving GPS data is the per-entry `Store`. During the first rollout, legacy `last_lat`, `last_lon` and `last_location_name` values are deliberately left as a **frozen rollback snapshot** in the old ConfigEntry. V2 neither reads nor updates those fields after migration; they exist only so a temporary rollback to V1.7.x still has a sane last-known position.
 
 ## Development and tests
 
@@ -137,7 +142,9 @@ Python 3.14
 pytest-homeassistant-custom-component 0.13.354
 ```
 
-The suite covers identity invariants, V1–V3 migration, event-driven tracking, the Lotte→Dortmund regression, API field contracts, sensor units, native HA weather forecasts, title-only update behavior, and full user config-flow paths for TRACK and STATIC modes.
+CI validates dependency consistency, compiles the Python sources, parses HACS/manifest/translation JSON resources and runs the full pytest suite.
+
+The suite covers identity invariants, V1 migration, rollback-safe config-entry migration, preservation of existing registry IDs/history, event-driven tracking, the Lotte→Dortmund regression, tracker-unavailable behavior, API field contracts, AQ request policy, sensor units, native HA weather forecasts, title-only update behavior, unload cleanup and full user config-flow paths for TRACK and STATIC modes.
 
 Run locally with:
 
@@ -148,7 +155,7 @@ pytest -q
 
 ## Installation
 
-The stable release remains the version published from `main`. V2 should currently be treated as development code and tested on a non-critical/staged Home Assistant installation before release.
+The stable release remains the version published from `main`. V2 should currently be treated as development code and tested on a staged/live Home Assistant installation before merge and release.
 
 ## License
 
