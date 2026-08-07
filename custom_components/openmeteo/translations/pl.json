@@ -4,225 +4,74 @@
     "step": {
       "user": {
         "title": "Open-Meteo",
-        "description": "Konfiguruj Open-Meteo.",
+        "description": "Wybierz źródło lokalizacji. Tryb śledzenia aktualizuje pogodę według pozycji wybranej encji, ale nie zmienia tożsamości encji Open-Meteo.",
         "data": {
-          "mode": "Tryb",
+          "mode": "Tryb lokalizacji"
+        }
+      },
+      "details": {
+        "title": "Konfiguracja źródła pogody",
+        "description": "Ustaw lokalizację, częstotliwość aktualizacji oraz sensory.",
+        "data": {
           "latitude": "Szerokość geograficzna",
           "longitude": "Długość geograficzna",
-          "entity_id": "Encja trackera",
-          "min_track_interval": "Min. odstęp śledzenia (min)",
-          "update_interval_min": "Interwał aktualizacji (min)",
-          "enabled_weather_sensors": "🌦️ Sensory pogody",
-          "enabled_aq_sensors": "💨 Sensory jakości powietrza",
-          "enabled_sensors": "Sensory do utworzenia",
-          "units": "Jednostki",
-          "api_provider": "Dostawca API",
-          "area_name_override": "Nazwa obszaru",
-          "use_place_as_device_name": "Użyj nazwy miejsca jako nazwy urządzenia",
-          "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
+          "entity_id": "Encja lokalizacji",
+          "min_track_interval": "Minimalny odstęp małych zmian pozycji (min)",
+          "update_interval_min": "Interwał odświeżania pogody (min)",
+          "area_name_override": "Stała nazwa źródła (opcjonalnie)",
+          "reverse_geocode_cooldown_min": "Minimalny odstęp odświeżania nazwy miejsca (min)",
+          "enabled_weather_sensors": "Sensory pogody",
+          "enabled_aq_sensors": "Sensory jakości powietrza"
         },
         "data_description": {
-          "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
-          "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
-          "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
-        }
-      },
-      "search_place": {
-        "title": "Open-Meteo",
-        "description": "Wyszukaj miejscowość (tryb statyczny).",
-        "data": {
-          "place_query": "Wpisz miejscowość",
-          "postal_code": "Kod pocztowy (opcjonalnie)",
-          "country_code": "Kraj (ISO-2, opcjonalnie)",
-          "admin1": "Województwo/region (opcjonalnie)"
-        }
-      },
-      "pick_place": {
-        "title": "Open-Meteo",
-        "description": "Wybierz miejscowość z listy.",
-        "data": {
-          "picked": "Wybierz miejscowość"
-        }
-      },
-      "mode_details": {
-        "title": "Open-Meteo",
-        "description": "Uzupełnij szczegóły konfiguracji.",
-        "data": {
-          "mode": "Tryb",
-          "latitude": "Szerokość geograficzna",
-          "longitude": "Długość geograficzna",
-          "entity_id": "Encja trackera",
-          "min_track_interval": "Min. odstęp śledzenia (min)",
-          "update_interval_min": "Interwał aktualizacji (min)",
-          "enabled_weather_sensors": "🌦️ Sensory pogody",
-          "enabled_aq_sensors": "💨 Sensory jakości powietrza",
-          "enabled_sensors": "Sensory do utworzenia",
-          "units": "Jednostki",
-          "api_provider": "Dostawca API",
-          "area_name_override": "Nazwa obszaru",
-          "use_place_as_device_name": "Użyj nazwy miejsca jako nazwy urządzenia",
-          "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
-        },
-        "data_description": {
-          "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
-          "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
-          "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
+          "entity_id": "Wybierz person lub device_tracker z atrybutami latitude i longitude.",
+          "min_track_interval": "Małe ruchy są grupowane. Duża zmiana lokalizacji jest przyjmowana natychmiast.",
+          "area_name_override": "Pozostaw puste, aby nazwa wpisu i urządzenia pokazywała aktualną miejscowość.",
+          "reverse_geocode_cooldown_min": "Ogranicza wywołania geokodowania przy małych zmianach pozycji."
         }
       }
     },
     "error": {
-      "missing_location": "Wymagana szerokość i długość geograficzna",
-      "missing_entity": "Wymagana encja do śledzenia",
-      "invalid_entity": "Encja nie ma współrzędnych GPS",
-      "no_results": "Brak wyników dla podanej nazwy",
-      "network_error": "Błąd sieci podczas wyszukiwania. Spróbuj ponownie."
-    }
-  },
-  "entity": {
-    "sensor": {
-      "pm2_5": {
-        "name": "PM2.5"
-      },
-      "pm10": {
-        "name": "PM10"
-      },
-      "carbon_monoxide": {
-        "name": "Tlenek węgla"
-      },
-      "nitrogen_dioxide": {
-        "name": "Dwutlenek azotu"
-      },
-      "sulphur_dioxide": {
-        "name": "Dwutlenek siarki"
-      },
-      "ozone": {
-        "name": "Ozon"
-      },
-      "us_aqi": {
-        "name": "US AQI"
-      },
-      "european_aqi": {
-        "name": "Europejski AQI"
-      }
+      "required": "To pole jest wymagane",
+      "missing_entity": "Wybierz encję lokalizacji",
+      "invalid_entity": "Wybrana encja nie udostępnia współrzędnych GPS"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Opcje Open-Meteo",
+        "description": "Wybierz tryb lokalizacji.",
         "data": {
-          "mode": "Tryb",
-          "latitude": "Szerokość geograficzna",
-          "longitude": "Długość geograficzna",
-          "entity_id": "Encja trackera",
-          "min_track_interval": "Min. odstęp śledzenia (min)",
-          "update_interval_min": "Interwał aktualizacji (min)",
-          "enabled_weather_sensors": "🌦️ Sensory pogody",
-          "enabled_aq_sensors": "💨 Sensory jakości powietrza",
-          "enabled_sensors": "Sensory do utworzenia",
-          "units": "Jednostki",
-          "api_provider": "Dostawca API",
-          "area_name_override": "Nazwa obszaru",
-          "use_place_as_device_name": "Użyj nazwy miejsca jako nazwy urządzenia",
-          "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
-        },
-        "data_description": {
-          "use_place_as_device_name": "Gdy włączone: urządzenie w Rejestrze Urządzeń będzie nazywać się tak jak miejscowość (np. Radłów). Gdy wyłączone: zachowamy własną nazwę nadaną przez użytkownika.",
-          "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
-          "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
+          "mode": "Tryb lokalizacji"
         }
       },
-      "mode_details": {
-        "title": "Opcje Open-Meteo",
+      "details": {
+        "title": "Opcje źródła pogody",
+        "description": "Zmiana tych ustawień nie zmienia stałej tożsamości istniejących encji.",
         "data": {
-          "mode": "Tryb",
           "latitude": "Szerokość geograficzna",
           "longitude": "Długość geograficzna",
-          "entity_id": "Encja trackera",
-          "min_track_interval": "Min. odstęp śledzenia (min)",
-          "update_interval_min": "Interwał aktualizacji (min)",
-          "enabled_weather_sensors": "🌦️ Sensory pogody",
-          "enabled_aq_sensors": "💨 Sensory jakości powietrza",
-          "enabled_sensors": "Sensory do utworzenia",
-          "units": "Jednostki",
-          "api_provider": "Dostawca API",
-          "area_name_override": "Nazwa obszaru",
-          "reverse_geocode_cooldown_min": "Odstęp odświeżania nazwy miejsca (min)",
-          "options_save_cooldown_min": "Odstęp zapisu ustawień (min)"
+          "entity_id": "Encja lokalizacji",
+          "min_track_interval": "Minimalny odstęp małych zmian pozycji (min)",
+          "update_interval_min": "Interwał odświeżania pogody (min)",
+          "area_name_override": "Stała nazwa źródła (opcjonalnie)",
+          "reverse_geocode_cooldown_min": "Minimalny odstęp odświeżania nazwy miejsca (min)",
+          "enabled_weather_sensors": "Sensory pogody",
+          "enabled_aq_sensors": "Sensory jakości powietrza"
         },
         "data_description": {
-          "reverse_geocode_cooldown_min": "Minimalny czas między próbami pobrania nazwy miejscowości na podstawie współrzędnych. Większa wartość = mniejsze zużycie baterii i danych.",
-          "options_save_cooldown_min": "Minimalny czas między zapisami ustawień (ostatnie współrzędne/nazwa) w Home Assistant, aby ograniczyć częste zapisy."
+          "entity_id": "Wybierz person lub device_tracker z atrybutami latitude i longitude.",
+          "min_track_interval": "Małe ruchy są grupowane. Duża zmiana lokalizacji jest przyjmowana natychmiast.",
+          "area_name_override": "Pozostaw puste, aby nazwa wpisu i urządzenia pokazywała aktualną miejscowość.",
+          "reverse_geocode_cooldown_min": "Ogranicza wywołania geokodowania przy małych zmianach pozycji."
         }
       }
     },
     "error": {
-      "missing_location": "Wymagana szerokość i długość geograficzna",
-      "missing_entity": "Wymagana encja do śledzenia",
-      "invalid_entity": "Encja nie ma współrzędnych GPS"
+      "required": "To pole jest wymagane",
+      "missing_entity": "Wybierz encję lokalizacji",
+      "invalid_entity": "Wybrana encja nie udostępnia współrzędnych GPS"
     }
-  },
-  "sensor": {
-    "temperature": {
-      "name": "Temperatura"
-    },
-    "humidity": {
-      "name": "Wilgotność"
-    },
-    "apparent_temperature": {
-      "name": "Temperatura odczuwalna"
-    },
-    "precipitation_probability": {
-      "name": "Prawdopodobieństwo opadów"
-    },
-    "precipitation_sum": {
-      "name": "Opad łączny (bieżąca godzina)"
-    },
-    "precipitation_daily_sum": {
-      "name": "Suma opadów (dzienna)"
-    },
-    "precipitation_last_3h": {
-      "name": "Opad (ostatnie 3h)"
-    },
-    "wind_speed": {
-      "name": "Prędkość wiatru"
-    },
-    "wind_gust": {
-      "name": "Porywy wiatru"
-    },
-    "wind_bearing": {
-      "name": "Kierunek wiatru"
-    },
-    "pressure": {
-      "name": "Ciśnienie"
-    },
-    "visibility": {
-      "name": "Widzialność"
-    },
-    "dew_point": {
-      "name": "Punkt rosy"
-    },
-    "location": {
-      "name": "Lokalizacja"
-    },
-    "sunrise": {
-      "name": "Wschód słońca"
-    },
-    "sunset": {
-      "name": "Zachód słońca"
-    },
-    "uv_index": {
-      "name": "Indeks UV"
-    },
-    "rain_current_hour": {
-      "name": "Deszcz (bieżąca godzina)"
-    },
-    "snow_current_hour": {
-      "name": "Śnieg (bieżąca godzina)"
-    }
-  },
-  "binary_sensor": {}
+  }
 }
