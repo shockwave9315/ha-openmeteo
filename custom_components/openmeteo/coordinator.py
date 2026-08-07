@@ -16,19 +16,14 @@ from homeassistant.util import dt as dt_util
 
 from .api import OpenMeteoApiError, OpenMeteoClient
 from .const import (
-    AQ_SENSOR_KEYS,
     CONF_AREA_NAME_OVERRIDE,
     CONF_ENABLED_AQ_SENSORS,
-    CONF_ENABLED_SENSORS,
-    CONF_ENABLED_WEATHER_SENSORS,
     CONF_ENTITY_ID,
     CONF_LATITUDE,
     CONF_LONGITUDE,
     CONF_MIN_TRACK_INTERVAL,
     CONF_MODE,
     CONF_REVERSE_GEOCODE_COOLDOWN_MIN,
-    CONF_TRACKED_ENTITY_ID,
-    CONF_UPDATE_INTERVAL,
     CONF_UPDATE_INTERVAL_MIN,
     DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_REVERSE_GEOCODE_COOLDOWN_MIN,
@@ -108,51 +103,27 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return override or self.location_name or self.entry.title or "Open-Meteo"
 
     def _mode(self) -> str:
-        merged = self._merged_config()
-        mode = merged.get(CONF_MODE)
-        if mode in (MODE_STATIC, MODE_TRACK):
-            return mode
-        return (
-            MODE_TRACK
-            if merged.get(CONF_ENTITY_ID) or merged.get(CONF_TRACKED_ENTITY_ID)
-            else MODE_STATIC
-        )
+        mode = self._merged_config().get(CONF_MODE, MODE_STATIC)
+        return mode if mode in (MODE_STATIC, MODE_TRACK) else MODE_STATIC
 
     def _tracker_entity_id(self) -> str | None:
-        merged = self._merged_config()
-        value = merged.get(CONF_ENTITY_ID) or merged.get(CONF_TRACKED_ENTITY_ID)
+        value = self._merged_config().get(CONF_ENTITY_ID)
         return str(value) if value else None
 
     def _air_quality_enabled(self) -> bool:
         """Return whether this entry actually needs the optional AQ endpoint."""
-        merged = self._merged_config()
-        selected = merged.get(CONF_ENABLED_AQ_SENSORS)
-        if isinstance(selected, list):
-            return bool(selected)
-
-        legacy = merged.get(CONF_ENABLED_SENSORS)
-        if isinstance(legacy, list):
-            return any(str(key) in AQ_SENSOR_KEYS for key in legacy)
-
-        # Old entries with no sensor-selection keys exposed all sensors. Preserve
-        # that behavior until migration/configuration makes the selection explicit.
-        return CONF_ENABLED_WEATHER_SENSORS not in merged
+        selected = self._merged_config().get(CONF_ENABLED_AQ_SENSORS, [])
+        return bool(selected) if isinstance(selected, list) else False
 
     def _weather_update_interval(self) -> timedelta:
-        merged = self._merged_config()
-        raw_minutes = merged.get(CONF_UPDATE_INTERVAL_MIN)
-        if raw_minutes is not None:
-            try:
-                return timedelta(minutes=max(1, int(raw_minutes)))
-            except (TypeError, ValueError):
-                pass
+        raw = self._merged_config().get(
+            CONF_UPDATE_INTERVAL_MIN, DEFAULT_UPDATE_INTERVAL // 60
+        )
         try:
-            seconds = max(
-                60, int(merged.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL))
-            )
+            minutes = max(1, int(raw))
         except (TypeError, ValueError):
-            seconds = DEFAULT_UPDATE_INTERVAL
-        return timedelta(seconds=seconds)
+            minutes = max(1, DEFAULT_UPDATE_INTERVAL // 60)
+        return timedelta(minutes=minutes)
 
     def _tracking_interval(self) -> timedelta:
         merged = self._merged_config()
