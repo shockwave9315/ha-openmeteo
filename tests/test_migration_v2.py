@@ -33,12 +33,14 @@ async def test_v3_tracking_entry_is_canonicalized_without_city_identity(hass) ->
         },
         options={"options_save_cooldown_sec": 60},
         version=3,
+        minor_version=1,
     )
     entry.add_to_hass(hass)
 
     assert await async_migrate_entry(hass, entry)
 
-    assert entry.version == 4
+    assert entry.version == 3
+    assert entry.minor_version == 2
     assert entry.title == "Lotte, DE"
     assert entry.data[CONF_MODE] == MODE_TRACK
     assert entry.data[CONF_ENTITY_ID] == "device_tracker.poco_x8"
