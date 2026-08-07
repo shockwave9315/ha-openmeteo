@@ -6,7 +6,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
+from homeassistant.const import CONF_LATITUDE, CONF_LOCATION, CONF_LONGITUDE
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 
@@ -31,8 +31,8 @@ from .const import (
     SENSOR_LABELS,
     WEATHER_SENSOR_KEYS,
 )
-from .coordinator import async_reverse_geocode
 from .identity import CONF_SOURCE_KEY, derive_source_key
+from .location import async_reverse_geocode, coordinate_label
 
 
 def _update_interval_minutes(defaults: dict[str, Any]) -> int:
@@ -50,16 +50,29 @@ def _update_interval_minutes(defaults: dict[str, Any]) -> int:
 
 def _label_options(hass: HomeAssistant, keys: list[str]) -> list[dict[str, str]]:
     language = (hass.config.language or "en").split("-", 1)[0].lower()
-    result: list[dict[str, str]] = []
-    for key in keys:
-        labels = SENSOR_LABELS.get(key) or {}
-        result.append(
-            {
-                "value": key,
-                "label": labels.get(language) or labels.get("en") or key,
-            }
+    return [
+        {
+            "value": key,
+            "label": (SENSOR_LABELS.get(key) or {}).get(language)
+            or (SENSOR_LABELS.get(key) or {}).get("en")
+            or key,
+        }
+        for key in keys
+    ]
+
+
+def _mode_selector(hass: HomeAssistant) -> selector.SelectSelector:
+    language = (hass.config.language or "en").split("-", 1)[0].lower()
+    if language == "pl":
+        labels = {MODE_STATIC: "Stała lokalizacja", MODE_TRACK: "Śledź encję"}
+    else:
+        labels = {MODE_STATIC: "Static location", MODE_TRACK: "Track an entity"}
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[{"value": value, "label": label} for value, label in labels.items()],
+            mode=selector.SelectSelectorMode.DROPDOWN,
         )
-    return result
+    )
 
 
 def _selected_defaults(
@@ -96,18 +109,13 @@ def _details_schema(
             )
         ] = vol.All(vol.Coerce(int), vol.Range(min=1, max=240))
     else:
+        location_default = {
+            CONF_LATITUDE: defaults.get(CONF_LATITUDE, hass.config.latitude),
+            CONF_LONGITUDE: defaults.get(CONF_LONGITUDE, hass.config.longitude),
+        }
         fields[
-            vol.Required(
-                CONF_LATITUDE,
-                default=defaults.get(CONF_LATITUDE, hass.config.latitude),
-            )
-        ] = vol.All(vol.Coerce(float), vol.Range(min=-90, max=90))
-        fields[
-            vol.Required(
-                CONF_LONGITUDE,
-                default=defaults.get(CONF_LONGITUDE, hass.config.longitude),
-            )
-        ] = vol.All(vol.Coerce(float), vol.Range(min=-180, max=180))
+            vol.Required(CONF_LOCATION, default=location_default)
+        ] = selector.LocationSelector(selector.LocationSelectorConfig(radius=False))
 
     fields[
         vol.Optional(
@@ -130,7 +138,6 @@ def _details_schema(
             ),
         )
     ] = vol.All(vol.Coerce(int), vol.Range(min=1, max=240))
-
     fields[
         vol.Optional(
             CONF_ENABLED_WEATHER_SENSORS,
@@ -160,6 +167,16 @@ def _details_schema(
     return vol.Schema(fields)
 
 
+def _flatten_static_location(values: dict[str, Any]) -> None:
+    location = values.pop(CONF_LOCATION, None)
+    if not isinstance(location, dict):
+        return
+    if CONF_LATITUDE in location:
+        values[CONF_LATITUDE] = float(location[CONF_LATITUDE])
+    if CONF_LONGITUDE in location:
+        values[CONF_LONGITUDE] = float(location[CONF_LONGITUDE])
+
+
 async def _initial_title(hass: HomeAssistant, mode: str, data: dict[str, Any]) -> str:
     override = str(data.get(CONF_AREA_NAME_OVERRIDE) or "").strip()
     if override:
@@ -177,12 +194,12 @@ async def _initial_title(hass: HomeAssistant, mode: str, data: dict[str, Any]) -
         return "Open-Meteo: tracking"
 
     try:
-        lat = float(data[CONF_LATITUDE])
-        lon = float(data[CONF_LONGITUDE])
+        latitude = float(data[CONF_LATITUDE])
+        longitude = float(data[CONF_LONGITUDE])
     except (KeyError, TypeError, ValueError):
         return "Open-Meteo"
-    place = await async_reverse_geocode(hass, lat, lon)
-    return place or f"{lat:.4f}, {lon:.4f}"
+    place = await async_reverse_geocode(hass, latitude, longitude)
+    return place or coordinate_label(latitude, longitude)
 
 
 class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -201,11 +218,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_MODE, default=self._mode): vol.In(
-                        [MODE_STATIC, MODE_TRACK]
-                    )
-                }
+                {vol.Required(CONF_MODE, default=self._mode): _mode_selector(self.hass)}
             ),
         )
 
@@ -215,7 +228,9 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             data = dict(user_input)
-            if self._mode == MODE_TRACK:
+            if self._mode == MODE_STATIC:
+                _flatten_static_location(data)
+            else:
                 entity_id = data.get(CONF_ENTITY_ID)
                 state = self.hass.states.get(entity_id) if entity_id else None
                 if not entity_id:
@@ -225,6 +240,7 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     or state.attributes.get("longitude") is None
                 ):
                     errors[CONF_ENTITY_ID] = "invalid_entity"
+
             if not errors:
                 data[CONF_MODE] = self._mode
                 title = await _initial_title(self.hass, self._mode, data)
@@ -265,11 +281,7 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_MODE, default=self._mode): vol.In(
-                        [MODE_STATIC, MODE_TRACK]
-                    )
-                }
+                {vol.Required(CONF_MODE, default=self._mode): _mode_selector(self.hass)}
             ),
         )
 
@@ -280,7 +292,9 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             values = dict(user_input)
-            if self._mode == MODE_TRACK and not values.get(CONF_ENTITY_ID):
+            if self._mode == MODE_STATIC:
+                _flatten_static_location(values)
+            elif not values.get(CONF_ENTITY_ID):
                 errors[CONF_ENTITY_ID] = "required"
 
             if not errors:
