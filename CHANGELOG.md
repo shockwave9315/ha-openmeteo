@@ -1,8 +1,33 @@
 # Changelog
 
+## 2.0.2
+
+### Static location setup
+- Added a dedicated one-shot static-location acquisition flow before the common weather settings form.
+- Added **Use Home Assistant location** to copy the coordinates configured for the HA instance.
+- Added **Use current person/device position** to copy GPS coordinates once from a `person` or `device_tracker`; the selected entity is not tracked afterwards.
+- Added simple city/place/address search through Nominatim forward geocoding, including result selection when multiple matches are returned.
+- Kept Home Assistant's native location selector as the manual map option.
+- The same acquisition choices are available from the Options flow.
+- All acquisition methods still save the same V2 runtime model: `mode=static` plus `latitude` / `longitude`.
+
+### UI and release
+- Added PL/EN strings for all new static-location steps and validation errors.
+- Bumped the integration manifest and HTTP User-Agent to 2.0.2.
+- Expanded config-flow and translation regression tests.
+
+## 2.0.1
+
+### Configuration UI hotfix
+- Added the missing base `strings.json` resource required by Home Assistant config/options-flow translations.
+- Replaced raw schema keys shown in the UI with translated field labels.
+- Renamed the Polish tracking choice from `Śledź encję` to the user-facing `Śledź lokalizację`.
+- Renamed the tracking selector label to `Źródło lokalizacji` and simplified interval/name descriptions.
+- Added translation resource regression tests.
+
 ## 2.0.0-dev.0 — V2 architecture rewrite
 
-Development branch: `rewrite/v2-architecture`. Not released yet.
+Initial V2 architecture baseline used for live validation before the 2.0.x release line.
 
 ### Architecture
 - Rebuilt config-entry lifecycle around `ConfigEntry.runtime_data` and per-entry Home Assistant storage.
@@ -29,7 +54,7 @@ Development branch: `rewrite/v2-architecture`. Not released yet.
 - V1 -> V2 in-place config-entry migration is intentionally unsupported; first V2 deployment is a one-time clean reinstall/reconfiguration.
 
 ### Home Assistant 2026.8
-- Weather forecasts now use the current native forecast field contract.
+- Weather forecasts use the current native forecast field contract.
 - Weather entity exposes apparent temperature, wind gusts, cloud coverage and UV index in addition to existing values.
 - CI targets Home Assistant 2026.8.0 and Python 3.14.
 - User config-flow tests run through Home Assistant's real custom-integration loader.
@@ -49,7 +74,7 @@ Development branch: `rewrite/v2-architecture`. Not released yet.
 
 ### Configuration UI
 - Simplified setup to Static or Tracking mode.
-- Static mode uses Home Assistant's native location selector.
+- Static mode originally used Home Assistant's native location selector; 2.0.2 adds multiple one-shot coordinate acquisition methods on top of the same static runtime model.
 - Tracking mode uses a `person`/`device_tracker` entity selector.
 - Tracker coordinate validation is shared by setup and options flows.
 - Removed obsolete/fake unit/provider configuration and old postcode/place-search flow.
@@ -64,7 +89,7 @@ Development branch: `rewrite/v2-architecture`. Not released yet.
 - Removed V1 migration helpers and compatibility constants from production code.
 - Removed stale duplicate translation files and rewrote PL/EN V2 translations.
 - Removed obsolete V1 tests that encoded retired architecture and replaced them with V2 behavior/contract tests.
-- Removed the ineffective `icon` key from the manifest; V2 brand assets will use Home Assistant's local `brand/` mechanism before release.
+- Removed the ineffective `icon` key from the manifest; V2 brand assets should use Home Assistant's branding mechanism instead.
 
 ## 1.7.1
 - Home Assistant 2026.8 compatibility fixes on the stable V1 line.
