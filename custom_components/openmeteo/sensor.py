@@ -475,6 +475,11 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
         self._attr_suggested_object_id = sensor_object_id(
             source_key, SENSOR_SLUGS[sensor_key]
         )
+        # HA 2026.8 turns Entity.suggested_object_id into an object-id base and
+        # may prefix it with the mutable device name. Supplying a valid entity_id
+        # before add makes EntityPlatform pass this as the integration's true
+        # suggested object id. Existing registry entries still win by unique_id.
+        self.entity_id = f"sensor.{self._attr_suggested_object_id}"
         self._attr_name = self.entity_description.name
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
