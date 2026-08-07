@@ -5,16 +5,13 @@
       "user": {
         "title": "Open-Meteo",
         "description": "Choose the location source. Tracking follows the selected entity without changing Open-Meteo entity identity.",
-        "data": {
-          "mode": "Location mode"
-        }
+        "data": {"mode": "Location mode"}
       },
       "details": {
         "title": "Weather source setup",
         "description": "Configure location, update frequency and sensors.",
         "data": {
-          "latitude": "Latitude",
-          "longitude": "Longitude",
+          "location": "Location",
           "entity_id": "Location entity",
           "min_track_interval": "Minimum interval for small position changes (min)",
           "update_interval_min": "Weather update interval (min)",
@@ -42,16 +39,13 @@
       "init": {
         "title": "Open-Meteo options",
         "description": "Choose the location mode.",
-        "data": {
-          "mode": "Location mode"
-        }
+        "data": {"mode": "Location mode"}
       },
       "details": {
         "title": "Weather source options",
         "description": "Changing these settings does not change the stable identity of existing entities.",
         "data": {
-          "latitude": "Latitude",
-          "longitude": "Longitude",
+          "location": "Location",
           "entity_id": "Location entity",
           "min_track_interval": "Minimum interval for small position changes (min)",
           "update_interval_min": "Weather update interval (min)",
