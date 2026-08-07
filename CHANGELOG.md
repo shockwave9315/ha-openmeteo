@@ -7,24 +7,26 @@ Development branch: `rewrite/v2-architecture`. Not released yet.
 ### Architecture
 - Rebuilt config-entry lifecycle around `ConfigEntry.runtime_data` and per-entry Home Assistant storage.
 - Separated stable source identity from mutable current location and UI presentation names.
-- Moved active runtime GPS/place persistence out of config-entry `data` and `options` into per-entry storage; frozen V1 `last_*` values are temporarily retained only as a rollback snapshot.
+- Moved active runtime GPS/place persistence out of config-entry `data` and `options` into per-entry storage.
 - Split the monolithic implementation into dedicated API, location, identity, runtime, coordinator and entity layers.
+- V2 intentionally starts from a clean config-entry schema instead of carrying V1 migration/rollback machinery.
 
 ### Tracking
 - Added event-driven tracker updates through Home Assistant state-change events.
 - Ignore GPS jitter below roughly 50 m.
 - Throttle small location changes with one delayed follow-up refresh.
 - Accept large jumps (>=10 km) immediately even inside the configured tracking interval.
-- Added a regression test for a tracker moving from Lotte to Dortmund without changing entity identity.
+- Added regression coverage for Lotte -> Dortmund -> Osnabrück without changing entity identity.
 - A tracking entry with no live GPS and no stored last position stays not-ready instead of falling back to Home Assistant's home coordinates.
+- If reverse geocoding fails after a large move, presentation falls back to coordinates instead of retaining the previous city.
 
-### Entity identity and migration
+### Entity identity and config schema
 - Added a persisted stable `source_key` for every entry.
-- Preserve V1 registry `unique_id` values to avoid duplicate entities and broken dashboards during migration.
-- Do not auto-rename existing entity IDs.
 - New entries receive source-scoped stable object IDs independent of the current city.
-- V2 migrates to config-entry version 3.2 (major 3, minor 2), so first live testing remains rollback-safe with the V1.7.x line.
-- Legacy V1/V3 config is canonicalized while frozen `last_lat`, `last_lon` and `last_location_name` values are retained as an inert rollback snapshot; V2 never updates them.
+- Registry `unique_id` values remain based on the config-entry ID, so movement and UI renaming do not change entity identity.
+- V2 config entries start at schema version 1.1.
+- Future backward-compatible V2 schema changes should bump the minor version; a new major version is reserved for breaking schema changes that actually require migration.
+- V1 -> V2 in-place config-entry migration is intentionally unsupported; first V2 deployment is a one-time clean reinstall/reconfiguration.
 
 ### Home Assistant 2026.8
 - Weather forecasts now use the current native forecast field contract.
@@ -53,12 +55,13 @@ Development branch: `rewrite/v2-architecture`. Not released yet.
 - Removed obsolete/fake unit/provider configuration and old postcode/place-search flow.
 
 ### Tests and CI
-- Replaced V1 architecture tests with V2 behavior/contract tests, including full setup → movement → registry → unload lifecycle coverage.
-- Added an upgrade test proving existing V1 registry IDs survive migration and movement without duplicate entities.
+- Replaced V1 architecture tests with V2 behavior/contract tests, including full setup -> movement -> registry -> unload lifecycle coverage.
+- Removed V1 migration and registry-preservation test machinery after choosing a clean V2 baseline.
 - CI checks dependencies, compiles component/test Python sources, validates HACS/manifest/translation JSON and runs the full pytest suite.
 
 ### Cleanup
 - Removed old naming/registry self-renaming machinery.
+- Removed V1 migration helpers and compatibility constants from production code.
 - Removed stale duplicate translation files and rewrote PL/EN V2 translations.
 - Removed obsolete V1 tests that encoded retired architecture and replaced them with V2 behavior/contract tests.
 - Removed the ineffective `icon` key from the manifest; V2 brand assets will use Home Assistant's local `brand/` mechanism before release.
