@@ -218,7 +218,8 @@ async def _initial_title(hass: HomeAssistant, mode: str, data: dict[str, Any]) -
 class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Set up one static or tracking Open-Meteo source."""
 
-    VERSION = 4
+    VERSION = 3
+    MINOR_VERSION = 2
 
     def __init__(self) -> None:
         self._mode = MODE_STATIC
