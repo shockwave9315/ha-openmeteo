@@ -177,6 +177,19 @@ def _flatten_static_location(values: dict[str, Any]) -> None:
         values[CONF_LONGITUDE] = float(location[CONF_LONGITUDE])
 
 
+def _validate_tracker(hass: HomeAssistant, entity_id: Any) -> str | None:
+    """Validate a selected tracker without rejecting a temporary unavailable state."""
+    if not entity_id:
+        return "required"
+    state = hass.states.get(str(entity_id))
+    if state is not None and (
+        state.attributes.get("latitude") is None
+        or state.attributes.get("longitude") is None
+    ):
+        return "invalid_entity"
+    return None
+
+
 async def _initial_title(hass: HomeAssistant, mode: str, data: dict[str, Any]) -> str:
     override = str(data.get(CONF_AREA_NAME_OVERRIDE) or "").strip()
     if override:
@@ -232,14 +245,8 @@ class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _flatten_static_location(data)
             else:
                 entity_id = data.get(CONF_ENTITY_ID)
-                state = self.hass.states.get(entity_id) if entity_id else None
-                if not entity_id:
-                    errors[CONF_ENTITY_ID] = "required"
-                elif state is not None and (
-                    state.attributes.get("latitude") is None
-                    or state.attributes.get("longitude") is None
-                ):
-                    errors[CONF_ENTITY_ID] = "invalid_entity"
+                if error := _validate_tracker(self.hass, entity_id):
+                    errors[CONF_ENTITY_ID] = error
 
             if not errors:
                 data[CONF_MODE] = self._mode
@@ -294,8 +301,8 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
             values = dict(user_input)
             if self._mode == MODE_STATIC:
                 _flatten_static_location(values)
-            elif not values.get(CONF_ENTITY_ID):
-                errors[CONF_ENTITY_ID] = "required"
+            elif error := _validate_tracker(self.hass, values.get(CONF_ENTITY_ID)):
+                errors[CONF_ENTITY_ID] = error
 
             if not errors:
                 new_options = dict(self._entry.options or {})
