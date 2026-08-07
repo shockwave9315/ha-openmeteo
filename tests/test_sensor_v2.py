@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from homeassistant.const import UnitOfRatio
+from homeassistant.const import UnitOfLength, UnitOfRatio
 
-from custom_components.openmeteo.coordinator import HOURLY_FIELDS
+from custom_components.openmeteo.api import HOURLY_FIELDS
 from custom_components.openmeteo.sensor import SENSORS
 
 
@@ -15,6 +15,10 @@ def test_carbon_monoxide_uses_current_home_assistant_ppm_unit() -> None:
     assert SENSORS["co"].native_unit_of_measurement == UnitOfRatio.PARTS_PER_MILLION
 
 
+def test_snowfall_uses_open_meteo_centimeter_unit() -> None:
+    assert SENSORS["snow_current_hour"].native_unit_of_measurement == UnitOfLength.CENTIMETERS
+
+
 def test_location_sensor_reports_place_not_coordinate_string() -> None:
     data = {
         "location_name": "Dortmund, DE",
@@ -24,6 +28,7 @@ def test_location_sensor_reports_place_not_coordinate_string() -> None:
     }
     description = SENSORS["location"]
     assert description.value_fn(data) == "Dortmund, DE"
+    assert description.attributes_fn is not None
     attrs = description.attributes_fn(data)
     assert attrs["latitude"] == 51.51
     assert attrs["longitude"] == 7.46
