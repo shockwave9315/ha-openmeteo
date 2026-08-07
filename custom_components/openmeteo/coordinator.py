@@ -169,6 +169,16 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else timedelta.max
         )
 
+    @callback
+    def _request_refresh_task(self, reason: str) -> None:
+        """Schedule a coordinator refresh tied to this config-entry lifecycle."""
+        self.entry.async_create_task(
+            self.hass,
+            self.async_request_refresh(),
+            name=f"{DOMAIN} {reason} refresh",
+            eager_start=True,
+        )
+
     def _schedule_delayed_refresh(self, delay_seconds: float) -> None:
         if self._delayed_refresh_unsub is not None:
             return
@@ -176,7 +186,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         @callback
         def _run(_now: datetime) -> None:
             self._delayed_refresh_unsub = None
-            self.async_request_refresh()
+            self._request_refresh_task("delayed tracker")
 
         self._delayed_refresh_unsub = async_call_later(
             self.hass, max(1.0, delay_seconds), _run
@@ -231,7 +241,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if coordinates is None:
                 return
             if self._tracker_change_requires_refresh(coordinates, dt_util.utcnow()):
-                self.async_request_refresh()
+                self._request_refresh_task("tracker event")
 
         self._tracker_unsub = async_track_state_change_event(
             self.hass, [entity_id], _on_tracker_change
