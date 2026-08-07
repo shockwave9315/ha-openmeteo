@@ -108,7 +108,7 @@ def _timestamp(data: Mapping[str, Any], key: str) -> datetime | None:
 
 
 def _co_ppm(data: Mapping[str, Any]) -> float | None:
-    raw = aq_hour_value(dict(data), AQ_HOURLY_KEYS["co"])
+    raw = aq_hour_value(data, AQ_HOURLY_KEYS["co"])
     try:
         return round(float(raw) * CO_UGM3_TO_PPM_FACTOR, 3) if raw is not None else None
     except (TypeError, ValueError):
@@ -117,7 +117,7 @@ def _co_ppm(data: Mapping[str, Any]) -> float | None:
 
 def _aq_value(key: str) -> Callable[[Mapping[str, Any]], Any]:
     def _value(data: Mapping[str, Any]) -> Any:
-        raw = aq_hour_value(dict(data), AQ_HOURLY_KEYS[key])
+        raw = aq_hour_value(data, AQ_HOURLY_KEYS[key])
         if raw is None:
             return None
         if key in ("aqi_us", "aqi_eu"):
@@ -144,9 +144,11 @@ def _location_attributes(data: Mapping[str, Any]) -> dict[str, Any]:
 
 @dataclass(frozen=True, kw_only=True)
 class OpenMeteoSensorDescription(SensorEntityDescription):
+    """Sensor metadata plus a pure value extractor."""
+
     value_fn: Callable[[Mapping[str, Any]], Any]
     attributes_fn: Callable[[Mapping[str, Any]], dict[str, Any]] | None = None
-    aq_sensor: bool = False
+    air_quality: bool = False
 
 
 SENSORS: dict[str, OpenMeteoSensorDescription] = {
@@ -168,7 +170,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         icon="mdi:thermometer-alert",
         value_fn=lambda d: _current(d, "apparent_temperature")
         if _current(d, "apparent_temperature") is not None
-        else hourly_at_now(dict(d), "apparent_temperature"),
+        else hourly_at_now(d, "apparent_temperature"),
     ),
     "humidity": OpenMeteoSensorDescription(
         key="humidity",
@@ -179,7 +181,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         icon="mdi:water-percent",
         value_fn=lambda d: _current(d, "relative_humidity_2m")
         if _current(d, "relative_humidity_2m") is not None
-        else hourly_at_now(dict(d), "relative_humidity_2m"),
+        else hourly_at_now(d, "relative_humidity_2m"),
     ),
     "pressure": OpenMeteoSensorDescription(
         key="pressure",
@@ -190,7 +192,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         icon="mdi:gauge",
         value_fn=lambda d: _current(d, "pressure_msl")
         if _current(d, "pressure_msl") is not None
-        else hourly_at_now(dict(d), "pressure_msl"),
+        else hourly_at_now(d, "pressure_msl"),
     ),
     "dew_point": OpenMeteoSensorDescription(
         key="dew_point",
@@ -199,12 +201,13 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:water",
-        value_fn=lambda d: hourly_at_now(dict(d), "dew_point_2m"),
+        value_fn=lambda d: hourly_at_now(d, "dew_point_2m"),
     ),
     "wind_speed": OpenMeteoSensorDescription(
         key="wind_speed",
         name="Prędkość wiatru",
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
+        device_class=SensorDeviceClass.SPEED,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:weather-windy",
         value_fn=lambda d: _current(d, "wind_speed_10m"),
@@ -213,6 +216,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         key="wind_gust",
         name="Porywy wiatru",
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
+        device_class=SensorDeviceClass.SPEED,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:weather-windy-variant",
         value_fn=lambda d: _current(d, "wind_gusts_10m"),
@@ -232,7 +236,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:cup-water",
-        value_fn=lambda d: hourly_at_now(dict(d), "precipitation") or 0,
+        value_fn=lambda d: hourly_at_now(d, "precipitation") or 0,
     ),
     "rain_current_hour": OpenMeteoSensorDescription(
         key="rain_current_hour",
@@ -241,16 +245,16 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:weather-rainy",
-        value_fn=lambda d: hourly_at_now(dict(d), "rain") or 0,
+        value_fn=lambda d: hourly_at_now(d, "rain") or 0,
     ),
     "snow_current_hour": OpenMeteoSensorDescription(
         key="snow_current_hour",
         name="Śnieg (bieżąca godzina)",
-        native_unit_of_measurement=UnitOfPrecipitationDepth.MILLIMETERS,
+        native_unit_of_measurement=UnitOfLength.CENTIMETERS,
         device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:weather-snowy",
-        value_fn=lambda d: hourly_at_now(dict(d), "snowfall") or 0,
+        value_fn=lambda d: hourly_at_now(d, "snowfall") or 0,
     ),
     "precipitation_daily_sum": OpenMeteoSensorDescription(
         key="precipitation_daily_sum",
@@ -268,7 +272,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         device_class=SensorDeviceClass.PRECIPITATION,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:weather-pouring",
-        value_fn=lambda d: hourly_sum_last_n(dict(d), ["precipitation"], 3),
+        value_fn=lambda d: hourly_sum_last_n(d, ["precipitation"], 3),
     ),
     "precipitation_probability": OpenMeteoSensorDescription(
         key="precipitation_probability",
@@ -276,17 +280,18 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:umbrella-outline",
-        value_fn=lambda d: hourly_at_now(dict(d), "precipitation_probability"),
+        value_fn=lambda d: hourly_at_now(d, "precipitation_probability"),
     ),
     "visibility": OpenMeteoSensorDescription(
         key="visibility",
         name="Widzialność",
         native_unit_of_measurement=UnitOfLength.KILOMETERS,
+        device_class=SensorDeviceClass.DISTANCE,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:eye",
         value_fn=lambda d: (
-            round(float(v) / 1000, 2)
-            if (v := hourly_at_now(dict(d), "visibility")) is not None
+            round(float(value) / 1000, 2)
+            if (value := hourly_at_now(d, "visibility")) is not None
             else None
         ),
     ),
@@ -310,7 +315,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         native_unit_of_measurement=UV_INDEX,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:weather-sunny-alert",
-        value_fn=lambda d: hourly_at_now(dict(d), "uv_index"),
+        value_fn=lambda d: hourly_at_now(d, "uv_index"),
     ),
     "uv_index_max": OpenMeteoSensorDescription(
         key="uv_index_max",
@@ -335,7 +340,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:blur",
         value_fn=_aq_value("pm2_5"),
-        aq_sensor=True,
+        air_quality=True,
     ),
     "pm10": OpenMeteoSensorDescription(
         key="pm10",
@@ -345,7 +350,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:blur",
         value_fn=_aq_value("pm10"),
-        aq_sensor=True,
+        air_quality=True,
     ),
     "co": OpenMeteoSensorDescription(
         key="co",
@@ -355,7 +360,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:molecule",
         value_fn=_co_ppm,
-        aq_sensor=True,
+        air_quality=True,
     ),
     "no2": OpenMeteoSensorDescription(
         key="no2",
@@ -365,7 +370,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:molecule",
         value_fn=_aq_value("no2"),
-        aq_sensor=True,
+        air_quality=True,
     ),
     "so2": OpenMeteoSensorDescription(
         key="so2",
@@ -375,7 +380,7 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:molecule",
         value_fn=_aq_value("so2"),
-        aq_sensor=True,
+        air_quality=True,
     ),
     "o3": OpenMeteoSensorDescription(
         key="o3",
@@ -385,36 +390,38 @@ SENSORS: dict[str, OpenMeteoSensorDescription] = {
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:molecule",
         value_fn=_aq_value("o3"),
-        aq_sensor=True,
+        air_quality=True,
     ),
     "aqi_us": OpenMeteoSensorDescription(
         key="aqi_us",
         name="US AQI",
+        device_class=SensorDeviceClass.AQI,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:gauge",
         value_fn=_aq_value("aqi_us"),
-        aq_sensor=True,
+        air_quality=True,
     ),
     "aqi_eu": OpenMeteoSensorDescription(
         key="aqi_eu",
         name="European AQI",
+        device_class=SensorDeviceClass.AQI,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:gauge",
         value_fn=_aq_value("aqi_eu"),
-        aq_sensor=True,
+        air_quality=True,
     ),
 }
 
-WEATHER_KEYS = [key for key, description in SENSORS.items() if not description.aq_sensor]
-AQ_KEYS = [key for key, description in SENSORS.items() if description.aq_sensor]
+WEATHER_KEYS = [key for key, description in SENSORS.items() if not description.air_quality]
+AQ_KEYS = [key for key, description in SENSORS.items() if description.air_quality]
 
 
 def _configured_keys(entry: ConfigEntry) -> list[str]:
     merged = {**dict(entry.data or {}), **dict(entry.options or {})}
     weather = merged.get(CONF_ENABLED_WEATHER_SENSORS)
-    aq = merged.get(CONF_ENABLED_AQ_SENSORS)
+    air_quality = merged.get(CONF_ENABLED_AQ_SENSORS)
 
-    if not isinstance(weather, list) and not isinstance(aq, list):
+    if not isinstance(weather, list) and not isinstance(air_quality, list):
         legacy = merged.get(CONF_ENABLED_SENSORS)
         if isinstance(legacy, list):
             return [key for key in legacy if key in SENSORS]
@@ -422,7 +429,7 @@ def _configured_keys(entry: ConfigEntry) -> list[str]:
 
     selected: list[str] = []
     selected.extend(key for key in (weather or []) if key in WEATHER_KEYS)
-    selected.extend(key for key in (aq or []) if key in AQ_KEYS)
+    selected.extend(key for key in (air_quality or []) if key in AQ_KEYS)
     return selected
 
 
@@ -436,7 +443,6 @@ async def async_setup_entry(
         return
     runtime = get_runtime_data(config_entry)
     source_key = runtime.source_key if runtime is not None else config_entry.entry_id[:8]
-
     async_add_entities(
         [
             OpenMeteoSensor(coordinator, config_entry, source_key, key)
@@ -459,10 +465,13 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
         sensor_key: str,
     ) -> None:
         super().__init__(coordinator)
-        self._config_entry = config_entry
         self._sensor_key = sensor_key
         self.entity_description = SENSORS[sensor_key]
-        self._attr_unique_id = sensor_unique_id(config_entry.entry_id, sensor_key)
+        self._attr_unique_id = sensor_unique_id(
+            config_entry.entry_id,
+            sensor_key,
+            air_quality=self.entity_description.air_quality,
+        )
         self._attr_suggested_object_id = sensor_object_id(
             source_key, SENSOR_SLUGS[sensor_key]
         )
@@ -476,9 +485,8 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
 
     @property
     def native_value(self) -> Any:
-        data = self.coordinator.data or {}
         try:
-            return self.entity_description.value_fn(data)
+            return self.entity_description.value_fn(self.coordinator.data or {})
         except (IndexError, KeyError, TypeError, ValueError):
             return None
 
@@ -486,8 +494,7 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
     def available(self) -> bool:
         if not self.coordinator.last_update_success:
             return False
-        description = self.entity_description
-        if description.aq_sensor:
+        if self.entity_description.air_quality:
             aq = (self.coordinator.data or {}).get("aq")
             return isinstance(aq, Mapping) and isinstance(aq.get("hourly"), Mapping)
         return True
@@ -495,7 +502,6 @@ class OpenMeteoSensor(CoordinatorEntity[OpenMeteoDataUpdateCoordinator], SensorE
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         attrs = {"attribution": ATTRIBUTION}
-        fn = self.entity_description.attributes_fn
-        if fn is not None:
-            attrs.update(fn(self.coordinator.data or {}))
+        if self.entity_description.attributes_fn is not None:
+            attrs.update(self.entity_description.attributes_fn(self.coordinator.data or {}))
         return attrs
