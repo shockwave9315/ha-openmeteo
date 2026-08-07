@@ -26,6 +26,8 @@ V2 intentionally does **not** migrate V1 configuration entries. The first V2 dep
 4. install V2,
 5. create the weather source again through the V2 config flow.
 
+Deleting only the HACS files is not enough for this transition: the old V1 config entry must be removed before V2 is loaded.
+
 This deliberately trades V1 history/entity continuity for a smaller and more predictable production codebase. Once V2 is released and proven on a live installation, future versions are expected to preserve V2 config entries normally.
 
 The V2 config-entry schema starts at **1.1**. Backward-compatible schema changes should stay on major version 1 and bump the minor version. A new major config-entry version is reserved for genuinely breaking schema changes that require migration.
