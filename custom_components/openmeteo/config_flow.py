@@ -14,13 +14,11 @@ from .const import (
     AQ_SENSOR_KEYS,
     CONF_AREA_NAME_OVERRIDE,
     CONF_ENABLED_AQ_SENSORS,
-    CONF_ENABLED_SENSORS,
     CONF_ENABLED_WEATHER_SENSORS,
     CONF_ENTITY_ID,
     CONF_MIN_TRACK_INTERVAL,
     CONF_MODE,
     CONF_REVERSE_GEOCODE_COOLDOWN_MIN,
-    CONF_UPDATE_INTERVAL,
     CONF_UPDATE_INTERVAL_MIN,
     DEFAULT_MIN_TRACK_INTERVAL,
     DEFAULT_REVERSE_GEOCODE_COOLDOWN_MIN,
@@ -36,14 +34,9 @@ from .location import async_reverse_geocode, coordinate_label
 
 
 def _update_interval_minutes(defaults: dict[str, Any]) -> int:
-    raw = defaults.get(CONF_UPDATE_INTERVAL_MIN)
-    if raw is not None:
-        try:
-            return max(1, int(raw))
-        except (TypeError, ValueError):
-            pass
+    raw = defaults.get(CONF_UPDATE_INTERVAL_MIN, DEFAULT_UPDATE_INTERVAL // 60)
     try:
-        return max(1, int(defaults.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)) // 60)
+        return max(1, int(raw))
     except (TypeError, ValueError):
         return max(1, DEFAULT_UPDATE_INTERVAL // 60)
 
@@ -81,11 +74,6 @@ def _selected_defaults(
     value = defaults.get(key)
     if isinstance(value, list):
         return [item for item in value if item in allowed]
-    legacy = defaults.get(CONF_ENABLED_SENSORS)
-    if isinstance(legacy, list):
-        selected = [item for item in legacy if item in allowed]
-        if selected:
-            return selected
     return list(allowed)
 
 
@@ -218,8 +206,10 @@ async def _initial_title(hass: HomeAssistant, mode: str, data: dict[str, Any]) -
 class OpenMeteoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Set up one static or tracking Open-Meteo source."""
 
-    VERSION = 3
-    MINOR_VERSION = 2
+    # V2 is a clean schema baseline. Keep compatible schema evolution on this
+    # major and bump MINOR_VERSION; use a new major only for breaking changes.
+    VERSION = 1
+    MINOR_VERSION = 1
 
     def __init__(self) -> None:
         self._mode = MODE_STATIC
@@ -307,7 +297,6 @@ class OpenMeteoOptionsFlow(config_entries.OptionsFlow):
 
             if not errors:
                 new_options = dict(self._entry.options or {})
-                new_options.pop(CONF_ENABLED_SENSORS, None)
                 if self._mode == MODE_TRACK:
                     new_options.pop(CONF_LATITUDE, None)
                     new_options.pop(CONF_LONGITUDE, None)
