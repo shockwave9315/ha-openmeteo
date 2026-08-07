@@ -97,6 +97,12 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _merged_config(self) -> dict[str, Any]:
         return {**dict(self.entry.data or {}), **dict(self.entry.options or {})}
 
+    @property
+    def presentation_name(self) -> str:
+        """Return the mutable UI name without changing source/location identity."""
+        override = str(self._merged_config().get(CONF_AREA_NAME_OVERRIDE) or "").strip()
+        return override or self.location_name or self.entry.title or "Open-Meteo"
+
     def _mode(self) -> str:
         merged = self._merged_config()
         mode = merged.get(CONF_MODE)
@@ -248,12 +254,13 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def async_shutdown(self) -> None:
-        """Release subscriptions and persist the last accepted runtime state."""
+        """Release our resources and then shut down DataUpdateCoordinator itself."""
         if self._tracker_unsub is not None:
             self._tracker_unsub()
             self._tracker_unsub = None
         self._cancel_delayed_refresh()
         await self._store.async_save(self._runtime_snapshot())
+        await super().async_shutdown()
 
     def _runtime_snapshot(self) -> dict[str, Any]:
         result: dict[str, Any] = {}
@@ -339,14 +346,11 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         coordinates_changed: bool,
         movement_km: float,
     ) -> tuple[str, bool]:
-        merged = self._merged_config()
-        override = str(merged.get(CONF_AREA_NAME_OVERRIDE) or "").strip()
-        if override:
-            return override, override != self.location_name
-
+        """Resolve the real current place; presentation override is handled separately."""
         if not coordinates_changed and self.location_name:
             return self.location_name, False
 
+        merged = self._merged_config()
         try:
             cooldown_minutes = max(
                 1,
@@ -379,10 +383,12 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         fallback = coordinate_label(latitude, longitude)
         return fallback, fallback != self.location_name
 
-    async def _sync_presentation(self, location_name: str) -> None:
-        """Update visible names without touching registry identity."""
-        if location_name and self.entry.title != location_name:
-            self.hass.config_entries.async_update_entry(self.entry, title=location_name)
+    async def _sync_presentation(self, presentation_name: str) -> None:
+        """Update visible names without touching registry identity or location state."""
+        if presentation_name and self.entry.title != presentation_name:
+            self.hass.config_entries.async_update_entry(
+                self.entry, title=presentation_name
+            )
 
         registry = dr.async_get(self.hass)
         device = registry.async_get_device_by_identifier(
@@ -391,9 +397,9 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if (
             device is not None
             and not device.name_by_user
-            and device.name != location_name
+            and device.name != presentation_name
         ):
-            registry.async_update_device(device.id, name=location_name)
+            registry.async_update_device(device.id, name=presentation_name)
 
     async def _async_update_data(self) -> dict[str, Any]:
         now = dt_util.utcnow()
@@ -415,6 +421,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             movement_km=movement,
         )
         self.location_name = location_name
+        presentation_name = self.presentation_name
 
         try:
             payload = await self._client.async_weather(latitude, longitude)
@@ -434,6 +441,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "longitude": longitude,
         }
         payload["location_name"] = location_name
+        payload["presentation_name"] = presentation_name
         payload["last_location_update"] = (
             self._accepted_at.isoformat() if self._accepted_at is not None else None
         )
@@ -444,7 +452,7 @@ class OpenMeteoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Also repair a stale title after restart even when the restored place name
         # did not change during this particular refresh.
-        if name_changed or self.entry.title != location_name:
-            await self._sync_presentation(location_name)
+        if self.entry.title != presentation_name:
+            await self._sync_presentation(presentation_name)
 
         return payload
